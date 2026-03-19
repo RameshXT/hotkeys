@@ -1,15 +1,43 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$ScriptDir    = Split-Path -Parent $MyInvocation.MyCommand.Path
-$LogFile      = Join-Path $ScriptDir "update_log.txt"
-$MaxLogSizeB  = 2MB
-$TriggerFile  = Join-Path $ScriptDir "update_trigger.txt"
-$ResultFile   = Join-Path $ScriptDir "update_result.txt"
-$StartTime    = Get-Date
-$Results      = [System.Collections.Generic.List[string]]::new()
-$W            = 50
-$line         = "=" * $W
+$ScriptVersion = "2.2.0"
+$ScriptDir     = Split-Path -Parent $MyInvocation.MyCommand.Path
+$LogFile       = Join-Path $ScriptDir "update_log.txt"
+$MaxLogSizeB   = 2MB
+$TriggerFile   = Join-Path $ScriptDir "update_trigger.txt"
+$ResultFile    = Join-Path $ScriptDir "update_result_$PID.txt"
+$StartTime     = Get-Date
+$Results       = [System.Collections.Generic.List[string]]::new()
+$HeaderWidth   = 50
+$LabelW        = 22
+$line          = "=" * $HeaderWidth
+$sepLine       = "-" * $HeaderWidth
+$ExitCode      = 0
+$WarnCount     = 0
+
+$mutex         = [System.Threading.Mutex]::new($false, "Global\WindowsUpdaterMutex")
+$mutexAcquired = $false
+try {
+    $mutexAcquired = $mutex.WaitOne(0)
+} catch [System.Threading.AbandonedMutexException] {
+    $mutexAcquired = $true
+}
+
+if (-not $mutexAcquired) {
+    Write-Host "ABORT: Another instance is already running." -ForegroundColor Red
+    Start-Sleep -Seconds 4
+    exit 1
+}
+
+try {
+
+$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $isAdmin) {
+    Write-Host "ABORT: Must run as Administrator." -ForegroundColor Red
+    Start-Sleep -Seconds 5
+    throw "ABORT: Not running as Administrator."
+}
 
 try {
     $src = @'
@@ -18,6 +46,7 @@ using System.Runtime.InteropServices;
 public class ConsoleWindow {
     [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();
     [DllImport("user32.dll")]   public static extern bool MoveWindow(IntPtr h, int x, int y, int w, int h2, bool r);
+    [DllImport("user32.dll")]   public static extern bool ShowWindow(IntPtr h, int n);
     [DllImport("user32.dll")]   public static extern int  GetSystemMetrics(int n);
 }
 '@
@@ -54,8 +83,7 @@ if (Test-Path -LiteralPath $TriggerFile) {
 
 function Write-Line {
     param([string]$Label, [string]$Value, [string]$Color = "White")
-    $totalW = 28
-    $dots   = "." * [math]::Max(1, $totalW - $Label.Length)
+    $dots = "." * [math]::Max(1, ($script:LabelW - $Label.Length))
     Write-Host "  $Label$dots " -NoNewline -ForegroundColor DarkGray
     Write-Host $Value -ForegroundColor $Color
 }
@@ -63,119 +91,108 @@ function Write-Line {
 function Add-Result {
     param([string]$Tag, [string]$Label, [string]$Value)
     $script:Results.Add("$Tag|$Label|$Value")
+    if ($Tag -eq "WARN") { $script:WarnCount++ }
 }
 
-function Format-LogRow {
+function Format-Row {
     param([string]$Tag, [string]$Label, [string]$Value)
-    "  " + "[$Tag]".PadRight(14) + $Label.PadRight(26) + $Value
-}
-
-function Format-PopupRow {
-    param([string]$Tag, [string]$Label, [string]$Value)
-    $tagStr = "[$Tag]"
-    $tab    = if ($tagStr.Length -lt 12) { "`t`t" } else { "`t" }
-    "  $tagStr$tab$Label`t$Value"
+    $tagCol   = "[$Tag]".PadRight(12)
+    $labelCol = $Label.PadRight($script:LabelW)
+    "  $tagCol  $labelCol  $Value"
 }
 
 function Show-Loader {
     param(
         [scriptblock]$ScriptBlock,
-        [object[]]$ArgumentList = @()
+        [object[]]$ArgumentList = @(),
+        [int]$ExpectedSeconds   = 120,
+        [int]$TimeoutSeconds    = 600
     )
 
-    $barLen     = 38
-    $elapsed    = [System.Diagnostics.Stopwatch]::StartNew()
-    $job        = Start-Job -ScriptBlock $ScriptBlock -ArgumentList $ArgumentList
-    $smoothFill = 0.0
-    $prevCpu    = 0.0
-    $clearLine  = " " * 80
+    $barLen    = 38
+    $elapsed   = [System.Diagnostics.Stopwatch]::StartNew()
+    $clearLine = " " * 80
 
+    $job = try {
+        if (Get-Command Start-ThreadJob -ErrorAction SilentlyContinue) {
+            Start-ThreadJob -ScriptBlock $ScriptBlock -ArgumentList $ArgumentList
+        } else {
+            Start-Job -ScriptBlock $ScriptBlock -ArgumentList $ArgumentList
+        }
+    } catch {
+        Start-Job -ScriptBlock $ScriptBlock -ArgumentList $ArgumentList
+    }
+
+    $timedOut = $false
     try {
         while ($job.State -eq 'Running') {
-            $secs   = [int]$elapsed.Elapsed.TotalSeconds
-
-            $cpuNow = try {
-                $procs = Get-Process -Name "powershell","pwsh","winget","wuauclt","TiWorker" -ErrorAction SilentlyContinue
-                if ($procs) { ($procs | Measure-Object -Property CPU -Sum).Sum } else { $prevCpu }
-            } catch { $prevCpu }
-
-            $delta      = [math]::Max(0, $cpuNow - $prevCpu)
-            $prevCpu    = $cpuNow
-            $smoothFill = [math]::Min($smoothFill + [math]::Min($delta * 0.8, 3.0), $barLen - 1)
-            $minFill    = [math]::Min($secs / 3.0, $barLen - 1)
-            $fill       = [int][math]::Max($smoothFill, $minFill)
-            $pct        = [int](($fill / $barLen) * 100)
-            $bar        = ('#' * $fill) + ('.' * ($barLen - $fill))
-
-            Write-Host -NoNewline "`r  ${secs}s  [$bar]  $pct%" -ForegroundColor Cyan
+            $secs = $elapsed.Elapsed.TotalSeconds
+            if ($secs -ge $TimeoutSeconds) {
+                $timedOut = $true
+                Stop-Job -Job $job -ErrorAction SilentlyContinue
+                break
+            }
+            $t    = [math]::Min($secs / [math]::Max($ExpectedSeconds, 1), 1.0)
+            $fill = [int]($barLen * ($t / ($t + 0.15)) * 0.95)
+            $pct  = [int](($fill / $barLen) * 100)
+            $bar  = ('#' * $fill) + ('.' * ($barLen - $fill))
+            $s    = [int]$secs
+            Write-Host -NoNewline "`r  ${s}s  [$bar]  $pct%" -ForegroundColor Cyan
             Start-Sleep -Milliseconds 250
         }
     } finally {
         $elapsed.Stop()
     }
 
+    if ($timedOut) {
+        $secs = [int]$elapsed.Elapsed.TotalSeconds
+        Write-Host -NoNewline "`r  ${secs}s  [$('!' * $barLen)]  TIMEOUT" -ForegroundColor Red
+        Start-Sleep -Milliseconds 300
+        Write-Host "`r$clearLine`r" -NoNewline
+        try { Remove-Job -Job $job -Force -ErrorAction SilentlyContinue } catch { }
+        return $null
+    }
+
     $secs = [int]$elapsed.Elapsed.TotalSeconds
     Write-Host -NoNewline "`r  ${secs}s  [$('#' * $barLen)]  100%" -ForegroundColor Green
     Start-Sleep -Milliseconds 300
-
     Write-Host "`r$clearLine`r" -NoNewline
 
-    $result = Receive-Job -Job $job -Wait -ErrorAction SilentlyContinue
-    Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
-    return $result
+    try {
+        $result = Receive-Job -Job $job -Wait -ErrorAction SilentlyContinue
+        return $result
+    } finally {
+        Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+    }
 }
+
+$title     = "WINDOWS UPDATER"
+$titleLine = $title.PadLeft([int](($HeaderWidth + $title.Length) / 2))
 
 Write-Host ""
 Write-Host $line -ForegroundColor DarkGray
-Write-Host ("WINDOWS UPDATER".PadLeft([int](($W + "WINDOWS UPDATER".Length) / 2))) -ForegroundColor Cyan
+Write-Host $titleLine -ForegroundColor Cyan
 Write-Host $line -ForegroundColor DarkGray
-Write-Host "Start   : $($StartTime.ToString('yyyy-MM-dd | hh:mm:ss tt'))" -ForegroundColor White
-Write-Host "Trigger : $TriggerLabel" -ForegroundColor White
+Write-Line "Start"   $StartTime.ToString('yyyy-MM-dd  HH:mm:ss') "White"
+Write-Line "Trigger" $TriggerLabel                               "White"
+Write-Line "Version" "v$ScriptVersion"                           "White"
 
 Write-Host ""
 Write-Host "[Init]" -ForegroundColor Yellow
 
-Write-Host "  Validating environment" -NoNewline -ForegroundColor DarkGray
-Write-Host "........ " -NoNewline -ForegroundColor DarkGray
-foreach ($envVar in @('TEMP', 'LOCALAPPDATA', 'USERPROFILE')) {
-    $val = [System.Environment]::GetEnvironmentVariable($envVar)
-    if ([string]::IsNullOrWhiteSpace($val) -or $val.Length -lt 4) {
-        Write-Host "FAIL" -ForegroundColor Red
-        throw "ABORT: `$$envVar is missing or invalid. Halted for safety."
-    }
-}
-Write-Host "OK" -ForegroundColor Green
+$psVer = "$($PSVersionTable.PSVersion.Major).$($PSVersionTable.PSVersion.Minor).$($PSVersionTable.PSVersion.Build)"
+Write-Line "PowerShell" "v$psVer" "DarkGray"
+Add-Result "INFO" "PowerShell" "v$psVer"
 
-Write-Host "  Checking internet" -NoNewline -ForegroundColor DarkGray
-Write-Host "............. " -NoNewline -ForegroundColor DarkGray
-$internetOk = try {
-    $ping  = [System.Net.NetworkInformation.Ping]::new()
-    $reply = $ping.Send("8.8.8.8", 3000)
-    $reply.Status -eq [System.Net.NetworkInformation.IPStatus]::Success
-} catch { $false }
+$osInfo = try {
+    $os = Get-CimInstance Win32_OperatingSystem -ErrorAction Stop
+    "$($os.Caption) Build $($os.BuildNumber)"
+} catch { "Unknown" }
+Write-Line "OS" $osInfo "DarkGray"
+Add-Result "INFO" "OS" $osInfo
 
-if (-not $internetOk) {
-    Write-Host "FAIL" -ForegroundColor Red
-    $msg = "ABORT: No internet connection. Update cancelled."
-    Add-Content -LiteralPath $LogFile -Value "$(Get-Date -Format 'yyyy-MM-dd | hh:mm:ss tt') | $msg" -Encoding UTF8 -ErrorAction SilentlyContinue
-    Set-Content -LiteralPath $ResultFile -Value $msg -Encoding UTF8 -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 5
-    exit 1
-}
-Write-Host "OK" -ForegroundColor Green
-
-try {
-    if ((Test-Path -LiteralPath $LogFile) -and (Get-Item -LiteralPath $LogFile).Length -gt $MaxLogSizeB) {
-        $archive = $LogFile -replace '\.txt$', "_archive_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
-        Move-Item -LiteralPath $LogFile -Destination $archive -Force -ErrorAction Stop
-    }
-} catch { }
-
-Write-Host ""
-Write-Host "[Phase 1] Winget" -ForegroundColor Yellow
-$Phase1Start = Get-Date
-
-$wingetExe = $null
+$wingetVerStr = "not found"
+$wingetExe    = $null
 $wingetCandidates = @(
     "$env:LOCALAPPDATA\Microsoft\WindowsApps\winget.exe",
     "C:\Program Files\WindowsApps\Microsoft.DesktopAppInstaller_*\winget.exe"
@@ -187,42 +204,149 @@ foreach ($candidate in $wingetCandidates) {
 if (-not $wingetExe) {
     $wingetExe = try { (Get-Command winget -ErrorAction Stop).Source } catch { $null }
 }
+if ($wingetExe) {
+    $wingetVerStr = try {
+        $raw = & $wingetExe --version 2>&1
+        ($raw | Out-String).Trim()
+    } catch { "unknown" }
+}
+Write-Line "Winget" $wingetVerStr "DarkGray"
+Add-Result "INFO" "Winget" $wingetVerStr
+
+$envOk = $true
+foreach ($envVar in @('TEMP', 'LOCALAPPDATA', 'USERPROFILE')) {
+    $val = [System.Environment]::GetEnvironmentVariable($envVar)
+    if ([string]::IsNullOrWhiteSpace($val) -or $val.Length -lt 4) { $envOk = $false; break }
+}
+if (-not $envOk) {
+    Write-Line "Env Vars" "MISSING" "Red"
+    throw "ABORT: Required environment variable missing. Halted for safety."
+}
+Write-Line "Env Vars" "OK" "Green"
+
+$minFreeGB  = 2
+$diskFreeGB = try {
+    $drive = Get-PSDrive -Name ($env:SystemDrive.TrimEnd(':')) -ErrorAction Stop
+    [math]::Round($drive.Free / 1GB, 2)
+} catch { -1 }
+
+if ($diskFreeGB -lt 0) {
+    Write-Line "Disk Space" "UNKNOWN" "Yellow"
+    Add-Result "WARN" "Disk Space" "could not determine free space"
+} elseif ($diskFreeGB -lt $minFreeGB) {
+    Write-Line "Disk Space" "LOW  (${diskFreeGB} GB free)" "Red"
+    Add-Result "WARN" "Disk Space" "${diskFreeGB}GB free - below ${minFreeGB}GB minimum"
+} else {
+    Write-Line "Disk Space" "${diskFreeGB} GB free" "Green"
+    Add-Result "INFO" "Disk Space" "${diskFreeGB}GB free"
+}
+
+$logWritable = try {
+    $testFile = Join-Path $ScriptDir ".write_test_$PID"
+    [System.IO.File]::WriteAllText($testFile, "test")
+    Remove-Item -LiteralPath $testFile -Force -ErrorAction SilentlyContinue
+    $true
+} catch { $false }
+
+if (-not $logWritable) {
+    Write-Line "Log Path" "READ-ONLY" "Yellow"
+    Add-Result "WARN" "Log Path" "directory not writable - log will be skipped"
+    $LogFile = $null
+} else {
+    Write-Line "Log Path" "OK" "Green"
+}
+
+$internetOk = try {
+    $ping   = [System.Net.NetworkInformation.Ping]::new()
+    $r1     = $ping.Send("8.8.8.8", 3000)
+    if ($r1.Status -eq [System.Net.NetworkInformation.IPStatus]::Success) {
+        $true
+    } else {
+        $r2 = $ping.Send("1.1.1.1", 3000)
+        $r2.Status -eq [System.Net.NetworkInformation.IPStatus]::Success
+    }
+} catch { $false }
+
+if (-not $internetOk) {
+    Write-Line "Internet" "FAIL" "Red"
+    $msg = "ABORT: No internet connection. Update cancelled."
+    if ($LogFile) {
+        Add-Content -LiteralPath $LogFile -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') | $msg" -Encoding UTF8 -ErrorAction SilentlyContinue
+    }
+    Start-Sleep -Seconds 5
+    throw $msg
+}
+Write-Line "Internet" "OK" "Green"
+
+if ($LogFile) {
+    try {
+        if ((Test-Path -LiteralPath $LogFile) -and (Get-Item -LiteralPath $LogFile).Length -gt $MaxLogSizeB) {
+            $archive = $LogFile -replace '\.txt$', "_archive_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
+            Move-Item -LiteralPath $LogFile -Destination $archive -Force -ErrorAction Stop
+        }
+    } catch {
+        try {
+            $tail = Get-Content -LiteralPath $LogFile -Tail 500 -ErrorAction SilentlyContinue
+            if ($tail) { Set-Content -LiteralPath $LogFile -Value $tail -Encoding UTF8 -ErrorAction SilentlyContinue }
+        } catch { }
+    }
+}
+
+Write-Host ""
+Write-Host "[Phase 1] Winget" -ForegroundColor Yellow
+$Phase1Start = Get-Date
 
 if ($null -eq $wingetExe) {
-    Write-Line "Sources refreshed" "SKIPPED" "DarkGray"
+    Write-Line "Sources"  "SKIPPED" "DarkGray"
     Write-Line "Packages" "SKIPPED" "DarkGray"
+    Write-Line "Time"     "n/a"     "DarkGray"
     Add-Result "SKIP" "Winget" "not found"
     Add-Result "SKIP" "Winget Source Update" "not available"
 } else {
-    $null = Show-Loader {
+    $sourceResult = Show-Loader {
         param($exe)
-        & $exe source update 2>&1 | Out-Null
-        return "done"
-    } -ArgumentList $wingetExe
-    Add-Result "OK" "Winget Source Update" "refreshed"
-    Write-Line "Sources refreshed" "DONE" "Green"
+        $ErrorActionPreference = "Stop"
+        try   { & $exe source update 2>&1 | Out-Null; return "done" }
+        catch { return "failed:$($_.Exception.Message)" }
+    } -ArgumentList $wingetExe -ExpectedSeconds 30 -TimeoutSeconds 120
+
+    if ($null -eq $sourceResult -or $sourceResult -match '^failed:') {
+        Write-Line "Sources" "FAILED"    "Red"
+        Add-Result "FAIL" "Winget Sources" "refresh failed"
+    } else {
+        Write-Line "Sources" "REFRESHED" "Green"
+        Add-Result "OK"   "Winget Sources" "refreshed"
+    }
 
     $wingetResult = Show-Loader {
         param($exe)
-        $raw          = & $exe upgrade --all --silent --accept-source-agreements --accept-package-agreements 2>&1
-        $out          = $raw -join "`n"
-        $updatedCount = ([regex]::Matches($out, '(?m)^\s*\S+.*\s+\S+\s+->\s+\S+\s*$')).Count
-        $failedCount  = ([regex]::Matches($out, 'failed', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)).Count
-        return @{ Updated = $updatedCount; Failed = $failedCount }
-    } -ArgumentList $wingetExe
+        $ErrorActionPreference = "SilentlyContinue"
+        try {
+            $raw          = & $exe upgrade --all --silent --accept-source-agreements --accept-package-agreements 2>&1
+            $out          = $raw -join "`n"
+            $updatedCount = ([regex]::Matches($out, '(?m)^\s*\S+\s+\S+\s+\S+\s+->\s+\S+\s*$')).Count
+            $failedCount  = ([regex]::Matches($out, '(?im)^\s*(failed|error)\b')).Count
+            return @{ Updated = $updatedCount; Failed = $failedCount }
+        } catch { return @{ Updated = 0; Failed = 1 } }
+    } -ArgumentList $wingetExe -ExpectedSeconds 180 -TimeoutSeconds 600
 
-    $u = if ($wingetResult -and $null -ne $wingetResult.Updated) { [int]$wingetResult.Updated } else { 0 }
-    $f = if ($wingetResult -and $null -ne $wingetResult.Failed)  { [int]$wingetResult.Failed  } else { 0 }
+    if ($null -eq $wingetResult) {
+        Write-Line "Packages" "TIMED OUT" "Red"
+        Add-Result "FAIL" "Winget Packages" "job timed out"
+    } else {
+        $u = if ($null -ne $wingetResult.Updated) { [int]$wingetResult.Updated } else { 0 }
+        $f = if ($null -ne $wingetResult.Failed)  { [int]$wingetResult.Failed  } else { 0 }
 
-    if      ($u -gt 0 -and $f -eq 0) { Write-Line "Packages" "$u UPDATED"           "Green";  Add-Result "OK"         "Winget" "$u updated" }
-    elseif  ($u -gt 0 -and $f -gt 0) { Write-Line "Packages" "$u UPDATED $f FAILED" "Yellow"; Add-Result "OK"         "Winget" "$u updated, $f failed" }
-    elseif  ($u -eq 0 -and $f -gt 0) { Write-Line "Packages" "FAILED ($f)"          "Red";    Add-Result "FAIL"       "Winget" "$f failed" }
-    else                              { Write-Line "Packages" "UP-TO-DATE"            "Green";  Add-Result "UP-TO-DATE" "Winget" "all current" }
+        if      ($u -gt 0 -and $f -eq 0) { Write-Line "Packages" "$u updated"               "Green";  Add-Result "OK"         "Winget Packages" "$u updated" }
+        elseif  ($u -gt 0 -and $f -gt 0) { Write-Line "Packages" "$u updated  /  $f failed" "Yellow"; Add-Result "OK"         "Winget Packages" "$u updated, $f failed" }
+        elseif  ($u -eq 0 -and $f -gt 0) { Write-Line "Packages" "FAILED  ($f)"             "Red";    Add-Result "FAIL"       "Winget Packages" "$f failed" }
+        else                              { Write-Line "Packages" "UP-TO-DATE"               "Green";  Add-Result "UP-TO-DATE" "Winget Packages" "all current" }
+    }
+
+    $p1s = [math]::Round(((Get-Date) - $Phase1Start).TotalSeconds, 1)
+    Add-Result "OK" "Winget Duration" "${p1s}s"
+    Write-Line "Time" "${p1s}s" "DarkGray"
 }
-
-$p1s = [math]::Round(((Get-Date) - $Phase1Start).TotalSeconds, 1)
-Add-Result "OK" "Winget Duration" "${p1s}s"
-Write-Line "Time" "${p1s}s" "DarkGray"
 
 Write-Host ""
 Write-Host "[Phase 2] Windows Update" -ForegroundColor Yellow
@@ -231,17 +355,18 @@ $wuReady     = $false
 
 try {
     if (-not (Get-Module -ListAvailable -Name PSWindowsUpdate -ErrorAction SilentlyContinue)) {
-        Install-Module -Name PSWindowsUpdate -Force -Scope CurrentUser -ErrorAction Stop
+        Install-Module -Name PSWindowsUpdate -MinimumVersion "2.2.0" -Force -Scope CurrentUser -ErrorAction Stop
     }
     Import-Module PSWindowsUpdate -Force -ErrorAction Stop
     $wuReady = $true
 } catch {
     Write-Line "Status" "MODULE UNAVAILABLE" "Red"
-    Add-Result "SKIP" "Windows Update" "module unavailable"
+    Add-Result "SKIP" "Windows Update" "module unavailable: $($_.Exception.Message)"
 }
 
 if ($wuReady) {
     $wuResult = Show-Loader {
+        $ErrorActionPreference = "Stop"
         try {
             Import-Module PSWindowsUpdate -Force -ErrorAction Stop
             $available = Get-WindowsUpdate -IgnoreReboot -ErrorAction Stop
@@ -255,13 +380,18 @@ if ($wuReady) {
         } catch {
             return @{ State = "failed"; Count = 0; KBList = $_.Exception.Message }
         }
-    }
+    } -ExpectedSeconds 300 -TimeoutSeconds 1800
 
-    $wuState = if ($wuResult -and $wuResult.State) { $wuResult.State } else { "failed" }
-    switch ($wuState) {
-        "uptodate"  { Write-Line "Status" "UP-TO-DATE"                     "Green"; Add-Result "UP-TO-DATE" "Windows Update" "no updates available" }
-        "installed" { Write-Line "Status" "$($wuResult.Count) INSTALLED"   "Green"; Add-Result "OK"         "Windows Update" "$($wuResult.Count) installed: $($wuResult.KBList)" }
-        "failed"    { Write-Line "Status" "FAILED"                         "Red";   Add-Result "FAIL"       "Windows Update" $wuResult.KBList }
+    if ($null -eq $wuResult) {
+        Write-Line "Status" "TIMED OUT" "Red"
+        Add-Result "FAIL" "Windows Update" "job timed out"
+    } else {
+        $wuState = if ($wuResult.State) { $wuResult.State } else { "failed" }
+        switch ($wuState) {
+            "uptodate"  { Write-Line "Status" "UP-TO-DATE"                   "Green"; Add-Result "UP-TO-DATE" "Windows Update" "no updates available" }
+            "installed" { Write-Line "Status" "$($wuResult.Count) installed" "Green"; Add-Result "OK"         "Windows Update" "$($wuResult.Count) installed: $($wuResult.KBList)" }
+            "failed"    { Write-Line "Status" "FAILED"                       "Red";   Add-Result "FAIL"       "Windows Update" $wuResult.KBList }
+        }
     }
 }
 
@@ -270,10 +400,53 @@ Add-Result "OK" "Windows Update Duration" "${p2s}s"
 Write-Line "Time" "${p2s}s" "DarkGray"
 
 Write-Host ""
-Write-Host "[Phase 3] Windows Store" -ForegroundColor Yellow
+Write-Host "[Phase 3] Driver Update" -ForegroundColor Yellow
 $Phase3Start = Get-Date
 
+if ($wuReady) {
+    $driverResult = Show-Loader {
+        $ErrorActionPreference = "Stop"
+        try {
+            Import-Module PSWindowsUpdate -Force -ErrorAction Stop
+            $available = Get-WindowsUpdate -UpdateType Driver -IgnoreReboot -ErrorAction Stop
+            if (-not $available -or $available.Count -eq 0) {
+                return @{ State = "uptodate"; Count = 0; List = "" }
+            }
+            $installed = Install-WindowsUpdate -UpdateType Driver -IgnoreReboot -AcceptAll -ErrorAction Stop
+            $count     = @($installed).Count
+            $list      = (@($installed) | ForEach-Object { $_.Title } | Where-Object { $_ }) -join ", "
+            return @{ State = "installed"; Count = $count; List = $list }
+        } catch {
+            return @{ State = "failed"; Count = 0; List = $_.Exception.Message }
+        }
+    } -ExpectedSeconds 120 -TimeoutSeconds 900
+
+    if ($null -eq $driverResult) {
+        Write-Line "Status" "TIMED OUT" "Red"
+        Add-Result "FAIL" "Driver Update" "job timed out"
+    } else {
+        $driverState = if ($driverResult.State) { $driverResult.State } else { "failed" }
+        switch ($driverState) {
+            "uptodate"  { Write-Line "Status" "UP-TO-DATE"                       "Green"; Add-Result "UP-TO-DATE" "Driver Update" "no driver updates available" }
+            "installed" { Write-Line "Status" "$($driverResult.Count) installed" "Green"; Add-Result "OK"         "Driver Update" "$($driverResult.Count) installed: $($driverResult.List)" }
+            "failed"    { Write-Line "Status" "FAILED"                           "Red";   Add-Result "FAIL"       "Driver Update" $driverResult.List }
+        }
+    }
+} else {
+    Write-Line "Status" "SKIPPED" "DarkGray"
+    Add-Result "SKIP" "Driver Update" "PSWindowsUpdate not available"
+}
+
+$p3s = [math]::Round(((Get-Date) - $Phase3Start).TotalSeconds, 1)
+Add-Result "OK" "Driver Duration" "${p3s}s"
+Write-Line "Time" "${p3s}s" "DarkGray"
+
+Write-Host ""
+Write-Host "[Phase 4] Windows Store" -ForegroundColor Yellow
+$Phase4Start = Get-Date
+
 $storeResult = Show-Loader {
+    $ErrorActionPreference = "SilentlyContinue"
     try {
         $ns       = "root\cimv2\mdm\dmmap"
         $cls      = "MDM_EnterpriseModernAppManagement_AppManagement01"
@@ -285,93 +458,120 @@ $storeResult = Show-Loader {
             $proc = Start-Process "wsreset.exe" -ArgumentList "-i" -WindowStyle Hidden -PassThru -ErrorAction Stop
             if ($proc) { return "wsreset" }
             return "failed"
-        } catch {
-            return "failed:$($_.Exception.Message)"
-        }
+        } catch { return "failed:$($_.Exception.Message)" }
+    }
+} -ExpectedSeconds 60 -TimeoutSeconds 300
+
+if ($null -eq $storeResult) {
+    Write-Line "Scan" "TIMED OUT" "Red"
+    Add-Result "FAIL" "Windows Store" "job timed out"
+} else {
+    switch -Wildcard ($storeResult) {
+        "mdm"      { Write-Line "Scan" "TRIGGERED  (MDM)"     "Green"; Add-Result "OK"   "Windows Store" "scan triggered via MDM" }
+        "wsreset"  { Write-Line "Scan" "TRIGGERED  (WSRESET)" "Green"; Add-Result "OK"   "Windows Store" "scan triggered via WSReset" }
+        "failed:*" { $err = $storeResult -replace '^failed:',''; Write-Line "Scan" "FAILED" "Red"; Add-Result "FAIL" "Windows Store" $err }
+        default    { Write-Line "Scan" "FAILED" "Red"; Add-Result "FAIL" "Windows Store" "unknown error" }
     }
 }
 
-switch -Wildcard ($storeResult) {
-    "mdm"      { Write-Line "Scan" "TRIGGERED (MDM)"     "Green"; Add-Result "OK"   "Windows Store" "scan triggered via MDM" }
-    "wsreset"  { Write-Line "Scan" "TRIGGERED (WSRESET)" "Green"; Add-Result "OK"   "Windows Store" "scan triggered via WSReset" }
-    "failed:*" { $err = $storeResult -replace '^failed:',''; Write-Line "Scan" "FAILED" "Red"; Add-Result "FAIL" "Windows Store" $err }
-    default    { Write-Line "Scan" "FAILED"               "Red";  Add-Result "FAIL" "Windows Store" "unknown error" }
-}
-
-$p3s = [math]::Round(((Get-Date) - $Phase3Start).TotalSeconds, 1)
-Add-Result "OK" "Store Duration" "${p3s}s"
-Write-Line "Time" "${p3s}s" "DarkGray"
+$p4s = [math]::Round(((Get-Date) - $Phase4Start).TotalSeconds, 1)
+Add-Result "OK" "Store Duration" "${p4s}s"
+Write-Line "Time" "${p4s}s" "DarkGray"
 
 $rebootKey     = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired"
 $rebootPending = Test-Path -LiteralPath $rebootKey
-if ($rebootPending) {
-    Add-Result "NOTICE" "Reboot Pending" "restart required"
-}
+if ($rebootPending) { Add-Result "NOTICE" "Reboot" "restart required" }
 
 $EndTime      = Get-Date
 $Duration     = ($EndTime - $StartTime).TotalSeconds
 $DurationText = "$([math]::Round($Duration, 1))s"
 
-$failCount     = @($Results | Where-Object { $_ -match '^FAIL\|' }).Count
-$overallStatus = if ($failCount -gt 0) { "PARTIAL" } else { "SUCCESS" }
+$failCount = @($Results | Where-Object { $_ -match '^FAIL\|' }).Count
+
+$overallStatus = if ($failCount -gt 0) {
+    "PARTIAL"
+} elseif ($WarnCount -gt 0) {
+    "SUCCESS  ($WarnCount WARNING$(if ($WarnCount -ne 1) { 'S' }))"
+} else {
+    "SUCCESS"
+}
+
+$ExitCode = if ($failCount -gt 0) { 2 } else { 0 }
 
 $logRows = foreach ($r in $Results) {
     $p = $r -split '\|', 3
-    Format-LogRow $p[0] $p[1] $p[2]
+    Format-Row $p[0] $p[1] $p[2]
 }
+$logRowsText  = $logRows -join "`n"
+
+$verTitle     = "WINDOWS UPDATER  v$ScriptVersion"
+$verTitleLine = $verTitle.PadLeft([int](($HeaderWidth + $verTitle.Length) / 2))
+$startStr     = $StartTime.ToString('yyyy-MM-dd  HH:mm:ss')
+$endStr       = $EndTime.ToString('yyyy-MM-dd  HH:mm:ss')
+$startLabel   = "Start".PadRight($LabelW)
+$triggerLabel = "Trigger".PadRight($LabelW)
+$statusLabel  = "Status".PadRight($LabelW)
+$totalLabel   = "Total".PadRight($LabelW)
+$endLabel     = "End".PadRight($LabelW)
 
 $LogEntry = @"
 $line
-$("WINDOWS UPDATER".PadLeft([int](($W + "WINDOWS UPDATER".Length) / 2)))
+$verTitleLine
 $line
-Start   : $($StartTime.ToString('yyyy-MM-dd | hh:mm:ss tt'))
-Trigger : $TriggerLabel
+$startLabel  $startStr
+$triggerLabel  $TriggerLabel
 $line
-$($logRows -join "`n")
+$logRowsText
 $line
-Status  : $overallStatus
-Total   : $DurationText
-End     : $($EndTime.ToString('yyyy-MM-dd | hh:mm:ss tt'))
+$statusLabel  $overallStatus
+$totalLabel  $DurationText
+$endLabel  $endStr
 $line
 
 "@
 
-try {
-    Add-Content -LiteralPath $LogFile -Value $LogEntry -Encoding UTF8
-} catch {
-    Write-Host "  Log FAILED: $($_.Exception.Message)" -ForegroundColor Red
+if ($LogFile) {
+    try {
+        Add-Content -LiteralPath $LogFile -Value $LogEntry -Encoding UTF8
+    } catch {
+        Write-Host "  Log FAILED: $($_.Exception.Message)" -ForegroundColor Red
+    }
 }
 
 Write-Host ""
-Write-Line "Log" $LogFile "DarkGray"
-Write-Host ""
-$statusColor = if ($overallStatus -eq "SUCCESS") { "Green" } else { "Yellow" }
-Write-Host "Status: $overallStatus" -ForegroundColor $statusColor
-Write-Host "Total : $DurationText" -ForegroundColor White
-Write-Host "End   : $($EndTime.ToString('yyyy-MM-dd | hh:mm:ss tt'))" -ForegroundColor White
+Write-Host $line -ForegroundColor DarkGray
+if ($LogFile) { Write-Line "Log" $LogFile "DarkGray" }
+$statusColor = if ($failCount -gt 0) { "Yellow" } elseif ($WarnCount -gt 0) { "Cyan" } else { "Green" }
+Write-Line "Status" $overallStatus $statusColor
+Write-Line "Total"  $DurationText  "White"
+Write-Line "End"    $endStr        "White"
 if ($rebootPending) {
     Write-Host ""
-    Write-Host "NOTICE: Reboot required to complete updates" -ForegroundColor Magenta
+    Write-Host "  ! Reboot required to complete updates" -ForegroundColor Magenta
 }
 Write-Host $line -ForegroundColor DarkGray
 Write-Host ""
 
 for ($i = 5; $i -ge 1; $i--) {
-    Write-Host -NoNewline "`r  Closing in $i...  " -ForegroundColor DarkGray
+    Write-Host -NoNewline "`r  Closing in ${i}s..." -ForegroundColor DarkGray
     Start-Sleep -Seconds 1
 }
-Write-Host "`r  Closing...        " -ForegroundColor DarkGray
+Write-Host "`r  Closing...      " -ForegroundColor DarkGray
 Write-Host ""
 
 $popupRows = foreach ($r in $Results) {
     $p = $r -split '\|', 3
-    Format-PopupRow $p[0] $p[1] $p[2]
+    Format-Row $p[0] $p[1] $p[2]
 }
+$popupRowsText = $popupRows -join "`n"
 
-$MsgBody  = "Update`t$($StartTime.ToString('yyyy-MM-dd | hh:mm tt'))`n"
-$MsgBody += "Trigger`t$TriggerLabel`n`n"
-$MsgBody += ($popupRows -join "`n")
-$MsgBody += "`n`nTotal`t$DurationText"
+$MsgBody  = "$startLabel  $startStr`n"
+$MsgBody += "$triggerLabel  $TriggerLabel`n"
+$MsgBody += "$sepLine`n"
+$MsgBody += $popupRowsText
+$MsgBody += "`n$sepLine`n"
+$MsgBody += "$statusLabel  $overallStatus`n"
+$MsgBody += "$totalLabel  $DurationText"
 
 Set-Content -LiteralPath $ResultFile -Value $MsgBody -Encoding UTF8 -ErrorAction SilentlyContinue
 
@@ -387,24 +587,28 @@ $content = try {
 
 try {
     $hwnd = [ConsoleWindow]::GetConsoleWindow()
-    Add-Type -Name WinUser -Namespace Win -MemberDefinition '[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);' -ErrorAction SilentlyContinue
-    [Win.WinUser]::ShowWindow($hwnd, 0) | Out-Null
+    if ($hwnd -ne [IntPtr]::Zero) { [void][ConsoleWindow]::ShowWindow($hwnd, 0) }
 } catch { }
 
-[System.Windows.Forms.MessageBox]::Show($content, "Update Done", "OK", [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
+[System.Windows.Forms.MessageBox]::Show($content, "Windows Updater  v$ScriptVersion", "OK", [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
 
 $openLog = [System.Windows.Forms.MessageBox]::Show(
-    "Wanna check the log file?",
+    "Open the log file?",
     "Update Log",
     [System.Windows.Forms.MessageBoxButtons]::YesNo,
     [System.Windows.Forms.MessageBoxIcon]::Question
 )
 if ($openLog -eq [System.Windows.Forms.DialogResult]::Yes) {
-    if (Test-Path -LiteralPath $LogFile) {
+    if ($LogFile -and (Test-Path -LiteralPath $LogFile)) {
         Start-Process notepad.exe -ArgumentList $LogFile
     } else {
         [System.Windows.Forms.MessageBox]::Show("Log file not found:`n$LogFile", "Error", "OK", [System.Windows.Forms.MessageBoxIcon]::Warning) | Out-Null
     }
 }
 
-exit 0
+} finally {
+    try { $mutex.ReleaseMutex() } catch { }
+    $mutex.Dispose()
+}
+
+exit $ExitCode
