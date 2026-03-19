@@ -169,6 +169,22 @@ Clean-Folder "C:\ProgramData\Microsoft\Windows\WER\ReportQueue"      "WER Report
 Clean-Folder "$env:LOCALAPPDATA\Microsoft\Windows\WER\ReportArchive" "WER User Archive"
 Clean-Folder "$env:LOCALAPPDATA\Microsoft\Windows\WER\ReportQueue"   "WER User Queue"
 
+Clean-Folder "C:\Windows\Minidump"                                    "Crash Minidumps"
+if (Test-Path -LiteralPath "C:\Windows\MEMORY.DMP") {
+    try {
+        $sz = (Get-Item -LiteralPath "C:\Windows\MEMORY.DMP").Length
+        Remove-Item -LiteralPath "C:\Windows\MEMORY.DMP" -Force -ErrorAction Stop
+        $script:TotalFreed += $sz
+        $Results.Add("OK|Crash Memory Dump|$(Format-Size $sz)")
+    } catch {
+        $Results.Add("FAIL|Crash Memory Dump|$($_.Exception.Message)")
+    }
+} else {
+    $Results.Add("SKIP|Crash Memory Dump|not found")
+}
+Clean-Folder "C:\Windows\Installer\`$PatchCache`$"                   "Installer Patch Cache"
+Clean-Folder "$env:APPDATA\Microsoft\Windows\Recent"                  "Recent Files"
+
 $thumbPath = "$env:LOCALAPPDATA\Microsoft\Windows\Explorer"
 if (Test-Path -LiteralPath $thumbPath) {
     $thumbFreed = [long]0
