@@ -47,18 +47,18 @@ C:\Users\rames\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\
 | Alt + G | Git Bash | Open in current Explorer folder |
 | Alt + T | CMD | CMD (Admin) |
 | Alt + C | Chrome | Long press → Chrome Incognito |
-| Alt + U | Ubuntu 22.04 WSL | — |
-| Alt + P | PowerShell (Admin) | — |
-| Alt + Y | YouTube | — |
-| Alt + W | WhatsApp | — |
-| Alt + I | Instagram | — |
-| Alt + S | Slack | — |
-| Alt + N | Notepad | — |
-| Alt + 0 | Calculator | — |
-| Alt + Q | Close active window (hold to keep closing) | — |
-| Ctrl+Shift+Alt+C | Run Windows Cleanup | — |
-| Ctrl+Shift+Alt+U | Run Windows Updater | — |
-| Ctrl+Shift+Alt+Delete | Empty Recycle Bin (with confirm) | — |
+| Alt + U | Ubuntu 22.04 WSL | NA |
+| Alt + P | PowerShell (Admin) | NA |
+| Alt + Y | YouTube | NA |
+| Alt + W | WhatsApp | NA |
+| Alt + I | Instagram | NA |
+| Alt + S | Slack | NA |
+| Alt + N | Notepad | NA |
+| Alt + 0 | Calculator | NA |
+| Alt + Q | Close active window (hold to keep closing) | NA |
+| Ctrl+Shift+Alt+C | Run Windows Cleanup | NA |
+| Ctrl+Shift+Alt+U | Run Windows Updater | NA |
+| Ctrl+Shift+Alt+Delete | Empty Recycle Bin (with confirm) | NA |
 
 ---
 
