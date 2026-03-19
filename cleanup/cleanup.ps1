@@ -8,6 +8,11 @@ $StartTime   = Get-Date
 $TotalFreed  = [long]0
 $Results     = [System.Collections.Generic.List[string]]::new()
 
+$currentPrincipal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    throw "ABORT: Script must be run as Administrator."
+}
+
 foreach ($envVar in @('TEMP', 'LOCALAPPDATA', 'USERPROFILE')) {
     $val = [System.Environment]::GetEnvironmentVariable($envVar)
     if ([string]::IsNullOrWhiteSpace($val) -or $val.Length -lt 4) {
@@ -61,16 +66,18 @@ function Format-Size {
 
 function Assert-SafePath {
     param([string]$Path)
-    $resolved = try { (Resolve-Path -LiteralPath $Path -ErrorAction Stop).Path } catch { $Path }
+    $resolved = try { (Resolve-Path -LiteralPath $Path -ErrorAction Stop).Path.TrimEnd('\') } catch { $Path.TrimEnd('\') }
+    $usersRoot = Join-Path $env:SystemDrive "Users"
     $blocked = @(
         "$env:SystemRoot",
         "$env:SystemRoot\System32",
         "$env:SystemRoot\SysWOW64",
         "$env:ProgramFiles",
         "${env:ProgramFiles(x86)}",
-        "C:\\Users\\rames",
-        "C:\", "D:\", "E:\"
-    )
+        $usersRoot,
+        $env:SystemDrive,
+        "D:\", "E:\"
+    ) | ForEach-Object { $_.TrimEnd('\') }
     foreach ($b in $blocked) {
         if ($resolved -ieq $b) {
             throw "SAFETY BLOCK: Refusing to clean protected path '$resolved'"
@@ -154,11 +161,15 @@ if ($wuWasRunning) {
     $Results.Add("SKIP|Windows Update Cache|service running")
 } else {
     try {
-        Stop-Service -Name wuauserv -Force -ErrorAction SilentlyContinue
-        Start-Sleep -Seconds 2
+        if ($wuService -and $wuService.Status -ne "Stopped") {
+            Stop-Service -Name wuauserv -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 2
+        }
         Clean-Folder "C:\Windows\SoftwareDistribution\Download" "Windows Update Cache"
     } finally {
-        Start-Service -Name wuauserv -ErrorAction SilentlyContinue
+        if ($wuService) {
+            Start-Service -Name wuauserv -ErrorAction SilentlyContinue
+        }
     }
 }
 
@@ -242,7 +253,7 @@ $Duration = ($EndTime - $StartTime).TotalSeconds
 $W        = 55
 $line1    = "=" * $W
 $line2    = "-" * $W
-$lineBot  = [char]0x2570 + ([string][char]0x2500 * ($W - 1)) + [char]0x256F
+$lineBot  = [string][char]0x2570 + ([string][char]0x2500 * ($W - 2)) + [string][char]0x256F
 
 $tagW     = 8
 $labelW   = 26
@@ -272,6 +283,7 @@ $LogEntry = @"
 $line1
 $headerRow
 $triggerRow
+$AuditInfo
 $line1
 $($rowLines -join "`n")
 $line2
@@ -296,7 +308,9 @@ if ($SkipLines) { $MsgBody += "$SkipLines`n" }
 if ($FailLines) { $MsgBody += "$FailLines`n" }
 $MsgBody += "$line2`n$totalRow`n$lineBot`n$endRow`n$lineBot"
 
-Set-Content -LiteralPath $ResultFile -Value $MsgBody -Encoding UTF8
+$TempResultFile = "$ResultFile.tmp"
+Set-Content -LiteralPath $TempResultFile -Value $MsgBody -Encoding UTF8
+Move-Item -LiteralPath $TempResultFile -Destination $ResultFile -Force
 
 Start-Sleep -Seconds 3
 if (Test-Path -LiteralPath $ResultFile) {
