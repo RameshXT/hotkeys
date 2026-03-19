@@ -14,9 +14,9 @@
 ; Alt + Q        → Close Active Window (hold to keep closing)
 ; Alt + 0        → Calculator
 
-; Ctrl+Shift+Alt+C     → Run Windows Cleanup Script
-; Ctrl+Shift+Alt+U     → Run Windows Updater Script
-; Ctrl+Shift+Alt+Delete → Empty Recycle Bin (with confirm)
+; Ctrl+Shift+Alt+C       → Run Windows Cleanup Script
+; Ctrl+Shift+Alt+U       → Run Windows Updater Script
+; Ctrl+Shift+Alt+Delete  → Empty Recycle Bin (with confirm)
 
 ; ====================[ Script Config ]====================
 #NoEnv
@@ -78,7 +78,7 @@ GetExplorerPath()
     catch e
     {
         ToolTip, Error getting Explorer path: %e%
-        SetTimer, RemoveToolTip, -3000
+        SetTimer, RemoveToolTip, -2000
     }
     return ""
 }
@@ -134,7 +134,7 @@ LaunchAndMaximize(appPath, windowIdentifier := "", timeout := 5)
         else
         {
             ToolTip, Window not detected: %windowIdentifier%
-            SetTimer, RemoveToolTip, -3000
+            SetTimer, RemoveToolTip, -2000
         }
     }
 
@@ -196,7 +196,7 @@ return
         catch e
         {
             ToolTip, Failed to open VS Code: %e%
-            SetTimer, RemoveToolTip, -3000
+            SetTimer, RemoveToolTip, -2000
         }
     }
     else
@@ -219,7 +219,7 @@ V_SinglePress:
     catch e
     {
         ToolTip, Failed to launch VS Code: %e%
-        SetTimer, RemoveToolTip, -3000
+        SetTimer, RemoveToolTip, -2000
     }
 return
 
@@ -250,7 +250,7 @@ return
         catch e
         {
             ToolTip, Failed to open Antigravity: %e%
-            SetTimer, RemoveToolTip, -3000
+            SetTimer, RemoveToolTip, -2000
         }
     }
     else
@@ -273,7 +273,7 @@ A_SinglePress:
     catch e
     {
         ToolTip, Failed to launch Antigravity: %e%
-        SetTimer, RemoveToolTip, -3000
+        SetTimer, RemoveToolTip, -2000
     }
 return
 
@@ -303,7 +303,7 @@ return
         catch e
         {
             ToolTip, Failed to launch Git Bash: %e%
-            SetTimer, RemoveToolTip, -3000
+            SetTimer, RemoveToolTip, -2000
         }
     }
     else
@@ -325,7 +325,7 @@ G_SinglePress:
     catch e
     {
         ToolTip, Failed to launch Git Bash: %e%
-        SetTimer, RemoveToolTip, -3000
+        SetTimer, RemoveToolTip, -2000
     }
 return
 
@@ -337,7 +337,7 @@ return
     catch e
     {
         ToolTip, Failed to launch Ubuntu 22.04`nIs WSL installed? %e%
-        SetTimer, RemoveToolTip, -4000
+        SetTimer, RemoveToolTip, -2000
     }
 return
 
@@ -359,7 +359,7 @@ return
             if (A_LastError != 1223) ; 1223 = user cancelled UAC
             {
                 ToolTip, Failed to launch Admin CMD: %e%
-                SetTimer, RemoveToolTip, -3000
+                SetTimer, RemoveToolTip, -2000
             }
         }
     }
@@ -377,7 +377,7 @@ T_SinglePress:
     catch e
     {
         ToolTip, Failed to launch CMD: %e%
-        SetTimer, RemoveToolTip, -3000
+        SetTimer, RemoveToolTip, -2000
     }
 return
 
@@ -391,7 +391,7 @@ return
         if (A_LastError != 1223) ; 1223 = user cancelled UAC
         {
             ToolTip, Failed to launch Admin PowerShell: %e%
-            SetTimer, RemoveToolTip, -3000
+            SetTimer, RemoveToolTip, -2000
         }
     }
 return
@@ -445,7 +445,7 @@ return
         catch e
         {
             ToolTip, Failed to launch Chrome: %e%
-            SetTimer, RemoveToolTip, -3000
+            SetTimer, RemoveToolTip, -2000
             KeyWait, c
             return
         }
@@ -465,7 +465,7 @@ return
         catch e
         {
             ToolTip, Failed to launch Chrome: %e%
-            SetTimer, RemoveToolTip, -3000
+            SetTimer, RemoveToolTip, -2000
             return
         }
     }
@@ -476,7 +476,7 @@ return
     else
     {
         ToolTip, Chrome window not detected
-        SetTimer, RemoveToolTip, -3000
+        SetTimer, RemoveToolTip, -2000
     }
 return
 #MaxThreadsPerHotkey 1
@@ -489,7 +489,7 @@ return
     catch e
     {
         ToolTip, Failed to launch Notepad: %e%
-        SetTimer, RemoveToolTip, -3000
+        SetTimer, RemoveToolTip, -2000
     }
 return
 
@@ -518,7 +518,7 @@ return
     catch e
     {
         ToolTip, Failed to launch Calculator: %e%
-        SetTimer, RemoveToolTip, -3000
+        SetTimer, RemoveToolTip, -2000
     }
 return
 
@@ -539,13 +539,14 @@ return
     {
         Run, schtasks.exe /Run /TN "WindowsCleanup" /I,, Hide
         ToolTip, Cleaning...
+        SetTimer, RemoveToolTip, -2000
     }
     catch e
     {
         if (A_LastError != 1223)
         {
             ToolTip, Failed to trigger cleanup: %e%
-            SetTimer, RemoveToolTip, -3000
+            SetTimer, RemoveToolTip, -2000
         }
         return
     }
@@ -567,7 +568,7 @@ return
 
     ToolTip
     ToolTip, Cleanup timed out - check cleanup_log.txt
-    SetTimer, RemoveToolTip, -4000
+    SetTimer, RemoveToolTip, -2000
 return
 
 
@@ -590,7 +591,7 @@ return
         if (A_LastError != 1223)
         {
             ToolTip, Failed to trigger updater: %e%
-            SetTimer, RemoveToolTip, -3000
+            SetTimer, RemoveToolTip, -2000
         }
     }
 return
@@ -610,7 +611,7 @@ return
         catch e
         {
             ToolTip, Failed to empty Recycle Bin: %e%
-            SetTimer, RemoveToolTip, -3000
+            SetTimer, RemoveToolTip, -2000
         }
     }
 return
