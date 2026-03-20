@@ -1,7 +1,6 @@
 #Requires -RunAsAdministrator
 
-$UserProfile   = "C:\Users\rames"
-$UpdateScript = "C:\Users\rames\sys-scripts\update\update.ps1"
+$UpdateScript = Join-Path $PSScriptRoot "update.ps1"
 $TaskName      = "WindowsUpdater"
 $LoggedInUser  = "$env:USERDOMAIN\$env:USERNAME"
 
@@ -15,7 +14,7 @@ Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction Silent
 
 $Action = New-ScheduledTaskAction `
     -Execute "powershell.exe" `
-    -Argument "-NoProfile -WindowStyle Normal -ExecutionPolicy Bypass -File `"$UpdateScript`""
+    -Argument "-NoProfile -WindowStyle Normal -ExecutionPolicy RemoteSigned -File `"$UpdateScript`""
 
 $Principal = New-ScheduledTaskPrincipal `
     -UserId    $LoggedInUser `
@@ -26,18 +25,24 @@ $Trigger = New-ScheduledTaskTrigger -AtLogOn -User $LoggedInUser
 $Trigger.Delay = "PT20M"
 
 $Settings = New-ScheduledTaskSettingsSet `
-    -ExecutionTimeLimit      (New-TimeSpan -Minutes 30) `
+    -ExecutionTimeLimit      (New-TimeSpan -Minutes 90) `
     -MultipleInstances       IgnoreNew `
     -Priority                7 `
     -RunOnlyIfNetworkAvailable
 
-Register-ScheduledTask `
-    -TaskName  $TaskName `
-    -Action    $Action `
-    -Principal $Principal `
-    -Trigger   $Trigger `
-    -Settings  $Settings `
-    -Force | Out-Null
+try {
+    Register-ScheduledTask `
+        -TaskName  $TaskName `
+        -Action    $Action `
+        -Principal $Principal `
+        -Trigger   $Trigger `
+        -Settings  $Settings `
+        -Force `
+        -ErrorAction Stop | Out-Null
+} catch {
+    Write-Host "ERROR: Failed to register task '$TaskName': $($_.Exception.Message)" -ForegroundColor Red
+    exit 1
+}
 
 Write-Host ""
 Write-Host "Task '$TaskName' registered successfully."          -ForegroundColor Green

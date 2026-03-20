@@ -3,16 +3,14 @@ $ErrorActionPreference = "Stop"
 
 $ScriptVersion = "2.2.0"
 $ScriptDir     = Split-Path -Parent $MyInvocation.MyCommand.Path
-$LogFile       = "C:\Users\rames\sys-scripts\logs\update_log.txt"
+$LogFile       = Join-Path (Split-Path -Parent $ScriptDir) "logs\update_log.txt"
 $MaxLogSizeB   = 2MB
 $TriggerFile   = Join-Path $ScriptDir "update_trigger.txt"
-$ResultFile    = Join-Path $ScriptDir "update_result_$PID.txt"
 $StartTime     = Get-Date
 $Results       = [System.Collections.Generic.List[string]]::new()
 $HeaderWidth   = 50
 $LabelW        = 22
 $line          = "=" * $HeaderWidth
-$sepLine       = "-" * $HeaderWidth
 $ExitCode      = 0
 $WarnCount     = 0
 
@@ -50,31 +48,32 @@ public class ConsoleWindow {
     [DllImport("user32.dll")]   public static extern int  GetSystemMetrics(int n);
 }
 '@
-    if (-not ([System.Management.Automation.PSTypeName]'ConsoleWindow').Type) {
+    if (-not ('ConsoleWindow' -as [type])) {
         Add-Type -TypeDefinition $src -ErrorAction Stop
     }
-    $sw = [ConsoleWindow]::GetSystemMetrics(0)
-    $sh = [ConsoleWindow]::GetSystemMetrics(1)
-    $ww = [int]($sw * 0.35)
-    $wh = [int]($sh * 0.60)
-    [void][ConsoleWindow]::MoveWindow([ConsoleWindow]::GetConsoleWindow(), ($sw - $ww), 0, $ww, $wh, $true)
+    $hwnd = [ConsoleWindow]::GetConsoleWindow()
+    if ($hwnd -ne [IntPtr]::Zero) {
+        $sw = [ConsoleWindow]::GetSystemMetrics(0)
+        $sh = [ConsoleWindow]::GetSystemMetrics(1)
+        $ww = [int]($sw * 0.35)
+        $wh = [int]($sh * 0.60)
+        [void][ConsoleWindow]::MoveWindow($hwnd, ($sw - $ww), 0, $ww, $wh, $true)
+    }
 } catch { }
 
 if (Test-Path -LiteralPath $TriggerFile) {
     $TriggerLabel = "Manual (Hotkey)"
     Remove-Item -LiteralPath $TriggerFile -Force -ErrorAction SilentlyContinue
 } else {
+    $_selfProc  = try { Get-CimInstance Win32_Process -Filter "ProcessId=$PID" -ErrorAction Stop } catch { $null }
     $parentName = try {
-        $ppid = (Get-CimInstance Win32_Process -Filter "ProcessId=$PID" -ErrorAction Stop).ParentProcessId
-        (Get-Process -Id $ppid -ErrorAction Stop).Name
+        if ($_selfProc) { (Get-Process -Id $_selfProc.ParentProcessId -ErrorAction Stop).Name } else { "" }
     } catch { "" }
 
     $TriggerLabel = switch -Regex ($parentName) {
         "^(powershell|pwsh)$"                 { "Manual (Shell)" }
         "^(svchost|taskeng|taskhostw|msdtc)$" {
-            $sid = try {
-                (Get-CimInstance Win32_Process -Filter "ProcessId=$PID" -ErrorAction Stop).SessionId
-            } catch { 0 }
+            $sid = if ($_selfProc) { $_selfProc.SessionId } else { 0 }
             if ($sid -gt 0) { "Scheduled (Manual)" } else { "Scheduled (Auto)" }
         }
         default { "Manual (Shell)" }
@@ -257,14 +256,19 @@ if (-not $logWritable) {
 }
 
 $internetOk = try {
-    $ping   = [System.Net.NetworkInformation.Ping]::new()
-    $r1     = $ping.Send("8.8.8.8", 3000)
-    if ($r1.Status -eq [System.Net.NetworkInformation.IPStatus]::Success) {
-        $true
-    } else {
-        $r2 = $ping.Send("1.1.1.1", 3000)
-        $r2.Status -eq [System.Net.NetworkInformation.IPStatus]::Success
+    $tcp = [System.Net.Sockets.TcpClient]::new()
+    $ar  = $tcp.BeginConnect("8.8.8.8", 443, $null, $null)
+    $ok  = $ar.AsyncWaitHandle.WaitOne(3000)
+    try { $tcp.EndConnect($ar) } catch {}
+    $tcp.Close()
+    if (-not $ok) {
+        $tcp2 = [System.Net.Sockets.TcpClient]::new()
+        $ar2  = $tcp2.BeginConnect("1.1.1.1", 443, $null, $null)
+        $ok   = $ar2.AsyncWaitHandle.WaitOne(3000)
+        try { $tcp2.EndConnect($ar2) } catch {}
+        $tcp2.Close()
     }
+    $ok
 } catch { $false }
 
 if (-not $internetOk) {
@@ -279,16 +283,8 @@ if (-not $internetOk) {
 Write-Line "Internet" "OK" "Green"
 
 if ($LogFile) {
-    try {
-        if ((Test-Path -LiteralPath $LogFile) -and (Get-Item -LiteralPath $LogFile).Length -gt $MaxLogSizeB) {
-            $archive = $LogFile -replace '\.txt$', "_archive_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
-            Move-Item -LiteralPath $LogFile -Destination $archive -Force -ErrorAction Stop
-        }
-    } catch {
-        try {
-            $tail = Get-Content -LiteralPath $LogFile -Tail 500 -ErrorAction SilentlyContinue
-            if ($tail) { Set-Content -LiteralPath $LogFile -Value $tail -Encoding UTF8 -ErrorAction SilentlyContinue }
-        } catch { }
+    if ((Test-Path -LiteralPath $LogFile) -and (Get-Item -LiteralPath $LogFile).Length -gt $MaxLogSizeB) {
+        Clear-Content -LiteralPath $LogFile -Force -ErrorAction SilentlyContinue
     }
 }
 
@@ -320,12 +316,13 @@ if ($null -eq $wingetExe) {
 
     $wingetResult = Show-Loader {
         param($exe)
-        $ErrorActionPreference = "SilentlyContinue"
+        $ErrorActionPreference = "Stop"
         try {
-            $raw          = & $exe upgrade --all --silent --accept-source-agreements --accept-package-agreements 2>&1
-            $out          = $raw -join "`n"
-            $updatedCount = ([regex]::Matches($out, '(?m)^\s*\S+\s+\S+\s+\S+\s+->\s+\S+\s*$')).Count
-            $failedCount  = ([regex]::Matches($out, '(?im)^\s*(failed|error)\b')).Count
+            $raw         = & $exe upgrade --all --silent --accept-source-agreements --accept-package-agreements 2>&1
+            $out         = $raw -join "`n"
+            $failedCount = ([regex]::Matches($out, '(?i)\bfailed\b')).Count
+            $lines       = $raw | Where-Object { $_ -match '->' }
+            $updatedCount = if ($lines) { @($lines).Count } else { 0 }
             return @{ Updated = $updatedCount; Failed = $failedCount }
         } catch { return @{ Updated = 0; Failed = 1 } }
     } -ArgumentList $wingetExe -ExpectedSeconds 180 -TimeoutSeconds 600
@@ -355,7 +352,7 @@ $wuReady     = $false
 
 try {
     if (-not (Get-Module -ListAvailable -Name PSWindowsUpdate -ErrorAction SilentlyContinue)) {
-        Install-Module -Name PSWindowsUpdate -MinimumVersion "2.2.0" -Force -Scope CurrentUser -ErrorAction Stop
+        Install-Module -Name PSWindowsUpdate -MinimumVersion "2.2.0" -Repository PSGallery -Force -Scope CurrentUser -ErrorAction Stop
     }
     Import-Module PSWindowsUpdate -Force -ErrorAction Stop
     $wuReady = $true
@@ -533,7 +530,7 @@ $line
 if ($LogFile) {
     $logDir = Split-Path -Parent $LogFile
     if (-not (Test-Path -LiteralPath $logDir)) {
-        New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+        New-Item -ItemType Directory -LiteralPath $logDir -Force | Out-Null
     }
     try {
         Add-Content -LiteralPath $LogFile -Value $LogEntry -Encoding UTF8
@@ -564,7 +561,7 @@ Write-Host "`r  Closing...      " -ForegroundColor DarkGray
 Write-Host ""
 
 $statusLine  = if ($failCount -gt 0) { "Windows Updater - errors found" } else { "Windows Updater success" }
-$resultPath  = "C:\Users\rames\sys-scripts\update\update_result.txt"
+$resultPath  = Join-Path $ScriptDir "update_result.txt"
 "$statusLine|Completed in $DurationText`nLogs: Ctrl+Shift+Alt+L" | Set-Content -LiteralPath $resultPath -Encoding UTF8 -ErrorAction SilentlyContinue
 
 } finally {
