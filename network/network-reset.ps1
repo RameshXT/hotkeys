@@ -5,6 +5,9 @@ $ErrorActionPreference = "Stop"
 
 $VERSION       = "1.0"
 $SCRIPT_START  = Get-Date
+$ScriptDir     = Split-Path -Parent $MyInvocation.MyCommand.Path
+$LogFile       = Join-Path (Split-Path -Parent $ScriptDir) "logs\netreset_log.txt"
+$MaxLogSizeB   = 2MB
 
 function Write-Header {
     $w    = 62
@@ -68,16 +71,29 @@ function Test-Gateway {
 }
 
 function Test-Internet {
-    $hosts = @("8.8.8.8","1.1.1.1","9.9.9.9")
+    $hosts = @("8.8.8.8", "1.1.1.1", "9.9.9.9")
     foreach ($h in $hosts) {
-        if (Test-Connection -ComputerName $h -Count 1 -Quiet -ErrorAction SilentlyContinue) {
-            return $true
-        }
+        try {
+            $tcp = [System.Net.Sockets.TcpClient]::new()
+            $ar  = $tcp.BeginConnect($h, 443, $null, $null)
+            $ok  = $ar.AsyncWaitHandle.WaitOne(3000)
+            try { $tcp.EndConnect($ar) } catch {}
+            $tcp.Close()
+            if ($ok) { return $true }
+        } catch {}
     }
     return $false
 }
 
 Write-Header
+
+$logDir = Split-Path -Parent $LogFile
+if (-not (Test-Path -LiteralPath $logDir)) {
+    New-Item -ItemType Directory -LiteralPath $logDir -Force | Out-Null
+}
+if ((Test-Path -LiteralPath $LogFile) -and (Get-Item -LiteralPath $LogFile).Length -gt $MaxLogSizeB) {
+    Clear-Content -LiteralPath $LogFile -Force -ErrorAction SilentlyContinue
+}
 
 Write-Section "Diagnostics"
 
@@ -98,7 +114,7 @@ Write-Info "Internet       :" $(if ($preInternet) {"Reachable"} else {"Unreachab
 
 Write-Section "Resetting..."
 
-Write-Step "Releasing IP lease          " { ipconfig /release *"$($adapter.Name)"* 2>&1 }
+Write-Step "Releasing IP lease          " { $n = $adapter.Name; ipconfig /release "$n" 2>&1 }
 Write-Step "Flushing DNS cache          " { Clear-DnsClientCache }
 Write-Step "Resetting Winsock           " { netsh winsock reset 2>&1 }
 Write-Step "Resetting TCP/IP stack      " { netsh int ip reset 2>&1 }
@@ -129,7 +145,7 @@ Write-Host ""
 if (-not $connected) {
     Write-Host "  [WARN] Adapter did not come back up within $timeout seconds." -ForegroundColor Yellow
 } else {
-    Write-Step "Renewing IP lease           " { ipconfig /renew *"$($adapter.Name)"* 2>&1 }
+    Write-Step "Renewing IP lease           " { $n = $adapter.Name; ipconfig /renew "$n" 2>&1 }
     Write-Step "Registering DNS             " { Register-DnsClient }
 }
 
@@ -159,8 +175,29 @@ Write-Host ""
 Write-Host "  Done." -ForegroundColor Cyan
 Write-Host ""
 
+$logLine = "=" * 62
+$logEntry = @"
+$logLine
+  NETWORK RESET  v$VERSION  |  $($SCRIPT_START.ToString('dd-MM-yyyy | hh.mm.ss tt'))
+$logLine
+  Adapter        : $($adapter.Name)
+  Pre-Gateway    : $(if ($preGateway.Gateway) { $preGateway.Gateway } else { "None" })  Reachable: $($preGateway.Reachable)
+  Pre-Internet   : $preInternet
+  Post-Gateway   : $(if ($postGateway.Gateway) { $postGateway.Gateway } else { "None" })  Reachable: $($postGateway.Reachable)
+  Post-Internet  : $postInternet
+  Elapsed        : $elapsedStr
+  Result         : $(if ($postInternet) { "Network restored" } else { "Still no internet" })
+$logLine
+
+"@
+try {
+    Add-Content -LiteralPath $LogFile -Value $logEntry -Encoding UTF8
+} catch {
+    Write-Host "  [WARN] Log write failed: $($_.Exception.Message)" -ForegroundColor Yellow
+}
+
 Add-Type -AssemblyName System.Windows.Forms
-$balloon                 = New-Object System.Windows.Forms.NotifyIcon
+$balloon                 = [System.Windows.Forms.NotifyIcon]::new()
 $balloon.Icon            = [System.Drawing.SystemIcons]::Information
 $balloon.BalloonTipTitle = "Network Reset Done"
 $balloon.BalloonTipText  = if ($postInternet) { "Internet restored." } else { "Still no internet. Try restarting router." }

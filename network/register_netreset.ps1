@@ -1,6 +1,6 @@
 #Requires -RunAsAdministrator
 
-$NetResetScript = "C:\Users\rames\sys-scripts\network\network-reset.ps1"
+$NetResetScript = Join-Path $PSScriptRoot "network-reset.ps1"
 $TaskName       = "NetworkReset"
 $LoggedInUser   = "$env:USERDOMAIN\$env:USERNAME"
 
@@ -14,7 +14,7 @@ Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction Silent
 
 $Action = New-ScheduledTaskAction `
     -Execute "powershell.exe" `
-    -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$NetResetScript`""
+    -Argument "-NoProfile -WindowStyle Normal -ExecutionPolicy RemoteSigned -File `"$NetResetScript`""
 
 $Principal = New-ScheduledTaskPrincipal `
     -UserId    $LoggedInUser `
@@ -26,12 +26,18 @@ $Settings = New-ScheduledTaskSettingsSet `
     -MultipleInstances  IgnoreNew `
     -Priority           5
 
-Register-ScheduledTask `
-    -TaskName  $TaskName `
-    -Action    $Action `
-    -Principal $Principal `
-    -Settings  $Settings `
-    -Force | Out-Null
+try {
+    Register-ScheduledTask `
+        -TaskName  $TaskName `
+        -Action    $Action `
+        -Principal $Principal `
+        -Settings  $Settings `
+        -Force `
+        -ErrorAction Stop | Out-Null
+} catch {
+    Write-Host "ERROR: Failed to register task '$TaskName': $($_.Exception.Message)" -ForegroundColor Red
+    exit 1
+}
 
 Write-Host ""
 Write-Host "Task '$TaskName' registered successfully." -ForegroundColor Green
