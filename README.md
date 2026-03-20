@@ -1,6 +1,6 @@
 # sys-scripts
 
-Windows automation scripts for cleanup, updates, and hotkeys.
+Windows automation scripts for cleanup, updates, hotkeys, image organizer and etc.
 
 ---
 
@@ -14,6 +14,9 @@ sys-scripts/
 │   └── register_cleanup.ps1
 ├── hotkeys/
 │   └── hotkeys.ahk
+├── image-organizer/
+│   ├── organize.ps1
+│   └── undo.ps1
 └── update/
     ├── register_update.ps1
     ├── update.ps1
@@ -59,6 +62,35 @@ C:\Users\rames\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\
 | Ctrl+Shift+Alt+C | Run Windows Cleanup | NA |
 | Ctrl+Shift+Alt+U | Run Windows Updater | NA |
 | Ctrl+Shift+Alt+Delete | Empty Recycle Bin (with confirm) | NA |
+
+---
+
+## Image Organizer
+
+Sorts photos and videos into date-based folders. Reads EXIF first, falls back to filename then file date.
+
+```
+<destination>/
+├── 2024/
+│   └── 03-March/
+└── _organizer_logs/
+    ├── report_<timestamp>.html
+    └── undo_<timestamp>.csv
+```
+
+```powershell
+# Organize
+powershell -ExecutionPolicy Bypass -File ".\image-organizer\organize.ps1"
+
+# Undo last run
+powershell -ExecutionPolicy Bypass -File ".\image-organizer\undo.ps1" -Log ".\<destination>\_organizer_logs\undo_<timestamp>.csv"
+```
+> [!NOTE]
+> The HTML report includes the exact undo command. Open it if you're unsure of the log path.
+
+The script will prompt for source, destination, move or copy, subfolders, and an optional dry run.
+
+Logs and HTML report are saved to `_organizer_logs\` inside the destination.
 
 ---
 
