@@ -16,6 +16,7 @@
 
 ; Ctrl+Shift+Alt+C       → Run Windows Cleanup Script
 ; Ctrl+Shift+Alt+U       → Run Windows Updater Script
+; Ctrl+Shift+Alt+N       → Run Network Reset Script
 ; Ctrl+Shift+Alt+Delete  → Empty Recycle Bin (with confirm)
 
 ; ====================[ Script Config ]====================
@@ -591,6 +592,25 @@ return
         if (A_LastError != 1223)
         {
             ToolTip, Failed to trigger updater: %e%
+            SetTimer, RemoveToolTip, -2000
+        }
+    }
+return
+
+
+; ====================[ Network Reset | Ctrl+Shift+Alt+N ]====================
+^+!n::
+    try
+    {
+        Run, schtasks.exe /Run /TN "NetworkReset" /I,, Hide
+        ToolTip, Resetting network...
+        SetTimer, RemoveToolTip, -2000
+    }
+    catch e
+    {
+        if (A_LastError != 1223)
+        {
+            ToolTip, Failed to trigger network reset: %e%
             SetTimer, RemoveToolTip, -2000
         }
     }
