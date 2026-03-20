@@ -1,6 +1,6 @@
 # sys-scripts
 
-Windows automation scripts for cleanup, updates, hotkeys, image organizer and etc.
+Windows automation scripts for cleanup, updates, hotkeys, image organizer, network reset and more to come.
 
 ---
 
@@ -54,7 +54,7 @@ Cleans temp files, Windows Update cache, prefetch, WER reports, crash dumps, thu
 powershell -ExecutionPolicy Bypass -File "C:\Users\rames\sys-scripts\cleanup\register_cleanup.ps1"
 ```
 
-Run the register script once as admin. After that use `Ctrl+Shift+Alt+C` — no UAC prompt.
+Run the register script once as admin. After that use `Ctrl+Shift+Alt+C` no UAC prompt.
 
 ---
 
@@ -106,6 +106,8 @@ destination/
     ├── report_timestamp.html
     └── undo_timestamp.csv
 ```
+
+To undo the last run, use the undo command with the log file from `_organizer_logs\`:
 ```powershell
 powershell -ExecutionPolicy Bypass -File ".\image-organizer\undo.ps1" -Log ".\destination\_organizer_logs\undo_timestamp.csv"
 ```
@@ -122,7 +124,7 @@ Resets Wi-Fi adapter, flushes DNS, and renews IP in one shot. Use when internet 
 powershell -ExecutionPolicy Bypass -File "C:\Users\rames\sys-scripts\network\register_netreset.ps1"
 ```
 
-Run the register script once as admin. After that use `Ctrl+Shift+Alt+N` — no UAC prompt.
+Run the register script once as admin. After that use `Ctrl+Shift+Alt+N` no UAC prompt.
 
 ---
 
@@ -133,7 +135,7 @@ Runs in 4 phases: Winget packages, Windows Update, Driver Update, Windows Store.
 powershell -ExecutionPolicy Bypass -File "C:\Users\rames\sys-scripts\update\register_update.ps1"
 ```
 
-Run the register script once as admin. After that use `Ctrl+Shift+Alt+U` — no UAC prompt.
+Run the register script once as admin. After that use `Ctrl+Shift+Alt+U` no UAC prompt.
 
 ---
 
@@ -143,4 +145,3 @@ Run the register script once as admin. After that use `Ctrl+Shift+Alt+U` — no 
 - `logs/update_log.txt`
 
 Logs are gitignored.
-```
