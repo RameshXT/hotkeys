@@ -29,7 +29,7 @@ SendMode Input
 SetWorkingDir %A_ScriptDir%
 
 ; ====================[ Path Config ]====================
-global USER_HOME := "C:\Users\rames"
+EnvGet, USER_HOME, USERPROFILE
 global VSCODE_PATH := USER_HOME . "\AppData\Local\Programs\Microsoft VS Code\Code.exe"
 global GIT_BASH_PATH := "C:\Program Files\Git\bin\bash.exe"
 global GIT_BASH_EXE := "C:\Program Files\Git\git-bash.exe"
@@ -86,7 +86,7 @@ GetExplorerPath()
     return ""
 }
 
-; ====================[ Convert Path to WSL Format ]====================
+; ====================[ Convert Path to WSL Format (defined, currently unused) ]====================
 ConvertToWSLPath(winPath)
 {
     local unixPath, drive
@@ -95,13 +95,13 @@ ConvertToWSLPath(winPath)
         return ""
 
     ; Replace backslashes with forward slashes
-    StringReplace, unixPath, winPath, \, /, All
+    unixPath := StrReplace(winPath, "\", "/")
 
     ; Convert drive letter (C: -> /c)
     if (SubStr(unixPath, 2, 1) = ":")
     {
         drive := SubStr(unixPath, 1, 1)
-        StringLower, drive, drive
+        drive := Format("{:L}", drive)
         unixPath := "/" . drive . SubStr(unixPath, 3)
     }
 
@@ -534,7 +534,14 @@ return
         FileDelete, %ResultFile%
 
     TriggerFile := USER_HOME . "\sys-scripts\cleanup\cleanup_trigger.txt"
-    FileAppend, hotkey, %TriggerFile%
+    try
+        FileAppend, hotkey, %TriggerFile%
+    catch e
+    {
+        ToolTip, Failed to write trigger file: %e%
+        SetTimer, RemoveToolTip, -2000
+        return
+    }
 
     try
     {
@@ -552,7 +559,7 @@ return
         return
     }
 
-    Loop, 120
+    Loop, 120  ; 120 x 500ms = 60 seconds total wait
     {
         Sleep, 500
         if FileExist(ResultFile)
@@ -561,11 +568,11 @@ return
             FileRead, ResultData, %ResultFile%
             FileDelete, %ResultFile%
             ToolTip
-            StringSplit, Parts, ResultData, |
-            if InStr(Parts1, "success")
-                TrayTip, %Parts1%, %Parts2%, 4, 1
+            Parts := StrSplit(ResultData, "|")
+            if InStr(Parts[1], "success")
+                TrayTip, % Parts[1], % Parts[2], 4, 1
             else
-                TrayTip, %Parts1%, %Parts2%, 4, 2
+                TrayTip, % Parts[1], % Parts[2], 4, 2
             return
         }
     }
@@ -585,7 +592,14 @@ return
     TriggerFile := USER_HOME . "\sys-scripts\update\update_trigger.txt"
     if FileExist(TriggerFile)
         FileDelete, %TriggerFile%
-    FileAppend, hotkey, %TriggerFile%
+    try
+        FileAppend, hotkey, %TriggerFile%
+    catch e
+    {
+        ToolTip, Failed to write trigger file: %e%
+        SetTimer, RemoveToolTip, -2000
+        return
+    }
 
     try
     {
@@ -603,7 +617,7 @@ return
         return
     }
 
-    Loop, 360
+    Loop, 360  ; 360 x 500ms = 180 seconds total wait
     {
         Sleep, 500
         if FileExist(ResultFile)
@@ -612,11 +626,11 @@ return
             FileRead, ResultData, %ResultFile%
             FileDelete, %ResultFile%
             ToolTip
-            StringSplit, Parts, ResultData, |
-            if InStr(Parts1, "success")
-                TrayTip, %Parts1%, %Parts2%, 4, 1
+            Parts := StrSplit(ResultData, "|")
+            if InStr(Parts[1], "success")
+                TrayTip, % Parts[1], % Parts[2], 4, 1
             else
-                TrayTip, %Parts1%, %Parts2%, 4, 2
+                TrayTip, % Parts[1], % Parts[2], 4, 2
             return
         }
     }
