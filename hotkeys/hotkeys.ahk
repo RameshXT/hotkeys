@@ -17,6 +17,7 @@
 ; Ctrl+Shift+Alt+C       → Run Windows Cleanup Script
 ; Ctrl+Shift+Alt+U       → Run Windows Updater Script
 ; Ctrl+Shift+Alt+N       → Run Network Reset Script
+; Ctrl+Shift+Alt+L       → Open Logs Folder
 ; Ctrl+Shift+Alt+Delete  → Empty Recycle Bin (with confirm)
 
 ; ====================[ Script Config ]====================
@@ -39,6 +40,7 @@ global SLACK_LNK := "C:\Program Files\Slack.lnk"
 global YOUTUBE_LNK := USER_HOME . "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Chrome Apps\YouTube.lnk"
 global CHROME_LNK := "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Google Chrome.lnk"
 global ANTIGRAVITY_LNK := USER_HOME . "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Antigravity\Antigravity.lnk"
+global LOGS_DIR := USER_HOME . "\sys-scripts\logs"
 
 ; ====================[ Timing Config ]====================
 global DOUBLE_PRESS_DELAY := 400
@@ -639,6 +641,24 @@ return
             ToolTip, Failed to trigger network reset: %e%
             SetTimer, RemoveToolTip, -2000
         }
+    }
+return
+
+
+; ====================[ Open Logs Folder | Ctrl+Shift+Alt+L ]====================
+^+!l::
+    if !FileExist(LOGS_DIR)
+    {
+        ToolTip, Logs folder not found: %LOGS_DIR%
+        SetTimer, RemoveToolTip, -2000
+        return
+    }
+    try
+        Run, explorer.exe "%LOGS_DIR%"
+    catch e
+    {
+        ToolTip, Failed to open logs folder: %e%
+        SetTimer, RemoveToolTip, -2000
     }
 return
 

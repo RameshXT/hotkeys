@@ -1,0 +1,2 @@
+﻿Windows Updater success|Completed in 58.9s
+Logs: Ctrl+Shift+Alt+L
