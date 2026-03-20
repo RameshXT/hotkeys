@@ -45,11 +45,17 @@ function Write-Err  ([string]$Msg) { Write-Host "  [ERROR] $Msg" -ForegroundColo
 
 function Prompt-Choice {
     param([string]$Question, [string[]]$Valid, [string]$Default = "")
+    $wordMap = @{
+        "MOVE" = "M"; "COPY" = "C"
+        "YES"  = "Y"; "NO"   = "N"
+    }
     do {
         $hint   = if ($Default) { " [$($Valid -join '/'), default=$Default]" } else { " [$($Valid -join '/')]" }
         Write-Host "  $Question$hint : " -NoNewline -ForegroundColor Gray
         $answer = (Read-Host).Trim()
         if ($answer -eq "" -and $Default -ne "") { $answer = $Default }
+        $upper = $answer.ToUpper()
+        if ($wordMap.ContainsKey($upper)) { $answer = $wordMap[$upper] }
     } while ($answer.ToUpper() -notin ($Valid | ForEach-Object { $_.ToUpper() }))
     return $answer.ToUpper()
 }
@@ -160,7 +166,7 @@ function Invoke-Organize {
     $gcArgs = @{ LiteralPath = $Source; File = $true }
     if ($DoRecurse) { $gcArgs['Recurse'] = $true }
     $allFiles = @(Get-ChildItem @gcArgs -ErrorAction SilentlyContinue |
-        Where-Object { $SupportedAll -contains $_.Extension.ToLower() })
+        Where-Object { $script:SupportedAll -contains $_.Extension.ToLower() })
     $total = $allFiles.Count
 
     if ($total -eq 0) { Write-Warn "No supported media files found in: $Source"; return $null }
@@ -171,7 +177,7 @@ function Invoke-Organize {
     $padWidth      = ([string]$total).Length
     $destHashCache = [System.Collections.Generic.HashSet[string]]::new()
 
-    if (-not $DryRun) {
+    if (-not $DryRun -and $null -ne $UndoLogPath) {
         if ($DoMove) {
             "Action,SourcePath,DestinationPath,FileName,CreationTime,LastWriteTime,LastAccessTime" |
                 Out-File -FilePath $UndoLogPath -Encoding UTF8
@@ -241,7 +247,6 @@ function Invoke-Organize {
             $status = "SKIPPED"; $skipFile = $true; $skipped++
         }
 
-        # Execute
         if (-not $skipFile) {
             try {
                 if (-not $DryRun) {
@@ -266,10 +271,10 @@ function Invoke-Organize {
                         $undoLine = "COPY,{0},{1},{2}" -f `
                             $file.FullName, $finalDest, $file.Name
                     }
-                    $undoLine | Out-File -FilePath $UndoLogPath -Append -Encoding UTF8
+                    if ($null -ne $UndoLogPath) { $undoLine | Out-File -FilePath $UndoLogPath -Append -Encoding UTF8 }
                 }
 
-                if ($null -eq $status) { $status = $Verb.ToUpper() }
+                if ($null -eq $status) { $status = if ($DryRun) { "WILL $($Verb.ToUpper())" } else { $Verb.ToUpper() } }
                 $processed++
                 if ($null -ne $sourceHash) { $destHashCache.Add($sourceHash) | Out-Null }
 
@@ -291,6 +296,8 @@ function Invoke-Organize {
 
         Write-Host "  $progress " -NoNewline -ForegroundColor DarkGray
         switch ($status) {
+            "WILL MOVED"  { Write-Host " WILL MOVE" -NoNewline -ForegroundColor Cyan }
+            "WILL COPIED" { Write-Host " WILL COPY" -NoNewline -ForegroundColor Cyan }
             "MOVED"    { Write-Host " MOVED    " -NoNewline -ForegroundColor Green }
             "COPIED"   { Write-Host " COPIED   " -NoNewline -ForegroundColor Green }
             "REPLACED" { Write-Host " REPLACED " -NoNewline -ForegroundColor Yellow }
@@ -318,7 +325,8 @@ function Invoke-Organize {
     Write-Host "  SUMMARY$(if ($DryRun){' (TEST RUN -- nothing was changed)'})" -ForegroundColor Cyan
     Write-Host $divider -ForegroundColor DarkGray
     Write-Info "Total found    :" $total
-    Write-Info "$($Verb.PadRight(12)) :" $processed
+    $summaryVerb = if ($DryRun) { "Will $Verb" } else { $Verb }
+    Write-Info "$($summaryVerb.PadRight(12)) :" $processed
     Write-Info "Replaced       :" $replaced "Yellow"
     Write-Info "Renamed        :" $renamed  "Cyan"
     Write-Info "Skipped        :" $skipped  "DarkGray"
@@ -326,7 +334,7 @@ function Invoke-Organize {
     Write-Info "Elapsed        :" $elapsedStr
     Write-Host $divider -ForegroundColor DarkGray
 
-    if (-not $DryRun) {
+    if (-not $DryRun -and $null -ne $HtmlReportPath) {
         $htmlRows = ($UndoEntries | ForEach-Object {
             $rc = if ($_.Action -eq "MOVE") { "moved" } else { "copied" }
             "<tr class='$rc'><td>$($_.FileName)</td><td>$($_.Action)</td><td>$($_.Date)</td><td>$($_.Source)</td><td>$($_.Destination)</td></tr>"
@@ -421,7 +429,6 @@ Write-Header
 
 Write-Section "Configuration"
 
-# Source
 if ($HardSource -ne "") {
     $Source = $HardSource
     Write-Info "Source         :" $Source
@@ -431,7 +438,6 @@ if ($HardSource -ne "") {
 }
 if (-not (Test-Path -LiteralPath $Source)) { Write-Err "Source path does not exist: $Source"; exit 1 }
 
-# Destination
 if ($HardDestination -ne "") {
     $Destination = $HardDestination
     Write-Info "Destination    :" $Destination
@@ -441,10 +447,9 @@ if ($HardDestination -ne "") {
 }
 
 $srcFull = (Resolve-Path -LiteralPath $Source).Path.TrimEnd('\')
-$dstFull = $Destination.TrimEnd('\')
+$dstFull = if (Test-Path -LiteralPath $Destination) { (Resolve-Path -LiteralPath $Destination).Path.TrimEnd('\') } else { $Destination.TrimEnd('\') }
 if ($srcFull -ieq $dstFull) { Write-Err "Source and Destination cannot be the same path."; exit 1 }
 
-# Action
 if ($HardAction -ne "") {
     $Action = $HardAction.ToUpper()
 } else {
@@ -454,7 +459,6 @@ if ($Action -notin @("M","C")) { Write-Err "Invalid action '$Action'"; exit 1 }
 $DoMove = ($Action -eq "M")
 $Verb   = if ($DoMove) { "Moved" } else { "Copied" }
 
-# Recurse
 if ($HardRecurse -ne "") {
     $RecurseInput = $HardRecurse.ToUpper()
 } else {
@@ -469,13 +473,12 @@ if ($HardRecurse -ne "") {
 if ($RecurseInput -notin @("Y","N")) { Write-Err "Invalid choice '$RecurseInput'"; exit 1 }
 $DoRecurse = ($RecurseInput -eq "Y")
 
-# Dry run
 if ($HardDryRun -ne "") {
     $DryRunInput = $HardDryRun.ToUpper()
 } else {
     Write-Host ""
     Write-Host "  Test run? (shows what will happen without touching any files)" -ForegroundColor Gray
-    $DryRunInput = Prompt-Choice "Test run" @("Y","N") "N"
+    $DryRunInput = Prompt-Choice "Proceed" @("Y","N") "N"
 }
 $DryRun = ($DryRunInput -eq "Y")
 
@@ -484,14 +487,19 @@ Write-Info "Action         :" $(if ($DoMove){"Move"} else {"Copy"})
 Write-Info "Subfolders     :" $(if ($DoRecurse){"Yes"} else {"No"})
 if ($DryRun) { Write-Info "Mode           :" "TEST RUN - nothing will be changed" "Yellow" }
 
-# Log paths
 $LogDir         = Join-Path $Destination "_organizer_logs"
 $UndoLogPath    = Join-Path $LogDir "undo_$LOG_TIMESTAMP.csv"
 $HtmlReportPath = Join-Path $LogDir "report_$LOG_TIMESTAMP.html"
 
 if (-not $DryRun) {
     if (-not (Test-Path -LiteralPath $LogDir)) {
-        New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
+        try {
+            New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
+        } catch {
+            Write-Warn "Cannot create log directory '$LogDir': $($_.Exception.Message). Logs will be skipped."
+            $UndoLogPath    = $null
+            $HtmlReportPath = $null
+        }
     }
 }
 
@@ -506,6 +514,8 @@ $result = Invoke-Organize `
     -UndoLogPath    $UndoLogPath `
     -HtmlReportPath $HtmlReportPath
 
+$cancelled = $false
+
 if ($DryRun -and $null -ne $result) {
     Write-Host ""
     Write-Host "  This was a test run. No files were touched." -ForegroundColor Yellow
@@ -517,7 +527,13 @@ if ($DryRun -and $null -ne $result) {
         Write-Host "  Starting real run..." -ForegroundColor Cyan
 
         if (-not (Test-Path -LiteralPath $LogDir)) {
-            New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
+            try {
+                New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
+            } catch {
+                Write-Warn "Cannot create log directory: $($_.Exception.Message). Logs will be skipped."
+                $UndoLogPath    = $null
+                $HtmlReportPath = $null
+            }
         }
 
         $result = Invoke-Organize `
@@ -531,7 +547,7 @@ if ($DryRun -and $null -ne $result) {
             -UndoLogPath    $UndoLogPath `
             -HtmlReportPath $HtmlReportPath
 
-        if (Test-Path -LiteralPath $UndoLogPath) {
+        if ($null -ne $UndoLogPath -and (Test-Path -LiteralPath $UndoLogPath)) {
             $undoDesc = if ($DoMove) { "move all files back to their original locations" } `
                                      else { "delete all copied files from destination" }
             Write-Host ""
@@ -541,12 +557,14 @@ if ($DryRun -and $null -ne $result) {
             Write-Host "  .\undo.ps1 -Log `"$UndoLogPath`"" -ForegroundColor Cyan
         }
     } else {
+        $cancelled = $true
+        $result    = $null
         Write-Host ""
         Write-Host "  Cancelled. No files were changed." -ForegroundColor DarkGray
     }
 
 } elseif (-not $DryRun -and $null -ne $result) {
-    if (Test-Path -LiteralPath $UndoLogPath) {
+    if ($null -ne $UndoLogPath -and (Test-Path -LiteralPath $UndoLogPath)) {
         $undoDesc = if ($DoMove) { "move all files back to their original locations" } `
                                  else { "delete all copied files from destination" }
         Write-Host ""
@@ -558,19 +576,26 @@ if ($DryRun -and $null -ne $result) {
 }
 
 Write-Host ""
-Write-Host "  Done." -ForegroundColor Cyan
+Write-Host $(if ($cancelled) { "  Cancelled." } else { "  Done." }) -ForegroundColor $(if ($cancelled) { "DarkGray" } else { "Cyan" })
 Write-Host ""
 
-if ($null -ne $result) {
-    try {
-        Add-Type -AssemblyName System.Windows.Forms
-        $balloon                 = New-Object System.Windows.Forms.NotifyIcon
-        $balloon.Icon            = [System.Drawing.SystemIcons]::Information
-        $balloon.BalloonTipTitle = "Image Organizer Done"
-        $balloon.BalloonTipText  = "$($result.Processed) $Verb, $($result.Skipped) skipped, $($result.Errored) error(s)"
-        $balloon.Visible         = $true
+try {
+    Add-Type -AssemblyName System.Windows.Forms
+    $balloon         = [System.Windows.Forms.NotifyIcon]::new()
+    $balloon.Icon    = [System.Drawing.SystemIcons]::Information
+    $balloon.Visible = $true
+    if ($cancelled) {
+        $balloon.BalloonTipTitle = "Image Organizer"
+        $balloon.BalloonTipText  = "Cancelled. No files were changed."
+        $balloon.BalloonTipIcon  = [System.Windows.Forms.ToolTipIcon]::Info
         $balloon.ShowBalloonTip(4000)
         Start-Sleep -Milliseconds 4500
-        $balloon.Dispose()
-    } catch { }
-}
+    } elseif ($null -ne $result) {
+        $balloon.BalloonTipTitle = "Image Organizer Done"
+        $balloon.BalloonTipText  = "$($result.Processed) $Verb, $($result.Skipped) skipped, $($result.Errored) error(s)"
+        $balloon.BalloonTipIcon  = [System.Windows.Forms.ToolTipIcon]::Info
+        $balloon.ShowBalloonTip(4000)
+        Start-Sleep -Milliseconds 4500
+    }
+    $balloon.Dispose()
+} catch { }

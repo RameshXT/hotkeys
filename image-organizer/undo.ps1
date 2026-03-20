@@ -28,16 +28,27 @@ if (-not (Test-Path -LiteralPath $Log)) {
     exit 1
 }
 
-$rows = Import-Csv -LiteralPath $Log
+$rows = @(Import-Csv -LiteralPath $Log -ErrorAction Stop)
 
 if ($rows.Count -eq 0) {
     Write-Host "  [WARN]  Log file is empty. Nothing to undo." -ForegroundColor Yellow
     exit
 }
 
+if (-not ($rows[0].PSObject.Properties.Name -contains 'Action') -or
+    -not ($rows[0].PSObject.Properties.Name -contains 'DestinationPath')) {
+    Write-Host "  [ERROR] Log file format is invalid or not an organizer log: $Log" -ForegroundColor Red
+    exit 1
+}
+
 $opType = $rows[0].Action.ToUpper()
 $isMove = ($opType -eq "MOVE")
 $total  = $rows.Count
+
+$LogDir         = Split-Path -Parent $Log
+$DestinationRoot = Split-Path -Parent $LogDir
+$LogTimestamp   = [System.IO.Path]::GetFileNameWithoutExtension($Log) -replace '^undo_', ''
+$HtmlReportPath = Join-Path $LogDir "report_$LogTimestamp.html"
 
 Write-Info "Log file   :" $Log
 Write-Info "Entries    :" $total
@@ -46,13 +57,15 @@ Write-Host ""
 if ($isMove) {
     Write-Host "  What will happen:" -ForegroundColor Gray
     Write-Host "    $total file(s) will be moved back to their original locations." -ForegroundColor White
-    Write-Host "    Original timestamps (created, modified, accessed) will be restored exactly." -ForegroundColor DarkGray
-    Write-Host "    Empty destination folders left behind will NOT be removed." -ForegroundColor DarkGray
+    Write-Host "    Original timestamps (created, modified, accessed) will be restored exactly." -ForegroundColor Green
+    Write-Host "    Empty destination folders will be removed automatically." -ForegroundColor DarkGray
+    Write-Host "    Organizer logs for this run will be deleted." -ForegroundColor DarkGray
 } else {
     Write-Host "  What will happen:" -ForegroundColor Gray
-    Write-Host "    $total file(s) will be permanently deleted from the destination." -ForegroundColor Yellow
-    Write-Host "    Your original source files are NOT affected." -ForegroundColor DarkGray
+    Write-Host "    $total file(s) will be permanently deleted from the destination." -ForegroundColor White
+    Write-Host "    Your original source files are NOT affected." -ForegroundColor Green
     Write-Host "    Empty destination folders will be removed automatically." -ForegroundColor DarkGray
+    Write-Host "    Organizer logs for this run will be deleted." -ForegroundColor DarkGray
 }
 
 Write-Host ""
@@ -68,12 +81,12 @@ if ($confirm -ne "Y") {
 
 Write-Host ""
 
-$restored = 0
-$deleted  = 0
-$skipped  = 0
-$errored  = 0
-$counter  = 0
-$padWidth = ([string]$total).Length
+$restored     = 0
+$deleted      = 0
+$skipped      = 0
+$errored      = 0
+$counter      = 0
+$padWidth     = ([string]$total).Length
 
 foreach ($row in $rows) {
 
@@ -109,7 +122,6 @@ foreach ($row in $rows) {
 
             Move-Item -LiteralPath $destPath -Destination $sourcePath -Force
 
-            # Restore all three timestamps exactly
             $f                = Get-Item -LiteralPath $sourcePath
             $f.CreationTime   = [datetime]::Parse($row.CreationTime)
             $f.LastWriteTime  = [datetime]::Parse($row.LastWriteTime)
@@ -141,12 +153,6 @@ foreach ($row in $rows) {
         try {
             Remove-Item -LiteralPath $destPath -Force
 
-            $parentDir = [System.IO.Path]::GetDirectoryName($destPath)
-            if ((Test-Path -LiteralPath $parentDir) -and
-                (@(Get-ChildItem -LiteralPath $parentDir -Force).Count -eq 0)) {
-                Remove-Item -LiteralPath $parentDir -Force -ErrorAction SilentlyContinue
-            }
-
             Write-Host " DELETED  " -NoNewline -ForegroundColor Red
             Write-Host " $fileName" -ForegroundColor DarkGray
             $deleted++
@@ -159,19 +165,53 @@ foreach ($row in $rows) {
     }
 }
 
+$foldersRemoved = 0
+
+if (Test-Path -LiteralPath $DestinationRoot) {
+    $dirsToCheck = @(Get-ChildItem -LiteralPath $DestinationRoot -Directory -Recurse -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -notlike "*\_organizer_logs*" } |
+        Sort-Object FullName -Descending)
+
+    foreach ($dir in $dirsToCheck) {
+        if (Test-Path -LiteralPath $dir.FullName) {
+            $children = @(Get-ChildItem -LiteralPath $dir.FullName -Force -ErrorAction SilentlyContinue)
+            if ($children.Count -eq 0) {
+                try {
+                    Remove-Item -LiteralPath $dir.FullName -Force -ErrorAction Stop
+                    $foldersRemoved++
+                } catch { }
+            }
+        }
+    }
+}
+
+if (Test-Path -LiteralPath $Log) {
+    try { Remove-Item -LiteralPath $Log -Force -ErrorAction SilentlyContinue } catch { }
+}
+if (Test-Path -LiteralPath $HtmlReportPath) {
+    try { Remove-Item -LiteralPath $HtmlReportPath -Force -ErrorAction SilentlyContinue } catch { }
+}
+if (Test-Path -LiteralPath $LogDir) {
+    $remaining = @(Get-ChildItem -LiteralPath $LogDir -Force -ErrorAction SilentlyContinue)
+    if ($remaining.Count -eq 0) {
+        try { Remove-Item -LiteralPath $LogDir -Force -ErrorAction SilentlyContinue } catch { }
+    }
+}
+
 Write-Host ""
 Write-Host $divider -ForegroundColor DarkGray
 Write-Host "  UNDO SUMMARY" -ForegroundColor Cyan
 Write-Host $divider -ForegroundColor DarkGray
 
 if ($isMove) {
-    Write-Info "Restored   :" $restored  "Green"
+    Write-Info "Restored   :" $restored       "Green"
 } else {
-    Write-Info "Deleted    :" $deleted   "Red"
+    Write-Info "Deleted    :" $deleted        "Red"
 }
 
-Write-Info "Skipped    :" $skipped  "DarkGray"
-Write-Info "Errors     :" $errored  $(if ($errored -gt 0){"Red"} else {"White"})
+Write-Info "Skipped    :" $skipped           "DarkGray"
+Write-Info "Errors     :" $errored           $(if ($errored -gt 0){"Red"} else {"White"})
+Write-Info "Folders rm :" $foldersRemoved    "DarkGray"
 Write-Host $divider -ForegroundColor DarkGray
 Write-Host ""
 Write-Host "  Done." -ForegroundColor Cyan
