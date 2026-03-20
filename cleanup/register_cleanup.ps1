@@ -1,6 +1,6 @@
 #Requires -RunAsAdministrator
 
-$CleanupScript = "C:\Users\rames\sys-scripts\cleanup\cleanup.ps1"
+$CleanupScript = Join-Path $PSScriptRoot "cleanup.ps1"
 $TaskName      = "WindowsCleanup"
 $LoggedInUser  = "$env:USERDOMAIN\$env:USERNAME"
 
@@ -14,7 +14,7 @@ Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction Silent
 
 $Action = New-ScheduledTaskAction `
     -Execute "powershell.exe" `
-    -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$CleanupScript`""
+    -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy RemoteSigned -File `"$CleanupScript`""
 
 $Principal = New-ScheduledTaskPrincipal `
     -UserId    $LoggedInUser `

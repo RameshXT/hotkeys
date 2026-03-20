@@ -2,7 +2,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $ScriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Path
-$LogFile     = "C:\Users\rames\sys-scripts\logs\cleanup_log.txt"
+$LogFile     = Join-Path (Split-Path -Parent $ScriptDir) "logs\cleanup_log.txt"
 $MaxLogSizeB = 2MB
 $StartTime   = Get-Date
 $TotalFreed  = [long]0
@@ -49,7 +49,7 @@ function Get-FolderSize {
     if (-not (Test-Path -LiteralPath $Path)) { return [long]0 }
     try {
         $sum = (Get-ChildItem -LiteralPath $Path -Recurse -Force -ErrorAction SilentlyContinue |
-                Where-Object { -not $_.PSIsContainer } |
+                Where-Object { $null -ne $_ -and -not $_.PSIsContainer } |
                 Measure-Object -Property Length -Sum -ErrorAction SilentlyContinue).Sum
         return [long]$(if ($null -eq $sum) { 0 } else { $sum })
     } catch { return [long]0 }
@@ -68,16 +68,18 @@ function Assert-SafePath {
     param([string]$Path)
     $resolved = try { (Resolve-Path -LiteralPath $Path -ErrorAction Stop).Path.TrimEnd('\') } catch { $Path.TrimEnd('\') }
     $usersRoot = Join-Path $env:SystemDrive "Users"
-    $blocked = @(
+    $fixedDriveRoots = [System.IO.DriveInfo]::GetDrives() |
+        Where-Object { $_.DriveType -eq 'Fixed' } |
+        ForEach-Object { $_.RootDirectory.FullName.TrimEnd('\') }
+    $blocked = (@(
         "$env:SystemRoot",
         "$env:SystemRoot\System32",
         "$env:SystemRoot\SysWOW64",
         "$env:ProgramFiles",
         "${env:ProgramFiles(x86)}",
         $usersRoot,
-        $env:SystemDrive,
-        "D:\", "E:\"
-    ) | ForEach-Object { $_.TrimEnd('\') }
+        $env:SystemDrive
+    ) + $fixedDriveRoots) | ForEach-Object { $_.TrimEnd('\') }
     foreach ($b in $blocked) {
         if ($resolved -ieq $b) {
             throw "SAFETY BLOCK: Refusing to clean protected path '$resolved'"
@@ -113,25 +115,35 @@ function Clean-Folder {
         if ($DaysOld -gt 0) {
             $cutoff = (Get-Date).AddDays(-$DaysOld)
             Get-ChildItem -LiteralPath $Path -Recurse -Force -ErrorAction SilentlyContinue |
-                Where-Object { -not $_.PSIsContainer -and $_.LastWriteTime -lt $cutoff } |
+                Where-Object { $null -ne $_ -and -not $_.PSIsContainer -and $_.LastWriteTime -lt $cutoff } |
                 ForEach-Object {
-                    try { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction Stop } catch {}
+                    $itemPath = $_.FullName
+                    try { Remove-Item -LiteralPath $itemPath -Force -ErrorAction Stop } catch {
+                        $script:Results.Add("WARN|$Label|delete failed: $itemPath - $($_.Exception.Message)")
+                    }
                 }
             Get-ChildItem -LiteralPath $Path -Recurse -Force -ErrorAction SilentlyContinue |
-                Where-Object { $_.PSIsContainer } |
+                Where-Object { $null -ne $_ -and $_.PSIsContainer } |
                 Sort-Object FullName -Descending |
                 ForEach-Object {
+                    $itemPath = $_.FullName
                     try {
-                        if ((Get-ChildItem -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue |
+                        if ((Get-ChildItem -LiteralPath $itemPath -Force -ErrorAction SilentlyContinue |
                              Measure-Object).Count -eq 0) {
-                            Remove-Item -LiteralPath $_.FullName -Force -ErrorAction Stop
+                            Remove-Item -LiteralPath $itemPath -Force -ErrorAction Stop
                         }
-                    } catch {}
+                    } catch {
+                        $script:Results.Add("WARN|$Label|delete failed: $itemPath - $($_.Exception.Message)")
+                    }
                 }
         } else {
             Get-ChildItem -LiteralPath $Path -Force -ErrorAction SilentlyContinue |
+                Where-Object { $null -ne $_ } |
                 ForEach-Object {
-                    try { Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction Stop } catch {}
+                    $itemPath = $_.FullName
+                    try { Remove-Item -LiteralPath $itemPath -Recurse -Force -ErrorAction Stop } catch {
+                        $script:Results.Add("WARN|$Label|delete failed: $itemPath - $($_.Exception.Message)")
+                    }
                 }
         }
     } catch {
@@ -147,28 +159,42 @@ function Clean-Folder {
 
 $logDir = Split-Path -Parent $LogFile
 if (-not (Test-Path -LiteralPath $logDir)) {
-    New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+    New-Item -ItemType Directory -LiteralPath $logDir -Force | Out-Null
 }
 
 if ((Test-Path -LiteralPath $LogFile) -and (Get-Item -LiteralPath $LogFile).Length -gt $MaxLogSizeB) {
-    $archive = $LogFile -replace '\.txt$', "_archive_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
-    Move-Item -LiteralPath $LogFile -Destination $archive -Force -ErrorAction SilentlyContinue
+    Clear-Content -LiteralPath $LogFile -Force -ErrorAction SilentlyContinue
 }
 
+Write-Host "[TRACE] START: User Temp"
 Clean-Folder $env:TEMP "User Temp"
 
+Write-Host "[TRACE] START: LocalAppData Temp"
+Clean-Folder "$env:LOCALAPPDATA\Temp" "LocalAppData Temp"
+
+Write-Host "[TRACE] START: Windows Temp"
 Clean-Folder "C:\Windows\Temp" "Windows Temp"
 
+Write-Host "[TRACE] START: Windows Update Cache block"
 $wuService    = Get-Service -Name wuauserv -ErrorAction SilentlyContinue
 $wuWasRunning = $wuService -and $wuService.Status -eq "Running"
 
 if ($wuWasRunning) {
-    $Results.Add("SKIP|Windows Update Cache|service running")
+    $script:Results.Add("SKIP|Windows Update Cache|service running")
 } else {
     try {
         if ($wuService -and $wuService.Status -ne "Stopped") {
             Stop-Service -Name wuauserv -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 2
+            $stopTimeout = 10
+            $stopElapsed = 0
+            do {
+                Start-Sleep -Seconds 1
+                $stopElapsed++
+                $wuService.Refresh()
+            } until ($wuService.Status -eq 'Stopped' -or $stopElapsed -ge $stopTimeout)
+            if ($wuService.Status -ne 'Stopped') {
+                throw "wuauserv did not stop within $stopTimeout seconds - aborting cache clean to prevent corruption."
+            }
         }
         Clean-Folder "C:\Windows\SoftwareDistribution\Download" "Windows Update Cache"
     } finally {
@@ -178,55 +204,121 @@ if ($wuWasRunning) {
     }
 }
 
+Write-Host "[TRACE] START: Delivery Optimization Cache"
+Clean-Folder "C:\Windows\SoftwareDistribution\DeliveryOptimization" "Delivery Optimization Cache"
+
+Write-Host "[TRACE] START: Prefetch"
 Clean-Folder "C:\Windows\Prefetch" "Prefetch"
+
+Write-Host "[TRACE] START: Windows Logs"
 Clean-Folder "C:\Windows\Logs" "Windows Logs (>7d)" 7
+
+Write-Host "[TRACE] START: WER blocks"
 Clean-Folder "C:\ProgramData\Microsoft\Windows\WER\ReportArchive"    "WER Report Archive"
 Clean-Folder "C:\ProgramData\Microsoft\Windows\WER\ReportQueue"      "WER Report Queue"
 Clean-Folder "$env:LOCALAPPDATA\Microsoft\Windows\WER\ReportArchive" "WER User Archive"
 Clean-Folder "$env:LOCALAPPDATA\Microsoft\Windows\WER\ReportQueue"   "WER User Queue"
 
-Clean-Folder "C:\Windows\Minidump"                                    "Crash Minidumps"
+Write-Host "[TRACE] START: Crash dumps"
+Clean-Folder "C:\Windows\Minidump" "Crash Minidumps"
 if (Test-Path -LiteralPath "C:\Windows\MEMORY.DMP") {
     try {
         $sz = (Get-Item -LiteralPath "C:\Windows\MEMORY.DMP").Length
         Remove-Item -LiteralPath "C:\Windows\MEMORY.DMP" -Force -ErrorAction Stop
         $script:TotalFreed += $sz
-        $Results.Add("OK|Crash Memory Dump|$(Format-Size $sz)")
+        $script:Results.Add("OK|Crash Memory Dump|$(Format-Size $sz)")
     } catch {
-        $Results.Add("FAIL|Crash Memory Dump|$($_.Exception.Message)")
+        $script:Results.Add("FAIL|Crash Memory Dump|$($_.Exception.Message)")
     }
 } else {
-    $Results.Add("SKIP|Crash Memory Dump|not found")
+    $script:Results.Add("SKIP|Crash Memory Dump|not found")
 }
-Clean-Folder "C:\Windows\Installer\`$PatchCache`$"                   "Installer Patch Cache"
-Clean-Folder "$env:APPDATA\Microsoft\Windows\Recent"                  "Recent Files"
 
+Write-Host "[TRACE] START: Installer Patch Cache"
+Clean-Folder "C:\Windows\Installer\`$PatchCache`$" "Installer Patch Cache"
+
+Write-Host "[TRACE] START: Recent Files"
+Clean-Folder "$env:APPDATA\Microsoft\Windows\Recent" "Recent Files"
+
+Write-Host "[TRACE] START: Edge Browser Cache"
+Clean-Folder "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Cache\Cache_Data" "Edge Browser Cache"
+
+Write-Host "[TRACE] START: Windows.old"
+if (Test-Path -LiteralPath "C:\Windows.old") {
+    try {
+        $woldBefore = Get-FolderSize "C:\Windows.old"
+        Get-ChildItem -LiteralPath "C:\Windows.old" -Force -ErrorAction SilentlyContinue |
+            Where-Object { $null -ne $_ } |
+            ForEach-Object {
+                $itemPath = $_.FullName
+                try { Remove-Item -LiteralPath $itemPath -Recurse -Force -ErrorAction Stop } catch {
+                    $script:Results.Add("WARN|Windows.old|delete failed: $itemPath - $($_.Exception.Message)")
+                }
+            }
+        $woldAfter = Get-FolderSize "C:\Windows.old"
+        $woldFreed = [math]::Max([long]0, $woldBefore - $woldAfter)
+        $script:TotalFreed += $woldFreed
+        try { Remove-Item -LiteralPath "C:\Windows.old" -Recurse -Force -ErrorAction SilentlyContinue } catch {}
+        $script:Results.Add("OK|Windows.old|$(Format-Size $woldFreed)")
+    } catch {
+        $script:Results.Add("FAIL|Windows.old|$($_.Exception.Message)")
+    }
+} else {
+    $script:Results.Add("SKIP|Windows.old|not found")
+}
+
+Write-Host "[TRACE] START: Event Logs"
+$evtLogs    = Get-WinEvent -ListLog "*" -ErrorAction SilentlyContinue
+$cutoffEvt  = (Get-Date).AddDays(-7)
+$evtCleared = 0
+$evtFailed  = 0
+if ($evtLogs) {
+    foreach ($log in $evtLogs) {
+        if ($log.RecordCount -gt 0 -and $log.LastWriteTime -lt $cutoffEvt) {
+            try {
+                [System.Diagnostics.Eventing.Reader.EventLogSession]::GlobalSession.ClearLog($log.LogName)
+                $evtCleared++
+            } catch {
+                $evtFailed++
+            }
+        }
+    }
+    $script:Results.Add("OK|Event Logs (>7d)|cleared $evtCleared log(s)$(if ($evtFailed -gt 0) { ", $evtFailed failed" })")
+} else {
+    $script:Results.Add("SKIP|Event Logs (>7d)|no logs found")
+}
+
+Write-Host "[TRACE] START: Thumbnail Cache"
 $thumbPath = "$env:LOCALAPPDATA\Microsoft\Windows\Explorer"
 if (Test-Path -LiteralPath $thumbPath) {
     $thumbFreed = [long]0
     Get-ChildItem -LiteralPath $thumbPath -Filter "thumbcache_*.db" -Force -ErrorAction SilentlyContinue |
+        Where-Object { $null -ne $_ } |
         ForEach-Object {
+            $itemPath = $_.FullName
+            $itemSize = $_.Length
             try {
-                $sz = $_.Length
-                Remove-Item -LiteralPath $_.FullName -Force -ErrorAction Stop
-                $thumbFreed += $sz
+                Remove-Item -LiteralPath $itemPath -Force -ErrorAction Stop
+                $thumbFreed += $itemSize
             } catch {}
         }
     $script:TotalFreed += $thumbFreed
-    $Results.Add("OK|Thumbnail Cache|$(Format-Size $thumbFreed)")
+    $script:Results.Add("OK|Thumbnail Cache|$(Format-Size $thumbFreed)")
 } else {
-    $Results.Add("SKIP|Thumbnail Cache|not found")
+    $script:Results.Add("SKIP|Thumbnail Cache|not found")
 }
 
+Write-Host "[TRACE] START: DNS Cache"
 try {
     Clear-DnsClientCache -ErrorAction Stop
-    $Results.Add("OK|DNS Cache|flushed")
+    $script:Results.Add("OK|DNS Cache|flushed")
 } catch {
-    $Results.Add("FAIL|DNS Cache|$($_.Exception.Message)")
+    $script:Results.Add("FAIL|DNS Cache|$($_.Exception.Message)")
 }
 
+Write-Host "[TRACE] START: Memory Standby List"
 try {
-    if (-not ([System.Management.Automation.PSTypeName]'MemUtil').Type) {
+    if (-not ('MemUtil' -as [type])) {
         $MemCode = @'
 using System;
 using System.Runtime.InteropServices;
@@ -237,7 +329,10 @@ public class MemUtil {
         IntPtr buf = Marshal.AllocHGlobal(4);
         try {
             Marshal.WriteInt32(buf, 4);
-            NtSetSystemInformation(0x60, buf, 4);
+            int status = NtSetSystemInformation(0x50, buf, 4);
+            if (status != 0) {
+                throw new Exception(string.Format("NtSetSystemInformation failed with NTSTATUS 0x{0:X8}", status));
+            }
         } finally {
             Marshal.FreeHGlobal(buf);
         }
@@ -247,9 +342,9 @@ public class MemUtil {
         Add-Type -TypeDefinition $MemCode -ErrorAction Stop
     }
     [MemUtil]::ClearStandbyList()
-    $Results.Add("OK|Memory Standby List|cleared")
+    $script:Results.Add("OK|Memory Standby List|cleared")
 } catch {
-    $Results.Add("FAIL|Memory Standby List|$($_.Exception.Message)")
+    $script:Results.Add("WARN|Memory Standby List|$($_.Exception.Message)")
 }
 
 $EndTime  = Get-Date
@@ -306,3 +401,5 @@ $statusLine = if ($hasFail) { "Windows Cleanup - errors found" } else { "Windows
 $ResultFile = Join-Path $ScriptDir "cleanup_result.txt"
 
 "$statusLine|Freed up: $FreedText`nLogs: Ctrl+Shift+Alt+L" | Set-Content -LiteralPath $ResultFile -Encoding UTF8
+
+Write-Host "[TRACE] Script completed successfully"
