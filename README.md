@@ -17,6 +17,9 @@ sys-scripts/
 ├── image-organizer/
 │   ├── organize.ps1
 │   └── undo.ps1
+├── network/
+│   ├── network-reset.ps1
+│   └── register_netreset.ps1
 └── update/
     ├── register_update.ps1
     ├── update.ps1
@@ -32,12 +35,15 @@ Run these once as admin in PowerShell:
 ```powershell
 powershell -ExecutionPolicy Bypass -File "C:\Users\rames\sys-scripts\cleanup\register_cleanup.ps1"
 powershell -ExecutionPolicy Bypass -File "C:\Users\rames\sys-scripts\update\register_update.ps1"
+powershell -ExecutionPolicy Bypass -File "C:\Users\rames\sys-scripts\network\register_netreset.ps1"
 ```
 
 Place a shortcut to `hotkeys.ahk` in:
 ```
 C:\Users\rames\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\
 ```
+
+Right-click the shortcut → Properties → Advanced → check **Run as administrator**.
 
 ---
 
@@ -61,6 +67,7 @@ C:\Users\rames\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\
 | Alt + Q | Close active window (hold to keep closing) | NA |
 | Ctrl+Shift+Alt+C | Run Windows Cleanup | NA |
 | Ctrl+Shift+Alt+U | Run Windows Updater | NA |
+| Ctrl+Shift+Alt+N | Run Network Reset | NA |
 | Ctrl+Shift+Alt+Delete | Empty Recycle Bin (with confirm) | NA |
 
 ---
@@ -86,12 +93,24 @@ destination/
     └── undo_timestamp.csv
 ```
 
-```
+```powershell
 powershell -ExecutionPolicy Bypass -File ".\image-organizer\undo.ps1" -Log ".\destination\_organizer_logs\undo_timestamp.csv"
 ```
 
 > [!NOTE]
 > The HTML report includes the exact undo command. Open it if you're unsure of the log path.
+
+---
+
+## Network Reset
+
+Resets Wi-Fi adapter, flushes DNS, and renews IP in one shot. Use when internet feels slow or stuck.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "C:\Users\rames\sys-scripts\network\register_netreset.ps1"
+```
+
+Run the register script once as admin. After that use `Ctrl+Shift+Alt+N` no UAC prompt.
 
 ---
 
