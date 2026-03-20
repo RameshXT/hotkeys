@@ -575,15 +575,21 @@ return
 
 ; ====================[ Windows Updater | Ctrl+Shift+Alt+U ]====================
 ^+!u::
-    TriggerFile := USER_HOME . "\update_trigger.txt"
+    ResultFile := USER_HOME . "\sys-scripts\update\update_result.txt"
+
+    if FileExist(ResultFile)
+        FileDelete, %ResultFile%
+
+    TriggerFile := USER_HOME . "\sys-scripts\update\update_trigger.txt"
     if FileExist(TriggerFile)
         FileDelete, %TriggerFile%
-
     FileAppend, hotkey, %TriggerFile%
 
     try
     {
         Run, schtasks.exe /Run /TN "WindowsUpdater" /I,, Hide
+        ToolTip, Updating...
+        SetTimer, RemoveToolTip, -2000
     }
     catch e
     {
@@ -592,7 +598,29 @@ return
             ToolTip, Failed to trigger updater: %e%
             SetTimer, RemoveToolTip, -2000
         }
+        return
     }
+
+    Loop, 360
+    {
+        Sleep, 500
+        if FileExist(ResultFile)
+        {
+            Sleep, 200
+            FileRead, ResultData, %ResultFile%
+            FileDelete, %ResultFile%
+            ToolTip
+            StringSplit, Parts, ResultData, |
+            if InStr(Parts1, "success")
+                TrayTip, %Parts1%, %Parts2%, 4, 1
+            else
+                TrayTip, %Parts1%, %Parts2%, 4, 2
+            return
+        }
+    }
+
+    ToolTip
+    TrayTip, Windows Updater, Timed out - check update_log.txt, 4, 3
 return
 
 

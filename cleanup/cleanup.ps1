@@ -145,6 +145,11 @@ function Clean-Folder {
     $script:Results.Add("OK|$Label|$(Format-Size $freed)")
 }
 
+$logDir = Split-Path -Parent $LogFile
+if (-not (Test-Path -LiteralPath $logDir)) {
+    New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+}
+
 if ((Test-Path -LiteralPath $LogFile) -and (Get-Item -LiteralPath $LogFile).Length -gt $MaxLogSizeB) {
     $archive = $LogFile -replace '\.txt$', "_archive_$(Get-Date -Format 'yyyyMMdd_HHmmss').txt"
     Move-Item -LiteralPath $LogFile -Destination $archive -Force -ErrorAction SilentlyContinue
@@ -300,4 +305,4 @@ $hasFail    = @($Results | Where-Object { $_ -match '^FAIL\||^BLOCK\|' }).Count 
 $statusLine = if ($hasFail) { "Windows Cleanup - errors found" } else { "Windows Cleanup success" }
 $ResultFile = Join-Path $ScriptDir "cleanup_result.txt"
 
-"$statusLine|Freed up: $FreedText" | Set-Content -LiteralPath $ResultFile -Encoding UTF8
+"$statusLine|Freed up: $FreedText`nLogs: Ctrl+Shift+Alt+L" | Set-Content -LiteralPath $ResultFile -Encoding UTF8

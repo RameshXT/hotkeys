@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 
 $ScriptVersion = "2.2.0"
 $ScriptDir     = Split-Path -Parent $MyInvocation.MyCommand.Path
-$LogFile       = Join-Path $ScriptDir "update_log.txt"
+$LogFile       = "C:\Users\rames\sys-scripts\logs\update_log.txt"
 $MaxLogSizeB   = 2MB
 $TriggerFile   = Join-Path $ScriptDir "update_trigger.txt"
 $ResultFile    = Join-Path $ScriptDir "update_result_$PID.txt"
@@ -531,6 +531,10 @@ $line
 "@
 
 if ($LogFile) {
+    $logDir = Split-Path -Parent $LogFile
+    if (-not (Test-Path -LiteralPath $logDir)) {
+        New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+    }
     try {
         Add-Content -LiteralPath $LogFile -Value $LogEntry -Encoding UTF8
     } catch {
@@ -552,59 +556,16 @@ if ($rebootPending) {
 Write-Host $line -ForegroundColor DarkGray
 Write-Host ""
 
-for ($i = 5; $i -ge 1; $i--) {
+for ($i = 3; $i -ge 1; $i--) {
     Write-Host -NoNewline "`r  Closing in ${i}s..." -ForegroundColor DarkGray
     Start-Sleep -Seconds 1
 }
 Write-Host "`r  Closing...      " -ForegroundColor DarkGray
 Write-Host ""
 
-$popupRows = foreach ($r in $Results) {
-    $p = $r -split '\|', 3
-    Format-Row $p[0] $p[1] $p[2]
-}
-$popupRowsText = $popupRows -join "`n"
-
-$MsgBody  = "$startLabel  $startStr`n"
-$MsgBody += "$triggerLabel  $TriggerLabel`n"
-$MsgBody += "$sepLine`n"
-$MsgBody += $popupRowsText
-$MsgBody += "`n$sepLine`n"
-$MsgBody += "$statusLabel  $overallStatus`n"
-$MsgBody += "$totalLabel  $DurationText"
-
-Set-Content -LiteralPath $ResultFile -Value $MsgBody -Encoding UTF8 -ErrorAction SilentlyContinue
-
-Add-Type -AssemblyName System.Windows.Forms
-
-$content = try {
-    if (Test-Path -LiteralPath $ResultFile) {
-        $c = Get-Content -LiteralPath $ResultFile -Raw -Encoding UTF8
-        Remove-Item -LiteralPath $ResultFile -Force -ErrorAction SilentlyContinue
-        $c
-    } else { $MsgBody }
-} catch { $MsgBody }
-
-try {
-    $hwnd = [ConsoleWindow]::GetConsoleWindow()
-    if ($hwnd -ne [IntPtr]::Zero) { [void][ConsoleWindow]::ShowWindow($hwnd, 0) }
-} catch { }
-
-[System.Windows.Forms.MessageBox]::Show($content, "Windows Updater  v$ScriptVersion", "OK", [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
-
-$openLog = [System.Windows.Forms.MessageBox]::Show(
-    "Open the log file?",
-    "Update Log",
-    [System.Windows.Forms.MessageBoxButtons]::YesNo,
-    [System.Windows.Forms.MessageBoxIcon]::Question
-)
-if ($openLog -eq [System.Windows.Forms.DialogResult]::Yes) {
-    if ($LogFile -and (Test-Path -LiteralPath $LogFile)) {
-        Start-Process notepad.exe -ArgumentList $LogFile
-    } else {
-        [System.Windows.Forms.MessageBox]::Show("Log file not found:`n$LogFile", "Error", "OK", [System.Windows.Forms.MessageBoxIcon]::Warning) | Out-Null
-    }
-}
+$statusLine  = if ($failCount -gt 0) { "Windows Updater - errors found" } else { "Windows Updater success" }
+$resultPath  = "C:\Users\rames\sys-scripts\update\update_result.txt"
+"$statusLine|Completed in $DurationText`nLogs: Ctrl+Shift+Alt+L" | Set-Content -LiteralPath $resultPath -Encoding UTF8 -ErrorAction SilentlyContinue
 
 } finally {
     try { $mutex.ReleaseMutex() } catch { }
