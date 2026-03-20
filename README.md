@@ -5,25 +5,26 @@ Windows automation scripts for cleanup, updates, hotkeys, image organizer and et
 ---
 
 ## Structure
-
 ```
 sys-scripts/
 ├── cleanup/
 │   ├── cleanup.ps1
-│   ├── cleanup_log.txt
 │   └── register_cleanup.ps1
 ├── hotkeys/
 │   └── hotkeys.ahk
 ├── image-organizer/
 │   ├── organize.ps1
 │   └── undo.ps1
+├── logs/
+│   ├── cleanup_log.txt
+│   └── update_log.txt
 ├── network/
 │   ├── network-reset.ps1
 │   └── register_netreset.ps1
 └── update/
     ├── register_update.ps1
     ├── update.ps1
-    └── update_log.txt
+    └── update_result.txt
 ```
 
 ---
@@ -31,7 +32,6 @@ sys-scripts/
 ## Setup
 
 Run these once as admin in PowerShell:
-
 ```powershell
 powershell -ExecutionPolicy Bypass -File "C:\Users\rames\sys-scripts\cleanup\register_cleanup.ps1"
 powershell -ExecutionPolicy Bypass -File "C:\Users\rames\sys-scripts\update\register_update.ps1"
@@ -47,7 +47,22 @@ Right-click the shortcut → Properties → Advanced → check **Run as administ
 
 ---
 
-## Hotkeys
+## [cleanup](./cleanup)
+
+Cleans temp files, Windows Update cache, prefetch, WER reports, crash dumps, thumbnail cache, DNS cache, and memory standby list. Logs every run with freed space and duration.
+```powershell
+powershell -ExecutionPolicy Bypass -File "C:\Users\rames\sys-scripts\cleanup\register_cleanup.ps1"
+```
+
+Run the register script once as admin. After that use `Ctrl+Shift+Alt+C` — no UAC prompt.
+
+---
+
+## [hotkeys](./hotkeys)
+
+AutoHotkey script that maps Alt and Ctrl+Shift+Alt combos to apps, tools, and system scripts.
+
+Place a shortcut to `hotkeys.ahk` in Startup and set it to run as administrator.
 
 | Hotkey | Action | Double / Long Press |
 |--------|--------|---------------------|
@@ -68,14 +83,14 @@ Right-click the shortcut → Properties → Advanced → check **Run as administ
 | Ctrl+Shift+Alt+C | Run Windows Cleanup | NA |
 | Ctrl+Shift+Alt+U | Run Windows Updater | NA |
 | Ctrl+Shift+Alt+N | Run Network Reset | NA |
+| Ctrl+Shift+Alt+L | Open Logs Folder | NA |
 | Ctrl+Shift+Alt+Delete | Empty Recycle Bin (with confirm) | NA |
 
 ---
 
-## Image Organizer
+## [image-organizer](./image-organizer)
 
 Sorts photos and videos into date-based folders. Reads EXIF first, falls back to filename then file date.
-
 ```powershell
 powershell -ExecutionPolicy Bypass -File ".\image-organizer\organize.ps1"
 ```
@@ -83,7 +98,6 @@ powershell -ExecutionPolicy Bypass -File ".\image-organizer\organize.ps1"
 The script will prompt for source, destination, move or copy, subfolders, and an optional dry run.
 
 Logs and HTML report are saved to `_organizer_logs\` inside the destination.
-
 ```
 destination/
 ├── 2026/
@@ -92,7 +106,6 @@ destination/
     ├── report_timestamp.html
     └── undo_timestamp.csv
 ```
-
 ```powershell
 powershell -ExecutionPolicy Bypass -File ".\image-organizer\undo.ps1" -Log ".\destination\_organizer_logs\undo_timestamp.csv"
 ```
@@ -102,21 +115,32 @@ powershell -ExecutionPolicy Bypass -File ".\image-organizer\undo.ps1" -Log ".\de
 
 ---
 
-## Network Reset
+## [network](./network)
 
 Resets Wi-Fi adapter, flushes DNS, and renews IP in one shot. Use when internet feels slow or stuck.
-
 ```powershell
 powershell -ExecutionPolicy Bypass -File "C:\Users\rames\sys-scripts\network\register_netreset.ps1"
 ```
 
-Run the register script once as admin. After that use `Ctrl+Shift+Alt+N` no UAC prompt.
+Run the register script once as admin. After that use `Ctrl+Shift+Alt+N` — no UAC prompt.
+
+---
+
+## [update](./update)
+
+Runs in 4 phases: Winget packages, Windows Update, Driver Update, Windows Store. Triggered automatically at logon (20 min delay) or manually via hotkey.
+```powershell
+powershell -ExecutionPolicy Bypass -File "C:\Users\rames\sys-scripts\update\register_update.ps1"
+```
+
+Run the register script once as admin. After that use `Ctrl+Shift+Alt+U` — no UAC prompt.
 
 ---
 
 ## Logs
 
-- `cleanup/cleanup_log.txt`
-- `update/update_log.txt`
+- `logs/cleanup_log.txt`
+- `logs/update_log.txt`
 
 Logs are gitignored.
+```
