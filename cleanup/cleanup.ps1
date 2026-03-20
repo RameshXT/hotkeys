@@ -238,7 +238,26 @@ Write-Host "[TRACE] START: Installer Patch Cache"
 Clean-Folder "C:\Windows\Installer\`$PatchCache`$" "Installer Patch Cache"
 
 Write-Host "[TRACE] START: Recent Files"
-Clean-Folder "$env:APPDATA\Microsoft\Windows\Recent" "Recent Files"
+$recentPath = "$env:APPDATA\Microsoft\Windows\Recent"
+if (Test-Path -LiteralPath $recentPath) {
+    $recentFreed = [long]0
+    Get-ChildItem -LiteralPath $recentPath -File -Filter "*.lnk" -Force -ErrorAction SilentlyContinue |
+        Where-Object { $null -ne $_ } |
+        ForEach-Object {
+            $itemPath = $_.FullName
+            $itemSize = $_.Length
+            try {
+                Remove-Item -LiteralPath $itemPath -Force -ErrorAction Stop
+                $recentFreed += $itemSize
+            } catch {
+                $script:Results.Add("WARN|Recent Files|delete failed: $itemPath - $($_.Exception.Message)")
+            }
+        }
+    $script:TotalFreed += $recentFreed
+    $script:Results.Add("OK|Recent Files|$(Format-Size $recentFreed)")
+} else {
+    $script:Results.Add("SKIP|Recent Files|not found")
+}
 
 Write-Host "[TRACE] START: Edge Browser Cache"
 Clean-Folder "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Cache\Cache_Data" "Edge Browser Cache"
