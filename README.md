@@ -79,12 +79,13 @@ Sorts photos and videos into date-based folders. Reads EXIF first, falls back to
 ```
 
 ```powershell
-# Organize
 powershell -ExecutionPolicy Bypass -File ".\image-organizer\organize.ps1"
+```
 
-# Undo last run
+```
 powershell -ExecutionPolicy Bypass -File ".\image-organizer\undo.ps1" -Log ".\<destination>\_organizer_logs\undo_<timestamp>.csv"
 ```
+
 > [!NOTE]
 > The HTML report includes the exact undo command. Open it if you're unsure of the log path.
 
