@@ -526,14 +526,12 @@ return
 
 ; ====================[ Windows Cleanup | Ctrl+Shift+Alt+C ]====================
 ^+!c::
-    ResultFile := USER_HOME . "\cleanup_result.txt"
+    ResultFile := USER_HOME . "\sys-scripts\cleanup\cleanup_result.txt"
 
-    ; Delete any old result file before triggering
     if FileExist(ResultFile)
         FileDelete, %ResultFile%
 
-    ; Write trigger hint file so cleanup.ps1 knows this came from hotkey
-    TriggerFile := USER_HOME . "\cleanup_trigger.txt"
+    TriggerFile := USER_HOME . "\sys-scripts\cleanup\cleanup_trigger.txt"
     FileAppend, hotkey, %TriggerFile%
 
     try
@@ -552,35 +550,35 @@ return
         return
     }
 
-    ; Poll for result file (max 60s)
     Loop, 120
     {
         Sleep, 500
         if FileExist(ResultFile)
         {
             Sleep, 200
-            FileRead, MsgBody, %ResultFile%
+            FileRead, ResultData, %ResultFile%
             FileDelete, %ResultFile%
             ToolTip
-            MsgBox, 64, Cleanup Done, %MsgBody%
+            StringSplit, Parts, ResultData, |
+            if InStr(Parts1, "success")
+                TrayTip, %Parts1%, %Parts2%, 4, 1
+            else
+                TrayTip, %Parts1%, %Parts2%, 4, 2
             return
         }
     }
 
     ToolTip
-    ToolTip, Cleanup timed out - check cleanup_log.txt
-    SetTimer, RemoveToolTip, -2000
+    TrayTip, Cleanup, Timed out - check cleanup_log.txt, 4, 3
 return
 
 
 ; ====================[ Windows Updater | Ctrl+Shift+Alt+U ]====================
 ^+!u::
-    ; Delete any stale trigger file
     TriggerFile := USER_HOME . "\update_trigger.txt"
     if FileExist(TriggerFile)
         FileDelete, %TriggerFile%
 
-    ; Write trigger hint so update.ps1 knows this came from hotkey
     FileAppend, hotkey, %TriggerFile%
 
     try

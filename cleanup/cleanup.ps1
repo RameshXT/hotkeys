@@ -2,7 +2,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $ScriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Path
-$LogFile     = Join-Path $ScriptDir "cleanup_log.txt"
+$LogFile     = "C:\Users\rames\sys-scripts\logs\cleanup_log.txt"
 $MaxLogSizeB = 2MB
 $StartTime   = Get-Date
 $TotalFreed  = [long]0
@@ -296,26 +296,8 @@ $lineBot
 
 Add-Content -LiteralPath $LogFile -Value $LogEntry -Encoding UTF8
 
+$hasFail    = @($Results | Where-Object { $_ -match '^FAIL\||^BLOCK\|' }).Count -gt 0
+$statusLine = if ($hasFail) { "Windows Cleanup - errors found" } else { "Windows Cleanup success" }
 $ResultFile = Join-Path $ScriptDir "cleanup_result.txt"
 
-$OkLines   = ($Results | Where-Object { $_ -match '^OK\|' }            | ForEach-Object { $p = $_ -split '\|',3; Format-Row $p[0] $p[1] $p[2] }) -join "`n"
-$SkipLines = ($Results | Where-Object { $_ -match '^SKIP\|' }          | ForEach-Object { $p = $_ -split '\|',3; Format-Row $p[0] $p[1] $p[2] }) -join "`n"
-$FailLines = ($Results | Where-Object { $_ -match '^FAIL\||^BLOCK\|' } | ForEach-Object { $p = $_ -split '\|',3; Format-Row $p[0] $p[1] $p[2] }) -join "`n"
-
-$MsgBody  = "$line1`n$headerRow`n$triggerRow`n$line1`n"
-if ($OkLines)   { $MsgBody += "$OkLines`n" }
-if ($SkipLines) { $MsgBody += "$SkipLines`n" }
-if ($FailLines) { $MsgBody += "$FailLines`n" }
-$MsgBody += "$line2`n$totalRow`n$lineBot`n$endRow`n$lineBot"
-
-$TempResultFile = "$ResultFile.tmp"
-Set-Content -LiteralPath $TempResultFile -Value $MsgBody -Encoding UTF8
-Move-Item -LiteralPath $TempResultFile -Destination $ResultFile -Force
-
-Start-Sleep -Seconds 3
-if (Test-Path -LiteralPath $ResultFile) {
-    $content = Get-Content -LiteralPath $ResultFile -Raw -Encoding UTF8
-    Remove-Item -LiteralPath $ResultFile -Force -ErrorAction SilentlyContinue
-    Add-Type -AssemblyName System.Windows.Forms
-    [System.Windows.Forms.MessageBox]::Show($content, "Cleanup Done", "OK", [System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
-}
+"$statusLine|Freed up: $FreedText" | Set-Content -LiteralPath $ResultFile -Encoding UTF8
