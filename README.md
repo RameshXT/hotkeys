@@ -69,6 +69,14 @@ C:\Users\rames\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\
 
 Sorts photos and videos into date-based folders. Reads EXIF first, falls back to filename then file date.
 
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\image-organizer\organize.ps1"
+```
+
+The script will prompt for source, destination, move or copy, subfolders, and an optional dry run.
+
+Logs and HTML report are saved to `_organizer_logs\` inside the destination.
+
 ```
 destination/
 ├── 2026/
@@ -78,20 +86,12 @@ destination/
     └── undo_timestamp.csv
 ```
 
-```powershell
-powershell -ExecutionPolicy Bypass -File ".\image-organizer\organize.ps1"
 ```
-
-```
-powershell -ExecutionPolicy Bypass -File ".\image-organizer\undo.ps1" -Log ".\<destination>\_organizer_logs\undo_<timestamp>.csv"
+powershell -ExecutionPolicy Bypass -File ".\image-organizer\undo.ps1" -Log ".\destination\_organizer_logs\undo_timestamp.csv"
 ```
 
 > [!NOTE]
 > The HTML report includes the exact undo command. Open it if you're unsure of the log path.
-
-The script will prompt for source, destination, move or copy, subfolders, and an optional dry run.
-
-Logs and HTML report are saved to `_organizer_logs\` inside the destination.
 
 ---
 
