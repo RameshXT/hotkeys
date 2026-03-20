@@ -70,12 +70,12 @@ C:\Users\rames\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\
 Sorts photos and videos into date-based folders. Reads EXIF first, falls back to filename then file date.
 
 ```
-<destination>/
-├── 2024/
+destination/
+├── 2026/
 │   └── 03-March/
 └── _organizer_logs/
-    ├── report_<timestamp>.html
-    └── undo_<timestamp>.csv
+    ├── report_timestamp.html
+    └── undo_timestamp.csv
 ```
 
 ```powershell
