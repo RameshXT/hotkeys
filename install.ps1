@@ -70,7 +70,7 @@ function Write-Err {
     Write-Host "  [x] $Message" -ForegroundColor Red
 }
 
-$TestDestination = "C:\tmp"
+$TestDestination = ""
 
 if ($PSScriptRoot -and (Test-Path $PSScriptRoot)) {
     $Source = $PSScriptRoot
@@ -81,7 +81,7 @@ if ($PSScriptRoot -and (Test-Path $PSScriptRoot)) {
 if ($TestDestination -ne "") {
     $Destination = $TestDestination
 } else {
-    $Destination = $env:USERPROFILE
+    $Destination = Join-Path $env:USERPROFILE "sys-scripts"
 }
 $StartupFolder = [Environment]::GetFolderPath("Startup")
 $SourceNorm    = $Source.TrimEnd('\').ToLower()
