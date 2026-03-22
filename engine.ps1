@@ -11,6 +11,8 @@ if (-not $isAdmin) {
     exit 0
 }
 
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+
 Add-Type -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
