@@ -152,3 +152,5 @@ Run the register script once as admin. After that use `Ctrl+Shift+Alt+U` no UAC 
 - `logs/update_log.txt`
 
 Logs are gitignored.
+
+Say chees
