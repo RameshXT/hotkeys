@@ -184,8 +184,9 @@ Write-Line "PowerShell" "v$psVer" "DarkGray"
 Add-Result "INFO" "PowerShell" "v$psVer"
 
 $osInfo = try {
-    $os = Get-CimInstance Win32_OperatingSystem -ErrorAction Stop
-    "$($os.Caption) Build $($os.BuildNumber)"
+    $os      = Get-CimInstance Win32_OperatingSystem -ErrorAction Stop
+    $caption = $os.Caption -replace '\s*(Single Language|Multi Language|Home Single Language)\s*', ' '
+    $caption.Trim()
 } catch { "Unknown" }
 Write-Line "OS" $osInfo "DarkGray"
 Add-Result "INFO" "OS" $osInfo
@@ -370,12 +371,14 @@ if ($wuReady) {
             if (-not $available -or $available.Count -eq 0) {
                 return @{ State = "uptodate"; Count = 0; KBList = "" }
             }
-            $installed = Install-WindowsUpdate -IgnoreReboot -AcceptAll -ErrorAction Stop
-            $count     = @($installed).Count
-            $kbList    = (@($installed) | ForEach-Object { $_.KB } | Where-Object { $_ }) -join ", "
-            return @{ State = "installed"; Count = $count; KBList = $kbList }
+            $installed  = Install-WindowsUpdate -IgnoreReboot -AcceptAll -ErrorAction Stop
+            $unique     = @($installed | Sort-Object KB -Unique)
+            $count      = $unique.Count
+            $kbList     = ($unique | ForEach-Object { $_.KB    } | Where-Object { $_ } | Select-Object -Unique) -join ", "
+            $titleList  = ($unique | ForEach-Object { $_.Title } | Where-Object { $_ } | Select-Object -Unique) -join ", "
+            return @{ State = "installed"; Count = $count; KBList = $kbList; TitleList = $titleList }
         } catch {
-            return @{ State = "failed"; Count = 0; KBList = $_.Exception.Message }
+            return @{ State = "failed"; Count = 0; KBList = $_.Exception.Message; TitleList = "" }
         }
     } -ExpectedSeconds 300 -TimeoutSeconds 1800
 
@@ -386,7 +389,7 @@ if ($wuReady) {
         $wuState = if ($wuResult.State) { $wuResult.State } else { "failed" }
         switch ($wuState) {
             "uptodate"  { Write-Line "Status" "UP-TO-DATE"                   "Green"; Add-Result "UP-TO-DATE" "Windows Update" "no updates available" }
-            "installed" { Write-Line "Status" "$($wuResult.Count) installed" "Green"; Add-Result "OK"         "Windows Update" "$($wuResult.Count) installed: $($wuResult.KBList)" }
+            "installed" { Write-Line "Status" "$($wuResult.Count) installed" "Green"; Add-Result "OK"         "Windows Update" "$($wuResult.Count) installed | KB: $($wuResult.KBList) | $($wuResult.TitleList)" }
             "failed"    { Write-Line "Status" "FAILED"                       "Red";   Add-Result "FAIL"       "Windows Update" $wuResult.KBList }
         }
     }
@@ -505,18 +508,18 @@ $verTitle     = "WINDOWS UPDATER  v$ScriptVersion"
 $verTitleLine = $verTitle.PadLeft([int](($HeaderWidth + $verTitle.Length) / 2))
 $startStr     = $StartTime.ToString('yyyy-MM-dd  HH:mm:ss')
 $endStr       = $EndTime.ToString('yyyy-MM-dd  HH:mm:ss')
-$startLabel   = "Start".PadRight($LabelW)
-$triggerLabel = "Trigger".PadRight($LabelW)
-$statusLabel  = "Status".PadRight($LabelW)
-$totalLabel   = "Total".PadRight($LabelW)
-$endLabel     = "End".PadRight($LabelW)
+$startLabel      = "Start".PadRight($LabelW)
+$triggerColLabel = "Trigger".PadRight($LabelW)
+$statusLabel     = "Status".PadRight($LabelW)
+$totalLabel      = "Total".PadRight($LabelW)
+$endLabel        = "End".PadRight($LabelW)
 
 $LogEntry = @"
 $line
 $verTitleLine
 $line
 $startLabel  $startStr
-$triggerLabel  $TriggerLabel
+$triggerColLabel  $TriggerLabel
 $line
 $logRowsText
 $line
