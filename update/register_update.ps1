@@ -22,7 +22,7 @@ $Principal = New-ScheduledTaskPrincipal `
     -LogonType Interactive
 
 $Trigger = New-ScheduledTaskTrigger -AtLogOn -User $LoggedInUser
-$Trigger.Delay = "PT20M"
+$Trigger.Delay = "PT30M"
 
 $Settings = New-ScheduledTaskSettingsSet `
     -ExecutionTimeLimit      (New-TimeSpan -Minutes 90) `
