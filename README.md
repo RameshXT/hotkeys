@@ -7,6 +7,11 @@ Windows automation scripts for cleanup, updates, hotkeys, image organizer, netwo
 ## Structure
 ```
 sys-scripts/
+├── LICENSE
+├── README.md
+├── install.bat
+├── uninstall.bat
+├── main.ps1
 ├── cleanup/
 │   ├── cleanup.ps1
 │   └── register_cleanup.ps1
@@ -17,6 +22,7 @@ sys-scripts/
 │   └── undo.ps1
 ├── logs/
 │   ├── cleanup_log.txt
+│   ├── netreset_log.txt
 │   └── update_log.txt
 ├── network/
 │   ├── network-reset.ps1
@@ -142,6 +148,7 @@ Run the register script once as admin. After that use `Ctrl+Shift+Alt+U` no UAC 
 ## Logs
 
 - `logs/cleanup_log.txt`
+- `logs/netreset_log.txt`
 - `logs/update_log.txt`
 
 Logs are gitignored.
