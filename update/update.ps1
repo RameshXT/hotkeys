@@ -194,7 +194,7 @@ $wingetVerStr = "not found"
 $wingetExe    = $null
 $wingetCandidates = @(
     "$env:LOCALAPPDATA\Microsoft\WindowsApps\winget.exe",
-    "C:\Program Files\WindowsApps\Microsoft.DesktopAppInstaller_*\winget.exe"
+    "$env:ProgramFiles\WindowsApps\Microsoft.DesktopAppInstaller_*\winget.exe"
 )
 foreach ($candidate in $wingetCandidates) {
     $resolved = Get-Item -Path $candidate -ErrorAction SilentlyContinue | Select-Object -First 1

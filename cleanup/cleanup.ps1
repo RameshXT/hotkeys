@@ -173,7 +173,7 @@ Write-Host "[TRACE] START: LocalAppData Temp"
 Clean-Folder "$env:LOCALAPPDATA\Temp" "LocalAppData Temp"
 
 Write-Host "[TRACE] START: Windows Temp"
-Clean-Folder "C:\Windows\Temp" "Windows Temp"
+Clean-Folder "$env:SystemRoot\Temp" "Windows Temp"
 
 Write-Host "[TRACE] START: Windows Update Cache block"
 $wuService    = Get-Service -Name wuauserv -ErrorAction SilentlyContinue
@@ -196,7 +196,7 @@ if ($wuWasRunning) {
                 throw "wuauserv did not stop within $stopTimeout seconds - aborting cache clean to prevent corruption."
             }
         }
-        Clean-Folder "C:\Windows\SoftwareDistribution\Download" "Windows Update Cache"
+        Clean-Folder "$env:SystemRoot\SoftwareDistribution\Download" "Windows Update Cache"
     } finally {
         if ($wuService) {
             Start-Service -Name wuauserv -ErrorAction SilentlyContinue
@@ -205,26 +205,26 @@ if ($wuWasRunning) {
 }
 
 Write-Host "[TRACE] START: Delivery Optimization Cache"
-Clean-Folder "C:\Windows\SoftwareDistribution\DeliveryOptimization" "Delivery Optimization Cache"
+Clean-Folder "$env:SystemRoot\SoftwareDistribution\DeliveryOptimization" "Delivery Optimization Cache"
 
 Write-Host "[TRACE] START: Prefetch"
-Clean-Folder "C:\Windows\Prefetch" "Prefetch"
+Clean-Folder "$env:SystemRoot\Prefetch" "Prefetch"
 
 Write-Host "[TRACE] START: Windows Logs"
-Clean-Folder "C:\Windows\Logs" "Windows Logs (>7d)" 7
+Clean-Folder "$env:SystemRoot\Logs" "Windows Logs (>7d)" 7
 
 Write-Host "[TRACE] START: WER blocks"
-Clean-Folder "C:\ProgramData\Microsoft\Windows\WER\ReportArchive"    "WER Report Archive"
-Clean-Folder "C:\ProgramData\Microsoft\Windows\WER\ReportQueue"      "WER Report Queue"
+Clean-Folder "$env:ProgramData\Microsoft\Windows\WER\ReportArchive"    "WER Report Archive"
+Clean-Folder "$env:ProgramData\Microsoft\Windows\WER\ReportQueue"      "WER Report Queue"
 Clean-Folder "$env:LOCALAPPDATA\Microsoft\Windows\WER\ReportArchive" "WER User Archive"
 Clean-Folder "$env:LOCALAPPDATA\Microsoft\Windows\WER\ReportQueue"   "WER User Queue"
 
 Write-Host "[TRACE] START: Crash dumps"
-Clean-Folder "C:\Windows\Minidump" "Crash Minidumps"
-if (Test-Path -LiteralPath "C:\Windows\MEMORY.DMP") {
+Clean-Folder "$env:SystemRoot\Minidump" "Crash Minidumps"
+if (Test-Path -LiteralPath "$env:SystemRoot\MEMORY.DMP") {
     try {
-        $sz = (Get-Item -LiteralPath "C:\Windows\MEMORY.DMP").Length
-        Remove-Item -LiteralPath "C:\Windows\MEMORY.DMP" -Force -ErrorAction Stop
+        $sz = (Get-Item -LiteralPath "$env:SystemRoot\MEMORY.DMP").Length
+        Remove-Item -LiteralPath "$env:SystemRoot\MEMORY.DMP" -Force -ErrorAction Stop
         $script:TotalFreed += $sz
         $script:Results.Add("OK|Crash Memory Dump|$(Format-Size $sz)")
     } catch {
@@ -235,7 +235,7 @@ if (Test-Path -LiteralPath "C:\Windows\MEMORY.DMP") {
 }
 
 Write-Host "[TRACE] START: Installer Patch Cache"
-Clean-Folder "C:\Windows\Installer\`$PatchCache`$" "Installer Patch Cache"
+Clean-Folder "$env:SystemRoot\Installer\`$PatchCache`$" "Installer Patch Cache"
 
 Write-Host "[TRACE] START: Recent Files"
 $recentPath = "$env:APPDATA\Microsoft\Windows\Recent"
@@ -263,10 +263,10 @@ Write-Host "[TRACE] START: Edge Browser Cache"
 Clean-Folder "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Cache\Cache_Data" "Edge Browser Cache"
 
 Write-Host "[TRACE] START: Windows.old"
-if (Test-Path -LiteralPath "C:\Windows.old") {
+if (Test-Path -LiteralPath "$env:SystemDrive\Windows.old") {
     try {
-        $woldBefore = Get-FolderSize "C:\Windows.old"
-        Get-ChildItem -LiteralPath "C:\Windows.old" -Force -ErrorAction SilentlyContinue |
+        $woldBefore = Get-FolderSize "$env:SystemDrive\Windows.old"
+        Get-ChildItem -LiteralPath "$env:SystemDrive\Windows.old" -Force -ErrorAction SilentlyContinue |
             Where-Object { $null -ne $_ } |
             ForEach-Object {
                 $itemPath = $_.FullName
@@ -274,10 +274,10 @@ if (Test-Path -LiteralPath "C:\Windows.old") {
                     $script:Results.Add("WARN|Windows.old|delete failed: $itemPath - $($_.Exception.Message)")
                 }
             }
-        $woldAfter = Get-FolderSize "C:\Windows.old"
+        $woldAfter = Get-FolderSize "$env:SystemDrive\Windows.old"
         $woldFreed = [math]::Max([long]0, $woldBefore - $woldAfter)
         $script:TotalFreed += $woldFreed
-        try { Remove-Item -LiteralPath "C:\Windows.old" -Recurse -Force -ErrorAction SilentlyContinue } catch {}
+        try { Remove-Item -LiteralPath "$env:SystemDrive\Windows.old" -Recurse -Force -ErrorAction SilentlyContinue } catch {}
         $script:Results.Add("OK|Windows.old|$(Format-Size $woldFreed)")
     } catch {
         $script:Results.Add("FAIL|Windows.old|$($_.Exception.Message)")
