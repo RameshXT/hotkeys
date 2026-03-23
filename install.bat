@@ -2,11 +2,11 @@
 setlocal EnableDelayedExpansion
 
 set "SCRIPT_DIR=%~dp0"
-set "PS_SCRIPT=%SCRIPT_DIR%engine.ps1"
+set "PS_SCRIPT=%SCRIPT_DIR%main.ps1"
 
 if not exist "%PS_SCRIPT%" (
     echo.
-    echo  [x] engine.ps1 not found next to install.bat
+    echo  [x] main.ps1 not found next to install.bat
     echo      Expected: %PS_SCRIPT%
     echo.
     pause
