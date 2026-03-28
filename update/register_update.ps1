@@ -48,6 +48,6 @@ Write-Host ""
 Write-Host "Task '$TaskName' registered successfully."          -ForegroundColor Green
 Write-Host "Update script  : $UpdateScript"                    -ForegroundColor Cyan
 Write-Host "Runs as        : $LoggedInUser (elevated, popup visible)" -ForegroundColor Cyan
-Write-Host "Triggered by   : At logon + 20 min delay, or Ctrl+Shift+Alt+W via AHK" -ForegroundColor Cyan
+Write-Host "Triggered by   : At logon + 30 min delay, or Ctrl+Shift+Alt+W via AHK" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "You only need to run this registration script once." -ForegroundColor Yellow

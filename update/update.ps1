@@ -6,6 +6,7 @@ $ScriptDir     = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LogFile       = Join-Path (Split-Path -Parent $ScriptDir) "logs\update_log.txt"
 $MaxLogSizeB   = 2MB
 $TriggerFile   = Join-Path $ScriptDir "update_trigger.txt"
+$LastRunFile   = Join-Path $ScriptDir "update_lastrun.txt"
 $StartTime     = Get-Date
 $Results       = [System.Collections.Generic.List[string]]::new()
 $HeaderWidth   = 50
@@ -37,6 +38,51 @@ if (-not $isAdmin) {
     throw "ABORT: Not running as Administrator."
 }
 
+# --- Trigger detection (must run before guards) ---
+if (Test-Path -LiteralPath $TriggerFile) {
+    $TriggerLabel = "Manual (Hotkey)"
+    Remove-Item -LiteralPath $TriggerFile -Force -ErrorAction SilentlyContinue
+} else {
+    $_selfProc  = try { Get-CimInstance Win32_Process -Filter "ProcessId=$PID" -ErrorAction Stop } catch { $null }
+    $parentName = try {
+        if ($_selfProc) { (Get-Process -Id $_selfProc.ParentProcessId -ErrorAction Stop).Name } else { "" }
+    } catch { "" }
+
+    $TriggerLabel = switch -Regex ($parentName) {
+        "^(powershell|pwsh)$"                 { "Manual (Shell)" }
+        "^(svchost|taskeng|taskhostw|msdtc)$" {
+            $sid = if ($_selfProc) { $_selfProc.SessionId } else { 0 }
+            if ($sid -gt 0) { "Scheduled (Manual)" } else { "Scheduled (Auto)" }
+        }
+        default { "Manual (Shell)" }
+    }
+}
+
+if ($TriggerLabel -eq "Scheduled (Auto)") {
+    $_today = (Get-Date).ToString('yyyy-MM-dd')
+    if (Test-Path -LiteralPath $LastRunFile) {
+        $_lastRun = (Get-Content -LiteralPath $LastRunFile -ErrorAction SilentlyContinue | Select-Object -First 1).Trim()
+        if ($_lastRun -eq $_today) {
+            Write-Host "SKIP: Already ran today ($_today). Exiting." -ForegroundColor Yellow
+            Start-Sleep -Seconds 4
+            exit 0
+        }
+    }
+
+    $_logonTime = try {
+        (Get-Process -Name "explorer" -ErrorAction Stop | Sort-Object StartTime | Select-Object -First 1).StartTime
+    } catch { $null }
+    if ($null -ne $_logonTime) {
+        $_minSinceLogon = ((Get-Date) - $_logonTime).TotalMinutes
+        if ($_minSinceLogon -lt 30) {
+            Write-Host "SKIP: Less than 30 minutes since logon. Exiting." -ForegroundColor Yellow
+            Start-Sleep -Seconds 4
+            exit 0
+        }
+    }
+}
+# --- End guards ---
+
 try {
     $src = @'
 using System;
@@ -60,25 +106,6 @@ public class ConsoleWindow {
         [void][ConsoleWindow]::MoveWindow($hwnd, ($sw - $ww), 0, $ww, $wh, $true)
     }
 } catch { }
-
-if (Test-Path -LiteralPath $TriggerFile) {
-    $TriggerLabel = "Manual (Hotkey)"
-    Remove-Item -LiteralPath $TriggerFile -Force -ErrorAction SilentlyContinue
-} else {
-    $_selfProc  = try { Get-CimInstance Win32_Process -Filter "ProcessId=$PID" -ErrorAction Stop } catch { $null }
-    $parentName = try {
-        if ($_selfProc) { (Get-Process -Id $_selfProc.ParentProcessId -ErrorAction Stop).Name } else { "" }
-    } catch { "" }
-
-    $TriggerLabel = switch -Regex ($parentName) {
-        "^(powershell|pwsh)$"                 { "Manual (Shell)" }
-        "^(svchost|taskeng|taskhostw|msdtc)$" {
-            $sid = if ($_selfProc) { $_selfProc.SessionId } else { 0 }
-            if ($sid -gt 0) { "Scheduled (Manual)" } else { "Scheduled (Auto)" }
-        }
-        default { "Manual (Shell)" }
-    }
-}
 
 function Write-Line {
     param([string]$Label, [string]$Value, [string]$Color = "White")
@@ -497,6 +524,11 @@ $overallStatus = if ($failCount -gt 0) {
 }
 
 $ExitCode = if ($failCount -gt 0) { 2 } else { 0 }
+
+# Mark today as done (once-per-day guard - automation only)
+if ($TriggerLabel -eq "Scheduled (Auto)") {
+    (Get-Date).ToString('yyyy-MM-dd') | Set-Content -LiteralPath $LastRunFile -Encoding UTF8 -ErrorAction SilentlyContinue
+}
 
 $logRows = foreach ($r in $Results) {
     $p = $r -split '\|', 3

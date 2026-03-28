@@ -2,6 +2,7 @@ logs/
 update/update_result.txt
 
 *.log
+*.txt
 
 Thumbs.db
 desktop.ini
