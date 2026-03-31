@@ -58,7 +58,7 @@ if (Test-Path -LiteralPath $TriggerFile) {
     }
 }
 
-if ($TriggerLabel -eq "Scheduled (Auto)") {
+if ($TriggerLabel -like "Scheduled*") {
     $_today = (Get-Date).ToString('yyyy-MM-dd')
     if (Test-Path -LiteralPath $LastRunFile) {
         $_lastRun = (Get-Content -LiteralPath $LastRunFile -ErrorAction SilentlyContinue | Select-Object -First 1).Trim()
@@ -525,8 +525,7 @@ $overallStatus = if ($failCount -gt 0) {
 
 $ExitCode = if ($failCount -gt 0) { 2 } else { 0 }
 
-# Mark today as done (once-per-day guard - automation only)
-if ($TriggerLabel -eq "Scheduled (Auto)") {
+if ($TriggerLabel -like "Scheduled*") {
     (Get-Date).ToString('yyyy-MM-dd') | Set-Content -LiteralPath $LastRunFile -Encoding UTF8 -ErrorAction SilentlyContinue
 }
 
