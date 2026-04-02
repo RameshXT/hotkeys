@@ -39,7 +39,8 @@ if (-not $isAdmin) {
 }
 
 # --- Trigger detection (must run before guards) ---
-if (Test-Path -LiteralPath $TriggerFile) {
+$IsHotkeyTrigger = Test-Path -LiteralPath $TriggerFile
+if ($IsHotkeyTrigger) {
     $TriggerLabel = "Manual (Hotkey)"
     Remove-Item -LiteralPath $TriggerFile -Force -ErrorAction SilentlyContinue
 } else {
@@ -54,11 +55,12 @@ if (Test-Path -LiteralPath $TriggerFile) {
             $sid = if ($_selfProc) { $_selfProc.SessionId } else { 0 }
             if ($sid -gt 0) { "Scheduled (Manual)" } else { "Scheduled (Auto)" }
         }
-        default { "Manual (Shell)" }
+        default { "Scheduled (Auto)" }
     }
 }
 
-if ($TriggerLabel -like "Scheduled*") {
+# --- Daily run guard (skipped only for hotkey triggers) ---
+if (-not $IsHotkeyTrigger) {
     $_today = (Get-Date).ToString('yyyy-MM-dd')
     if (Test-Path -LiteralPath $LastRunFile) {
         $_lastRun = (Get-Content -LiteralPath $LastRunFile -ErrorAction SilentlyContinue | Select-Object -First 1).Trim()
@@ -525,7 +527,7 @@ $overallStatus = if ($failCount -gt 0) {
 
 $ExitCode = if ($failCount -gt 0) { 2 } else { 0 }
 
-if ($TriggerLabel -like "Scheduled*") {
+if (-not $IsHotkeyTrigger) {
     (Get-Date).ToString('yyyy-MM-dd') | Set-Content -LiteralPath $LastRunFile -Encoding UTF8 -ErrorAction SilentlyContinue
 }
 
