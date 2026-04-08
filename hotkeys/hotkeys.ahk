@@ -28,36 +28,81 @@
 SendMode Input
 SetWorkingDir %A_ScriptDir%
 
-; ====================[ Path Config ]====================
+; ====================[ Path & URI Config ]====================
 EnvGet, USER_HOME, USERPROFILE
-global VSCODE_PATH := USER_HOME . "\AppData\Local\Programs\Microsoft VS Code\Code.exe"
-global GIT_BASH_PATH := "C:\Program Files\Git\bin\bash.exe"
-global GIT_BASH_EXE := "C:\Program Files\Git\git-bash.exe"
-global CHROME_PATH := "C:\Program Files\Google\Chrome\Application\chrome.exe"
-global WHATSAPP_LNK := "C:\Program Files\WhatsApp.lnk"
-global INSTAGRAM_LNK := "C:\Program Files\Instagram.lnk"
-global SLACK_LNK := "C:\Program Files\Slack.lnk"
-global YOUTUBE_LNK := USER_HOME . "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Chrome Apps\YouTube.lnk"
-global CHROME_LNK := "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Google Chrome.lnk"
-global ANTIGRAVITY_LNK := USER_HOME . "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Antigravity\Antigravity.lnk"
-global LOGS_DIR := USER_HOME . "\sys-scripts\logs"
+global VSCODE_PATH      := USER_HOME . "\AppData\Local\Programs\Microsoft VS Code\Code.exe"
+global GIT_BASH_EXE     := "C:\Program Files\Git\git-bash.exe"
+global CHROME_PATH      := "C:\Program Files\Google\Chrome\Application\chrome.exe"
+global LOGS_DIR         := USER_HOME . "\sys-scripts\logs"
+
+; Apps and Direct Links
+global WHATSAPP_APP     := "C:\Program Files\WhatsApp.lnk"
+global INSTAGRAM_APP    := "C:\Program Files\Instagram.lnk"
+global SLACK_LNK        := "C:\Program Files\Slack.lnk"
+global YOUTUBE_LNK      := USER_HOME . "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Chrome Apps\YouTube.lnk"
+global CHROME_LNK       := "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Google Chrome.lnk"
+global ANTIGRAVITY_LNK  := USER_HOME . "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Antigravity\Antigravity.lnk"
 
 ; ====================[ Timing Config ]====================
-global DOUBLE_PRESS_DELAY := 400
+global DOUBLE_PRESS_DELAY   := 400
 global LONG_PRESS_THRESHOLD := 600
-global WINDOW_WAIT_TIMEOUT := 5
+global WINDOW_WAIT_TIMEOUT  := 5
 
 ; ====================[ State Variables ]====================
-global v_LastPress := 0
-global g_LastPress := 0
 global t_LastPress := 0
-global a_LastPress := 0
-
 
 ; ====================[ Helper Functions ]====================
+
+; Generic handler for Single/Double press logic
+HandleContextHotkey(key, path, sArgs := "", dPre := "") {
+    static lastPresses := {}
+    static timers := {}
+    local now, last, timerObj, dir
+
+    now := A_TickCount
+    last := lastPresses[key] ? lastPresses[key] : 0
+    
+    if (now - last < DOUBLE_PRESS_DELAY) {
+        lastPresses[key] := 0
+        timerObj := timers[key]
+        SetTimer, % timerObj, Off
+        
+        dir := GetValidExplorerPath()
+        if (dir != "")
+            RunApp(path, dPre . """" . dir . """")
+    } else {
+        lastPresses[key] := now
+        timerObj := Func("RunApp").Bind(path, sArgs)
+        timers[key] := timerObj
+        SetTimer, % timerObj, % -DOUBLE_PRESS_DELAY
+    }
+}
+
+; Robust App Runner supporting Paths and URIs
+RunApp(path, args := "") {
+    local e
+    try {
+        if InStr(path, "://") {
+            Run, %path%
+        } else {
+            if (!FileExist(path)) {
+                MsgBox, 16, Error, Target not found:`n%path%
+                return
+            }
+            if (args != "")
+                Run, "%path%" %args%
+            else
+                Run, "%path%"
+        }
+    } catch e {
+        ToolTip, Launch Error: %e%
+        SetTimer, RemoveToolTip, -2000
+    }
+}
+
 GetExplorerPath()
 {
-    local folderPath
+    local folderPath, window, e
 
     try
     {
@@ -112,8 +157,7 @@ ConvertToWSLPath(winPath)
 LaunchAndMaximize(appPath, windowIdentifier := "", timeout := 5)
 {
     local e
-
-    if (!FileExist(appPath))
+    if (!InStr(appPath, "://") && !FileExist(appPath))
     {
         MsgBox, 16, Error, Application not found:`n%appPath%
         return false
@@ -121,7 +165,10 @@ LaunchAndMaximize(appPath, windowIdentifier := "", timeout := 5)
 
     try
     {
-        Run, "%appPath%"
+        if InStr(appPath, "://")
+            Run, %appPath%
+        else
+            Run, "%appPath%"
     }
     catch e
     {
@@ -173,164 +220,10 @@ RemoveToolTip:
 return
 
 
-; ====================[ VS Code | Alt + V (Single / Double) ]====================
-!v::
-    now := A_TickCount
-    timeSinceLastPress := now - v_LastPress
-
-    if (timeSinceLastPress > 0 && timeSinceLastPress < DOUBLE_PRESS_DELAY)
-    {
-        ; Double press - open VS Code in current Explorer folder
-        v_LastPress := 0
-        SetTimer, V_SinglePress, Off
-
-        path := GetValidExplorerPath()
-        if (path = "")
-            return
-
-        if (!FileExist(VSCODE_PATH))
-        {
-            MsgBox, 16, Error, VS Code not found:`n%VSCODE_PATH%
-            return
-        }
-
-        try
-            Run, "%VSCODE_PATH%" "%path%"
-        catch e
-        {
-            ToolTip, Failed to open VS Code: %e%
-            SetTimer, RemoveToolTip, -2000
-        }
-    }
-    else
-    {
-        ; First press - start timer for single press
-        v_LastPress := now
-        SetTimer, V_SinglePress, -%DOUBLE_PRESS_DELAY%
-    }
-return
-
-V_SinglePress:
-    v_LastPress := 0
-    if (!FileExist(VSCODE_PATH))
-    {
-        MsgBox, 16, Error, VS Code not found:`n%VSCODE_PATH%
-        return
-    }
-    try
-        Run, "%VSCODE_PATH%"
-    catch e
-    {
-        ToolTip, Failed to launch VS Code: %e%
-        SetTimer, RemoveToolTip, -2000
-    }
-return
-
-
-; ====================[ Antigravity | Alt + A (Single / Double) ]====================
-!a::
-    now := A_TickCount
-    timeSinceLastPress := now - a_LastPress
-
-    if (timeSinceLastPress > 0 && timeSinceLastPress < DOUBLE_PRESS_DELAY)
-    {
-        ; Double press - open Antigravity in current Explorer folder
-        a_LastPress := 0
-        SetTimer, A_SinglePress, Off
-
-        path := GetValidExplorerPath()
-        if (path = "")
-            return
-
-        if (!FileExist(ANTIGRAVITY_LNK))
-        {
-            MsgBox, 16, Error, Antigravity not found:`n%ANTIGRAVITY_LNK%
-            return
-        }
-
-        try
-            Run, "%ANTIGRAVITY_LNK%" "%path%"
-        catch e
-        {
-            ToolTip, Failed to open Antigravity: %e%
-            SetTimer, RemoveToolTip, -2000
-        }
-    }
-    else
-    {
-        ; First press - start timer for single press
-        a_LastPress := now
-        SetTimer, A_SinglePress, -%DOUBLE_PRESS_DELAY%
-    }
-return
-
-A_SinglePress:
-    a_LastPress := 0
-    if (!FileExist(ANTIGRAVITY_LNK))
-    {
-        MsgBox, 16, Error, Antigravity not found:`n%ANTIGRAVITY_LNK%
-        return
-    }
-    try
-        Run, "%ANTIGRAVITY_LNK%"
-    catch e
-    {
-        ToolTip, Failed to launch Antigravity: %e%
-        SetTimer, RemoveToolTip, -2000
-    }
-return
-
-
-; ====================[ Git Bash | Alt + G (Single / Double) ]====================
-!g::
-    now := A_TickCount
-    timeSinceLastPress := now - g_LastPress
-
-    if (timeSinceLastPress > 0 && timeSinceLastPress < DOUBLE_PRESS_DELAY)
-    {
-        g_LastPress := 0
-        SetTimer, G_SinglePress, Off
-
-        path := GetValidExplorerPath()
-        if (path = "")
-            return
-
-        if (!FileExist(GIT_BASH_EXE))
-        {
-            MsgBox, 16, Error, Git Bash not found:`n%GIT_BASH_EXE%
-            return
-        }
-
-        try
-            Run, "%GIT_BASH_EXE%" --cd="%path%"
-        catch e
-        {
-            ToolTip, Failed to launch Git Bash: %e%
-            SetTimer, RemoveToolTip, -2000
-        }
-    }
-    else
-    {
-        g_LastPress := now
-        SetTimer, G_SinglePress, -%DOUBLE_PRESS_DELAY%
-    }
-return
-
-G_SinglePress:
-    g_LastPress := 0
-    if (!FileExist(GIT_BASH_EXE))
-    {
-        MsgBox, 16, Error, Git Bash not found:`n%GIT_BASH_EXE%
-        return
-    }
-    try
-        Run, "%GIT_BASH_EXE%" --cd-to-home
-    catch e
-    {
-        ToolTip, Failed to launch Git Bash: %e%
-        SetTimer, RemoveToolTip, -2000
-    }
-return
+; ====================[ Context Apps | Alt + V, A, G ]====================
+!v::HandleContextHotkey("v", VSCODE_PATH)
+!a::HandleContextHotkey("a", ANTIGRAVITY_LNK)
+!g::HandleContextHotkey("g", GIT_BASH_EXE, "--cd-to-home", "--cd=")
 
 
 ; ====================[ Ubuntu 22.04 - Always Home | Alt + U ]====================
@@ -374,7 +267,6 @@ return
 return
 
 T_SinglePress:
-    t_LastPress := 0
     try
         Run, cmd.exe, %USER_HOME%
     catch e
@@ -398,8 +290,6 @@ return
         }
     }
 return
-
-
 ; ====================[ YouTube App - New Window (Always) | Alt + Y ]====================
 !y::
     LaunchAndMaximize(YOUTUBE_LNK, "YouTube", WINDOW_WAIT_TIMEOUT)
@@ -408,13 +298,13 @@ return
 
 ; ====================[ WhatsApp App - New Window (Always) | Alt + W ]====================
 !w::
-    LaunchAndMaximize(WHATSAPP_LNK, "WhatsApp", WINDOW_WAIT_TIMEOUT)
+    LaunchAndMaximize(WHATSAPP_APP, "WhatsApp", WINDOW_WAIT_TIMEOUT)
 return
 
 
 ; ====================[ Instagram App - New Window (Always) | Alt + I ]====================
 !i::
-    LaunchAndMaximize(INSTAGRAM_LNK, "Instagram", WINDOW_WAIT_TIMEOUT)
+    LaunchAndMaximize(INSTAGRAM_APP, "Instagram", WINDOW_WAIT_TIMEOUT)
 return
 
 
