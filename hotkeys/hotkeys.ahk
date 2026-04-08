@@ -53,8 +53,57 @@ global t_LastPress := 0
 
 ; ====================[ Helper Functions ]====================
 
+; Generic handler for Scheduled Tasks with Result waiting
+TriggerScheduledTask(taskName, friendlyName, triggerFile := "", resultFile := "", timeoutSec := 60) {
+    local ResultData, Parts, e
+    
+    if (resultFile != "" && FileExist(resultFile))
+        FileDelete, %resultFile%
+
+    if (triggerFile != "") {
+        if FileExist(triggerFile)
+            FileDelete, %triggerFile%
+        try 
+            FileAppend, hotkey, %triggerFile%
+        catch e {
+            ToolTip, Failed to write trigger file: %e%
+            SetTimer, RemoveToolTip, -2000
+            return
+        }
+    }
+
+    try {
+        Run, schtasks.exe /Run /TN "%taskName%" /I,, Hide
+        ToolTip, %friendlyName% in progress...
+        SetTimer, RemoveToolTip, -2000
+    } catch e {
+        ToolTip, Failed to trigger %friendlyName%: %e%
+        SetTimer, RemoveToolTip, -2000
+        return
+    }
+
+    if (resultFile == "")
+        return
+
+    Loop, % (timeoutSec * 2) { ; 500ms intervals
+        Sleep, 500
+        if FileExist(resultFile) {
+            Sleep, 200
+            FileRead, ResultData, %resultFile%
+            FileDelete, %resultFile%
+            ToolTip
+            Parts := StrSplit(ResultData, "|")
+            TrayTip, % Parts[1], % Parts[2], 4, (InStr(Parts[1], "success") ? 1 : 2)
+            return
+        }
+    }
+    ToolTip
+    TrayTip, %friendlyName%, Timed out - check logs, 4, 3
+}
+
 ; Generic handler for Single/Double press logic
 HandleContextHotkey(key, path, sArgs := "", dPre := "") {
+
     static lastPresses := {}
     static timers := {}
     local now, last, timerObj, dir
@@ -85,10 +134,12 @@ RunApp(path, args := "") {
         if InStr(path, "://") {
             Run, %path%
         } else {
-            if (!FileExist(path)) {
+            ; Only check for existence if a specific path is provided (contains a backslash)
+            if (InStr(path, "\") && !FileExist(path)) {
                 MsgBox, 16, Error, Target not found:`n%path%
                 return
             }
+            
             if (args != "")
                 Run, "%path%" %args%
             else
@@ -376,15 +427,7 @@ return
 
 
 ; ====================[ Notepad | Alt + N ]====================
-!n::
-    try
-        Run, notepad.exe
-    catch e
-    {
-        ToolTip, Failed to launch Notepad: %e%
-        SetTimer, RemoveToolTip, -2000
-    }
-return
+!n::RunApp("notepad.exe")
 
 
 ; ====================[ Close Active App | Alt + Q (Continuous) ]====================
@@ -405,148 +448,27 @@ return
 
 
 ; ====================[ Calculator | Alt + 0 ]====================
-!0::
-    try
-        Run, calc.exe
-    catch e
-    {
-        ToolTip, Failed to launch Calculator: %e%
-        SetTimer, RemoveToolTip, -2000
-    }
-return
+!0::RunApp("calc.exe")
 
 
 ; ====================[ Windows Cleanup | Ctrl+Shift+Alt+C ]====================
 ^+!c::
-    ResultFile := USER_HOME . "\sys-scripts\cleanup\cleanup_result.txt"
-
-    if FileExist(ResultFile)
-        FileDelete, %ResultFile%
-
-    TriggerFile := USER_HOME . "\sys-scripts\cleanup\cleanup_trigger.txt"
-    try
-        FileAppend, hotkey, %TriggerFile%
-    catch e
-    {
-        ToolTip, Failed to write trigger file: %e%
-        SetTimer, RemoveToolTip, -2000
-        return
-    }
-
-    try
-    {
-        Run, schtasks.exe /Run /TN "WindowsCleanup" /I,, Hide
-        ToolTip, Cleaning...
-        SetTimer, RemoveToolTip, -2000
-    }
-    catch e
-    {
-        if (A_LastError != 1223)
-        {
-            ToolTip, Failed to trigger cleanup: %e%
-            SetTimer, RemoveToolTip, -2000
-        }
-        return
-    }
-
-    Loop, 120  ; 120 x 500ms = 60 seconds total wait
-    {
-        Sleep, 500
-        if FileExist(ResultFile)
-        {
-            Sleep, 200
-            FileRead, ResultData, %ResultFile%
-            FileDelete, %ResultFile%
-            ToolTip
-            Parts := StrSplit(ResultData, "|")
-            if InStr(Parts[1], "success")
-                TrayTip, % Parts[1], % Parts[2], 4, 1
-            else
-                TrayTip, % Parts[1], % Parts[2], 4, 2
-            return
-        }
-    }
-
-    ToolTip
-    TrayTip, Cleanup, Timed out - check cleanup_log.txt, 4, 3
+    TriggerScheduledTask("WindowsCleanup", "Cleanup"
+        , USER_HOME . "\sys-scripts\cleanup\cleanup_trigger.txt"
+        , USER_HOME . "\sys-scripts\cleanup\cleanup_result.txt", 60)
 return
 
 
 ; ====================[ Windows Updater | Ctrl+Shift+Alt+U ]====================
 ^+!u::
-    ResultFile := USER_HOME . "\sys-scripts\update\update_result.txt"
-
-    if FileExist(ResultFile)
-        FileDelete, %ResultFile%
-
-    TriggerFile := USER_HOME . "\sys-scripts\update\update_trigger.txt"
-    if FileExist(TriggerFile)
-        FileDelete, %TriggerFile%
-    try
-        FileAppend, hotkey, %TriggerFile%
-    catch e
-    {
-        ToolTip, Failed to write trigger file: %e%
-        SetTimer, RemoveToolTip, -2000
-        return
-    }
-
-    try
-    {
-        Run, schtasks.exe /Run /TN "WindowsUpdater" /I,, Hide
-        ToolTip, Updating...
-        SetTimer, RemoveToolTip, -2000
-    }
-    catch e
-    {
-        if (A_LastError != 1223)
-        {
-            ToolTip, Failed to trigger updater: %e%
-            SetTimer, RemoveToolTip, -2000
-        }
-        return
-    }
-
-    Loop, 360  ; 360 x 500ms = 180 seconds total wait
-    {
-        Sleep, 500
-        if FileExist(ResultFile)
-        {
-            Sleep, 200
-            FileRead, ResultData, %ResultFile%
-            FileDelete, %ResultFile%
-            ToolTip
-            Parts := StrSplit(ResultData, "|")
-            if InStr(Parts[1], "success")
-                TrayTip, % Parts[1], % Parts[2], 4, 1
-            else
-                TrayTip, % Parts[1], % Parts[2], 4, 2
-            return
-        }
-    }
-
-    ToolTip
-    TrayTip, Windows Updater, Timed out - check update_log.txt, 4, 3
+    TriggerScheduledTask("WindowsUpdater", "Update"
+        , USER_HOME . "\sys-scripts\update\update_trigger.txt"
+        , USER_HOME . "\sys-scripts\update\update_result.txt", 180)
 return
 
 
 ; ====================[ Network Reset | Ctrl+Shift+Alt+N ]====================
-^+!n::
-    try
-    {
-        Run, schtasks.exe /Run /TN "NetworkReset" /I,, Hide
-        ToolTip, Resetting network...
-        SetTimer, RemoveToolTip, -2000
-    }
-    catch e
-    {
-        if (A_LastError != 1223)
-        {
-            ToolTip, Failed to trigger network reset: %e%
-            SetTimer, RemoveToolTip, -2000
-        }
-    }
-return
+^+!n::TriggerScheduledTask("NetworkReset", "Network Reset")
 
 
 ; ====================[ Open Logs Folder | Ctrl+Shift+Alt+L ]====================
