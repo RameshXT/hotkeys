@@ -50,6 +50,7 @@ global WINDOW_WAIT_TIMEOUT  := 5
 
 ; ====================[ State Variables ]====================
 global t_LastPress := 0
+global u_LastPress := 0
 
 ; ====================[ Helper Functions ]====================
 
@@ -102,7 +103,7 @@ TriggerScheduledTask(taskName, friendlyName, triggerFile := "", resultFile := ""
 }
 
 ; Generic handler for Single/Double press logic
-HandleContextHotkey(key, path, sArgs := "", dPre := "") {
+HandleContextHotkey(key, name, path, sArgs := "", dPre := "") {
 
     static lastPresses := {}
     static timers := {}
@@ -117,19 +118,33 @@ HandleContextHotkey(key, path, sArgs := "", dPre := "") {
         SetTimer, % timerObj, Off
         
         dir := GetValidExplorerPath()
-        if (dir != "")
+        if (dir != "") {
+            ToolTip, %name%
+            SetTimer, RemoveToolTip, -2000
             RunApp(path, dPre . """" . dir . """")
+        }
     } else {
         lastPresses[key] := now
-        timerObj := Func("RunApp").Bind(path, sArgs)
+        timerObj := Func("RunAppAndNotify").Bind(path, sArgs, name)
         timers[key] := timerObj
         SetTimer, % timerObj, % -DOUBLE_PRESS_DELAY
     }
 }
 
+; Helper to Run App and show ToolTip for single press
+RunAppAndNotify(path, args, name) {
+    ToolTip, %name%
+    SetTimer, RemoveToolTip, -2000
+    RunApp(path, args)
+}
+
 ; Robust App Runner supporting Paths and URIs
-RunApp(path, args := "") {
+RunApp(path, args := "", name := "") {
     local e
+    if (name != "") {
+        ToolTip, %name%
+        SetTimer, RemoveToolTip, -2000
+    }
     try {
         if InStr(path, "://") {
             Run, %path%
@@ -182,7 +197,7 @@ GetExplorerPath()
     return ""
 }
 
-; ====================[ Convert Path to WSL Format (defined, currently unused) ]====================
+; ====================[ Convert Path to WSL Format ]====================
 ConvertToWSLPath(winPath)
 {
     local unixPath, drive
@@ -198,7 +213,7 @@ ConvertToWSLPath(winPath)
     {
         drive := SubStr(unixPath, 1, 1)
         drive := Format("{:L}", drive)
-        unixPath := "/" . drive . SubStr(unixPath, 3)
+        unixPath := "/mnt/" . drive . SubStr(unixPath, 3)
     }
 
     return unixPath
@@ -272,13 +287,43 @@ return
 
 
 ; ====================[ Context Apps | Alt + V, A, G ]====================
-!v::HandleContextHotkey("v", VSCODE_PATH)
-!a::HandleContextHotkey("a", ANTIGRAVITY_LNK)
-!g::HandleContextHotkey("g", GIT_BASH_EXE, "--cd-to-home", "--cd=")
+!v::HandleContextHotkey("v", "VS Code", VSCODE_PATH)
+!a::HandleContextHotkey("a", "Antigravity", ANTIGRAVITY_LNK)
+!g::HandleContextHotkey("g", "Git Bash", GIT_BASH_EXE, "--cd-to-home", "--cd=")
 
 
-; ====================[ Ubuntu 22.04 - Always Home | Alt + U ]====================
+; ====================[ Ubuntu 22.04 - Context Aware | Alt + U ]====================
 !u::
+    now := A_TickCount
+    timeSinceLastPress := now - u_LastPress
+
+    if (timeSinceLastPress > 0 && timeSinceLastPress < DOUBLE_PRESS_DELAY)
+    {
+        u_LastPress := 0
+        SetTimer, U_SinglePress, Off
+        
+        dir := GetValidExplorerPath()
+        if (dir != "")
+        {
+            unixPath := ConvertToWSLPath(dir)
+            ToolTip, WSL
+            SetTimer, RemoveToolTip, -2000
+            try
+                Run, wsl.exe -d Ubuntu-22.04 -- bash -lc "cd '%unixPath%'; exec bash"
+            catch e
+                ToolTip, Failed to launch Ubuntu 22.04`nIs WSL installed? %e%
+        }
+    }
+    else
+    {
+        u_LastPress := now
+        SetTimer, U_SinglePress, -%DOUBLE_PRESS_DELAY%
+    }
+return
+
+U_SinglePress:
+    ToolTip, WSL
+    SetTimer, RemoveToolTip, -2000
     try
         Run, wsl.exe -d Ubuntu-22.04 -- bash -lc "cd ~; exec bash"
     catch e
@@ -299,6 +344,8 @@ return
         t_LastPress := 0
         SetTimer, T_SinglePress, Off
 
+        ToolTip, Admin CMD
+        SetTimer, RemoveToolTip, -2000
         try
             Run, *RunAs cmd.exe, %USER_HOME%
         catch e
@@ -318,6 +365,8 @@ return
 return
 
 T_SinglePress:
+    ToolTip, CMD
+    SetTimer, RemoveToolTip, -2000
     try
         Run, cmd.exe, %USER_HOME%
     catch e
@@ -349,12 +398,16 @@ return
 
 ; ====================[ WhatsApp App - New Window (Always) | Alt + W ]====================
 !w::
+    ToolTip, WhatsApp
+    SetTimer, RemoveToolTip, -2000
     LaunchAndMaximize(WHATSAPP_APP, "WhatsApp", WINDOW_WAIT_TIMEOUT)
 return
 
 
 ; ====================[ Instagram App - New Window (Always) | Alt + I ]====================
 !i::
+    ToolTip, Instagram
+    SetTimer, RemoveToolTip, -2000
     LaunchAndMaximize(INSTAGRAM_APP, "Instagram", WINDOW_WAIT_TIMEOUT)
 return
 
@@ -427,7 +480,7 @@ return
 
 
 ; ====================[ Notepad | Alt + N ]====================
-!n::RunApp("notepad.exe")
+!n::RunApp("notepad.exe", "", "Notepad")
 
 
 ; ====================[ Close Active App | Alt + Q (Continuous) ]====================
@@ -448,7 +501,7 @@ return
 
 
 ; ====================[ Calculator | Alt + 0 ]====================
-!0::RunApp("calc.exe")
+!0::RunApp("calc.exe", "", "Calculator")
 
 
 ; ====================[ Windows Cleanup | Ctrl+Shift+Alt+C ]====================
