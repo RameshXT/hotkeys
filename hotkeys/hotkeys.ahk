@@ -28,6 +28,9 @@
 SendMode Input
 SetWorkingDir %A_ScriptDir%
 
+; Auto-Reload on Script Change
+SetTimer, WatchScript, 1000
+
 ; ====================[ Path & URI Config ]====================
 EnvGet, USER_HOME, USERPROFILE
 global VSCODE_PATH      := USER_HOME . "\AppData\Local\Programs\Microsoft VS Code\Code.exe"
@@ -51,6 +54,7 @@ global WINDOW_WAIT_TIMEOUT  := 5
 ; ====================[ State Variables ]====================
 global t_LastPress := 0
 global u_LastPress := 0
+global ScriptModTime := "" ; Used for Auto-Reload
 
 ; ====================[ Helper Functions ]====================
 
@@ -283,6 +287,19 @@ GetValidExplorerPath()
 
 RemoveToolTip:
     ToolTip
+return
+
+WatchScript:
+    FileGetTime, curModTime, %A_ScriptFullPath%
+    if (ScriptModTime = "") {
+        ScriptModTime := curModTime
+        return
+    }
+    if (curModTime != ScriptModTime) {
+        ToolTip, Reloading Script...
+        SetTimer, RemoveToolTip, -1000
+        Reload
+    }
 return
 
 
