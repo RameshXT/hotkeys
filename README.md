@@ -66,31 +66,38 @@ Run the register script once as admin. After that use `Ctrl+Shift+Alt+C` no UAC 
 
 ## [hotkeys](./hotkeys)
 
-AutoHotkey script that maps Alt and Ctrl+Shift+Alt combos to apps, tools, and system scripts.
+Advanced AutoHotkey system providing context-aware application launching, system maintenance automation, and safe window management.
 
-Place a shortcut to `hotkeys.ahk` in Startup and set it to run as administrator.
+### Key Logic & Features
+- **Contextual Intelligence**:
+    - **Double-Tap to Folder**: `Alt + V` (VS Code), `A` (Antigravity), `G` (Git Bash), and `U` (Ubuntu WSL) open the application directly in your **active File Explorer directory** when double-pressed.
+    - **Double-Tap to Admin**: `Alt + T` toggles between a standard User CMD and an **Administrator CMD**.
+    - **Long-Press Interface**: `Alt + C` launches standard Chrome on a short tap, but triggers **Incognito Mode** if held for >600ms.
+- **Safety & Protection**: `Alt + Q` (Close Window) supports continuous closing when held, but is logic-locked to **prevent accidental closure** of critical system components (Taskbar, Desktop).
+- **Automation Pipeline**: Integrates with Windows Scheduled Tasks for Cleanup, Updates, and Network Resets, providing real-time status feedback.
+- **Self-Maintaining**: Automatically reloads and applies changes the moment you save `hotkeys.ahk`.
 
 | Hotkey | Action | Double / Long Press |
 |--------|--------|---------------------|
 | Alt + V | VS Code | Open in current Explorer folder |
 | Alt + A | Antigravity | Open in current Explorer folder |
 | Alt + G | Git Bash | Open in current Explorer folder |
-| Alt + T | CMD | CMD (Admin) |
-| Alt + C | Chrome | Long press → Chrome Incognito |
-| Alt + U | Ubuntu 22.04 WSL | NA |
+| Alt + U | Ubuntu 22.04 WSL | Open in current Explorer folder |
+| Alt + T | CMD | Toggle **Admin CMD** |
+| Alt + C | Google Chrome | Long press → **Incognito Mode** |
 | Alt + P | PowerShell (Admin) | NA |
-| Alt + Y | YouTube | NA |
-| Alt + W | WhatsApp | NA |
-| Alt + I | Instagram | NA |
-| Alt + S | Slack | NA |
+| Alt + Y | YouTube | Auto-Maximize |
+| Alt + W | WhatsApp | Auto-Maximize |
+| Alt + I | Instagram | Auto-Maximize |
+| Alt + S | Slack | Auto-Maximize |
 | Alt + N | Notepad | NA |
 | Alt + 0 | Calculator | NA |
-| Alt + Q | Close active window (hold to keep closing) | NA |
-| Ctrl+Shift+Alt+C | Run Windows Cleanup | NA |
-| Ctrl+Shift+Alt+U | Run Windows Updater | NA |
-| Ctrl+Shift+Alt+N | Run Network Reset | NA |
+| Alt + Q | Close active window | Continuous Close (Protected) |
+| Ctrl+Shift+Alt+C | Run Windows Cleanup | Result via TrayTip |
+| Ctrl+Shift+Alt+U | Run Windows Updater | Result via TrayTip |
+| Ctrl+Shift+Alt+N | Run Network Reset | Result via ToolTip |
 | Ctrl+Shift+Alt+L | Open Logs Folder | NA |
-| Ctrl+Shift+Alt+Delete | Empty Recycle Bin (with confirm) | NA |
+| Ctrl+Shift+Alt+Delete | Empty Recycle Bin | Confirmation required |
 
 ---
 
