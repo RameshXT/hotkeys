@@ -1,5 +1,3 @@
-$ErrorActionPreference = "Continue"
-Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $ScriptVersion = "2.2.0"

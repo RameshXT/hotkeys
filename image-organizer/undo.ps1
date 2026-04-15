@@ -6,7 +6,7 @@ param(
 )
 
 Set-StrictMode -Version Latest
-$ErrorActionPreference = "Continue"
+$ErrorActionPreference = "Stop"
 $ErrorActionPreference = "Stop"
 
 function Write-Info ([string]$Label, [string]$Value, [string]$Color = "White") {

@@ -1,5 +1,5 @@
 #Requires -Version 5.1
-$ErrorActionPreference = "Continue"
+$ErrorActionPreference = "Stop"
 
 $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal   = New-Object Security.Principal.WindowsPrincipal($currentUser)
@@ -7,7 +7,7 @@ $isAdmin     = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Admi
 
 if (-not $isAdmin) {
     $scriptPath = if ($PSCommandPath) { $PSCommandPath } else { $MyInvocation.MyCommand.Path }
-    $argList = "-NonInteractive -NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`""
+    $argList = "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`""
     Start-Process powershell.exe -ArgumentList $argList -Verb RunAs
     exit 0
 }
@@ -218,7 +218,7 @@ function Register-PSTask {
             return "WARN"
         }
 
-        $action   = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NonInteractive -ExecutionPolicy Bypass -File `"$ScriptPath`""
+        $action   = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File `"$ScriptPath`""
 
         if ($TriggerType -eq "Weekly") {
             $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $Day -At $At

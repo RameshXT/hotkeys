@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 #Requires -RunAsAdministrator
 Set-StrictMode -Version Latest
-$ErrorActionPreference = "Continue"
+$ErrorActionPreference = "Stop"
 
 $NetResetScript = Join-Path $PSScriptRoot "network-reset.ps1"
 $TaskName = "NetworkReset"
@@ -21,7 +21,7 @@ Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction Silent
 
 $Action = New-ScheduledTaskAction `
     -Execute "powershell.exe" `
-    -Argument "-NonInteractive -NoProfile -WindowStyle Hidden -ExecutionPolicy RemoteSigned -File `"$NetResetScript`""
+    -Argument "-NoProfile -WindowStyle Normal -ExecutionPolicy RemoteSigned -File `"$NetResetScript`""
 
 $Principal = New-ScheduledTaskPrincipal `
     -UserId    $LoggedInUser `

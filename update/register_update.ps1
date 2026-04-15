@@ -1,5 +1,5 @@
 #Requires -RunAsAdministrator
-$ErrorActionPreference = "Continue"
+$ErrorActionPreference = "Stop"
 
 $UpdateScript = Join-Path $PSScriptRoot "update.ps1"
 $TaskName      = "WindowsUpdater"
@@ -15,7 +15,7 @@ Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction Silent
 
 $Action = New-ScheduledTaskAction `
     -Execute "powershell.exe" `
-    -Argument "-NonInteractive -NoProfile -WindowStyle Normal -ExecutionPolicy RemoteSigned -File `"$UpdateScript`""
+    -Argument "-NoProfile -WindowStyle Normal -ExecutionPolicy RemoteSigned -File `"$UpdateScript`""
 
 $Principal = New-ScheduledTaskPrincipal `
     -UserId    $LoggedInUser `

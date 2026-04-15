@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 #Requires -RunAsAdministrator
 Set-StrictMode -Version Latest
-$ErrorActionPreference = "Continue"
+$ErrorActionPreference = "Stop"
 
 $CleanupScript = Join-Path $PSScriptRoot "cleanup.ps1"
 $TaskName = "WindowsCleanup"
@@ -22,7 +22,7 @@ Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction Silent
 
 $Action = New-ScheduledTaskAction `
     -Execute "powershell.exe" `
-    -Argument "-NonInteractive -NoProfile -WindowStyle Hidden -ExecutionPolicy RemoteSigned -File `"$CleanupScript`""
+    -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy RemoteSigned -File `"$CleanupScript`""
 
 $Principal = New-ScheduledTaskPrincipal `
     -UserId    $LoggedInUser `

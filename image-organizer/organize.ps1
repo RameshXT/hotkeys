@@ -1,5 +1,5 @@
 #Requires -Version 5.1
-$ErrorActionPreference = "Continue"
+$ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
