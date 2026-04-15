@@ -21,6 +21,7 @@
 ; Ctrl+Shift+Alt+Delete  → Empty Recycle Bin (with confirm)
 
 ; ====================[ Script Config ]====================
+#Requires AutoHotkey v1.1
 #NoEnv
 #SingleInstance Force
 #Persistent
@@ -50,6 +51,7 @@ global ANTIGRAVITY_LNK  := USER_HOME . "\AppData\Roaming\Microsoft\Windows\Start
 global DOUBLE_PRESS_DELAY   := 400
 global LONG_PRESS_THRESHOLD := 600
 global WINDOW_WAIT_TIMEOUT  := 5
+global TOOLTIP_DURATION_MS  := 2000
 
 ; ====================[ State Variables ]====================
 global t_LastPress := 0
@@ -58,32 +60,52 @@ global ScriptModTime := "" ; Used for Auto-Reload
 
 ; ====================[ Helper Functions ]====================
 
+ShowTransientToolTip(message, durationMs := "") {
+    if (durationMs = "")
+        durationMs := TOOLTIP_DURATION_MS
+    ToolTip, %message%
+    SetTimer, RemoveToolTip, % -durationMs
+}
+
+ShowLaunchError(prefix, err) {
+    ShowTransientToolTip(prefix . ": " . err)
+}
+
+DeleteFileIfExists(path) {
+    if (path != "" && FileExist(path))
+        FileDelete, %path%
+}
+
+IsProtectedWindowClass(windowClass) {
+    return (windowClass = "Shell_TrayWnd" || windowClass = "Progman" || windowClass = "WorkerW")
+}
+
 ; Generic handler for Scheduled Tasks with Result waiting
 TriggerScheduledTask(taskName, friendlyName, triggerFile := "", resultFile := "", timeoutSec := 60) {
     local ResultData, Parts, e
-    
-    if (resultFile != "" && FileExist(resultFile))
-        FileDelete, %resultFile%
+
+    if (taskName = "" || friendlyName = "") {
+        ShowTransientToolTip("Scheduled task configuration is invalid")
+        return
+    }
+
+    DeleteFileIfExists(resultFile)
 
     if (triggerFile != "") {
-        if FileExist(triggerFile)
-            FileDelete, %triggerFile%
-        try 
+        DeleteFileIfExists(triggerFile)
+        try
             FileAppend, hotkey, %triggerFile%
         catch e {
-            ToolTip, Failed to write trigger file: %e%
-            SetTimer, RemoveToolTip, -2000
+            ShowLaunchError("Failed to write trigger file", e)
             return
         }
     }
 
     try {
         Run, schtasks.exe /Run /TN "%taskName%" /I,, Hide
-        ToolTip, %friendlyName% in progress...
-        SetTimer, RemoveToolTip, -2000
+        ShowTransientToolTip(friendlyName . " in progress...")
     } catch e {
-        ToolTip, Failed to trigger %friendlyName%: %e%
-        SetTimer, RemoveToolTip, -2000
+        ShowLaunchError("Failed to trigger " . friendlyName, e)
         return
     }
 
@@ -95,7 +117,7 @@ TriggerScheduledTask(taskName, friendlyName, triggerFile := "", resultFile := ""
         if FileExist(resultFile) {
             Sleep, 200
             FileRead, ResultData, %resultFile%
-            FileDelete, %resultFile%
+            DeleteFileIfExists(resultFile)
             ToolTip
             Parts := StrSplit(ResultData, "|")
             TrayTip, % Parts[1], % Parts[2], 4, (InStr(Parts[1], "success") ? 1 : 2)
@@ -123,8 +145,7 @@ HandleContextHotkey(key, name, path, sArgs := "", dPre := "") {
         
         dir := GetValidExplorerPath()
         if (dir != "") {
-            ToolTip, %name%
-            SetTimer, RemoveToolTip, -2000
+            ShowTransientToolTip(name)
             RunApp(path, dPre . """" . dir . """")
         }
     } else {
@@ -137,8 +158,7 @@ HandleContextHotkey(key, name, path, sArgs := "", dPre := "") {
 
 ; Helper to Run App and show ToolTip for single press
 RunAppAndNotify(path, args, name) {
-    ToolTip, %name%
-    SetTimer, RemoveToolTip, -2000
+    ShowTransientToolTip(name)
     RunApp(path, args)
 }
 
@@ -146,8 +166,7 @@ RunAppAndNotify(path, args, name) {
 RunApp(path, args := "", name := "") {
     local e
     if (name != "") {
-        ToolTip, %name%
-        SetTimer, RemoveToolTip, -2000
+        ShowTransientToolTip(name)
     }
     try {
         if InStr(path, "://") {
@@ -165,8 +184,7 @@ RunApp(path, args := "", name := "") {
                 Run, "%path%"
         }
     } catch e {
-        ToolTip, Launch Error: %e%
-        SetTimer, RemoveToolTip, -2000
+        ShowLaunchError("Launch Error", e)
     }
 }
 
@@ -195,8 +213,7 @@ GetExplorerPath()
     }
     catch e
     {
-        ToolTip, Error getting Explorer path: %e%
-        SetTimer, RemoveToolTip, -2000
+        ShowLaunchError("Error getting Explorer path", e)
     }
     return ""
 }
@@ -269,16 +286,14 @@ GetValidExplorerPath()
     WinGetClass, class, A
     if (class != "CabinetWClass" && class != "ExploreWClass")
     {
-        ToolTip, Please focus on a File Explorer window
-        SetTimer, RemoveToolTip, -2000
+        ShowTransientToolTip("Please focus on a File Explorer window")
         return ""
     }
 
     path := GetExplorerPath()
     if (path = "")
     {
-        ToolTip, Could not get folder path
-        SetTimer, RemoveToolTip, -2000
+        ShowTransientToolTip("Could not get folder path")
         return ""
     }
 
@@ -323,12 +338,11 @@ return
         if (dir != "")
         {
             unixPath := ConvertToWSLPath(dir)
-            ToolTip, WSL
-            SetTimer, RemoveToolTip, -2000
+            ShowTransientToolTip("WSL")
             try
                 Run, wsl.exe -d Ubuntu-22.04 -- bash -lc "cd '%unixPath%'; exec bash"
             catch e
-                ToolTip, Failed to launch Ubuntu 22.04`nIs WSL installed? %e%
+                ShowTransientToolTip("Failed to launch Ubuntu 22.04`nIs WSL installed? " . e)
         }
     }
     else
@@ -339,14 +353,12 @@ return
 return
 
 U_SinglePress:
-    ToolTip, WSL
-    SetTimer, RemoveToolTip, -2000
+    ShowTransientToolTip("WSL")
     try
         Run, wsl.exe -d Ubuntu-22.04 -- bash -lc "cd ~; exec bash"
     catch e
     {
-        ToolTip, Failed to launch Ubuntu 22.04`nIs WSL installed? %e%
-        SetTimer, RemoveToolTip, -2000
+        ShowTransientToolTip("Failed to launch Ubuntu 22.04`nIs WSL installed? " . e)
     }
 return
 
@@ -361,16 +373,14 @@ return
         t_LastPress := 0
         SetTimer, T_SinglePress, Off
 
-        ToolTip, Admin CMD
-        SetTimer, RemoveToolTip, -2000
+        ShowTransientToolTip("Admin CMD")
         try
             Run, *RunAs cmd.exe, %USER_HOME%
         catch e
         {
             if (A_LastError != 1223) ; 1223 = user cancelled UAC
             {
-                ToolTip, Failed to launch Admin CMD: %e%
-                SetTimer, RemoveToolTip, -2000
+                ShowLaunchError("Failed to launch Admin CMD", e)
             }
         }
     }
@@ -382,14 +392,12 @@ return
 return
 
 T_SinglePress:
-    ToolTip, CMD
-    SetTimer, RemoveToolTip, -2000
+    ShowTransientToolTip("CMD")
     try
         Run, cmd.exe, %USER_HOME%
     catch e
     {
-        ToolTip, Failed to launch CMD: %e%
-        SetTimer, RemoveToolTip, -2000
+        ShowLaunchError("Failed to launch CMD", e)
     }
 return
 
@@ -402,8 +410,7 @@ return
     {
         if (A_LastError != 1223) ; 1223 = user cancelled UAC
         {
-            ToolTip, Failed to launch Admin PowerShell: %e%
-            SetTimer, RemoveToolTip, -2000
+            ShowLaunchError("Failed to launch Admin PowerShell", e)
         }
     }
 return
@@ -415,16 +422,14 @@ return
 
 ; ====================[ WhatsApp App - New Window (Always) | Alt + W ]====================
 !w::
-    ToolTip, WhatsApp
-    SetTimer, RemoveToolTip, -2000
+    ShowTransientToolTip("WhatsApp")
     LaunchAndMaximize(WHATSAPP_APP, "WhatsApp", WINDOW_WAIT_TIMEOUT)
 return
 
 
 ; ====================[ Instagram App - New Window (Always) | Alt + I ]====================
 !i::
-    ToolTip, Instagram
-    SetTimer, RemoveToolTip, -2000
+    ShowTransientToolTip("Instagram")
     LaunchAndMaximize(INSTAGRAM_APP, "Instagram", WINDOW_WAIT_TIMEOUT)
 return
 
@@ -458,8 +463,7 @@ return
             Run, "%CHROME_PATH%" --incognito
         catch e
         {
-            ToolTip, Failed to launch Chrome: %e%
-            SetTimer, RemoveToolTip, -2000
+            ShowLaunchError("Failed to launch Chrome", e)
             KeyWait, c
             return
         }
@@ -478,8 +482,7 @@ return
             Run, "%CHROME_LNK%"
         catch e
         {
-            ToolTip, Failed to launch Chrome: %e%
-            SetTimer, RemoveToolTip, -2000
+            ShowLaunchError("Failed to launch Chrome", e)
             return
         }
     }
@@ -488,10 +491,7 @@ return
     if (!ErrorLevel)
         WinMaximize
     else
-    {
-        ToolTip, Chrome window not detected
-        SetTimer, RemoveToolTip, -2000
-    }
+        ShowTransientToolTip("Chrome window not detected")
 return
 #MaxThreadsPerHotkey 1
 
@@ -505,10 +505,9 @@ return
     while GetKeyState("q", "P") && GetKeyState("Alt", "P")
     {
         WinGetClass, activeClass, A
-        if (activeClass = "Shell_TrayWnd" || activeClass = "Progman" || activeClass = "WorkerW")
+        if IsProtectedWindowClass(activeClass)
         {
-            ToolTip, Cannot close system window
-            SetTimer, RemoveToolTip, -2000
+            ShowTransientToolTip("Cannot close system window")
             break
         }
         WinClose, A
@@ -545,16 +544,14 @@ return
 ^+!l::
     if !FileExist(LOGS_DIR)
     {
-        ToolTip, Logs folder not found: %LOGS_DIR%
-        SetTimer, RemoveToolTip, -2000
+        ShowTransientToolTip("Logs folder not found: " . LOGS_DIR)
         return
     }
     try
         Run, explorer.exe "%LOGS_DIR%"
     catch e
     {
-        ToolTip, Failed to open logs folder: %e%
-        SetTimer, RemoveToolTip, -2000
+        ShowLaunchError("Failed to open logs folder", e)
     }
 return
 
@@ -567,13 +564,11 @@ return
         try
         {
             DllCall("shell32\SHEmptyRecycleBin", "Ptr", 0, "Ptr", 0, "UInt", 0x1)
-            ToolTip, Recycle Bin emptied
-            SetTimer, RemoveToolTip, -2000
+            ShowTransientToolTip("Recycle Bin emptied")
         }
         catch e
         {
-            ToolTip, Failed to empty Recycle Bin: %e%
-            SetTimer, RemoveToolTip, -2000
+            ShowLaunchError("Failed to empty Recycle Bin", e)
         }
     }
 return
