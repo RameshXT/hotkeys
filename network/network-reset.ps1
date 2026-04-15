@@ -171,7 +171,7 @@ try {
 
     Write-Host ""
     Write-Host "  Waiting for adapter to reconnect..." -ForegroundColor DarkGray
-    $timeout = 25; $interval = 1; $elapsed = 0; $connected = $false
+    $timeout = 60; $interval = 1; $elapsed = 0; $connected = $false
     while ($elapsed -lt $timeout) {
         Start-Sleep -Seconds $interval
         $elapsed += $interval
