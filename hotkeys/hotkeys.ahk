@@ -537,7 +537,11 @@ return
 
 
 ; ====================[ Network Reset | Ctrl+Shift+Alt+N ]====================
-^+!n::TriggerScheduledTask("NetworkReset", "Network Reset")
+^+!n::
+    TriggerScheduledTask("NetworkReset", "Network Reset"
+        , ""
+        , USER_HOME . "\sys-scripts\network\netreset_result.txt", 90)
+return
 
 
 ; ====================[ Open Logs Folder | Ctrl+Shift+Alt+L ]====================

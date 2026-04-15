@@ -8,7 +8,10 @@ $VERSION       = "1.0"
 $SCRIPT_START  = Get-Date
 $ScriptDir     = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LogFile       = Join-Path (Split-Path -Parent $ScriptDir) "logs\netreset_log.txt"
+$ResultFile    = Join-Path $ScriptDir "netreset_result.txt"
 $MaxLogSizeB   = 2MB
+$script:SystemFormsLoaded = $false
+$script:SystemDrawingLoaded = $false
 
 function Write-Header {
     $w    = 62
@@ -38,6 +41,30 @@ function Write-Step ([string]$Label, [scriptblock]$Action) {
         Write-Host " OK" -ForegroundColor Green
     } catch {
         Write-Host " FAILED  $_" -ForegroundColor Red
+    }
+}
+
+function Ensure-ParentDirectory {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Path)
+
+    $parentPath = Split-Path -Parent $Path
+    if (-not [string]::IsNullOrWhiteSpace($parentPath) -and -not (Test-Path -LiteralPath $parentPath)) {
+        New-Item -ItemType Directory -LiteralPath $parentPath -Force | Out-Null
+    }
+}
+
+function Ensure-WindowsFormsLoaded {
+    if (-not $script:SystemFormsLoaded) {
+        Add-Type -AssemblyName System.Windows.Forms
+        $script:SystemFormsLoaded = $true
+    }
+}
+
+function Ensure-SystemDrawingLoaded {
+    if (-not $script:SystemDrawingLoaded) {
+        Add-Type -AssemblyName System.Drawing
+        $script:SystemDrawingLoaded = $true
     }
 }
 
@@ -72,26 +99,38 @@ function Test-Gateway {
 }
 
 function Test-Internet {
+    [CmdletBinding()]
+    param()
+
     $hosts = @("8.8.8.8", "1.1.1.1", "9.9.9.9")
     foreach ($h in $hosts) {
+        $tcp = $null
+        $asyncResult = $null
         try {
             $tcp = [System.Net.Sockets.TcpClient]::new()
-            $ar  = $tcp.BeginConnect($h, 443, $null, $null)
-            $ok  = $ar.AsyncWaitHandle.WaitOne(3000)
-            try { $tcp.EndConnect($ar) } catch {}
-            $tcp.Close()
+            $asyncResult = $tcp.BeginConnect($h, 443, $null, $null)
+            $ok = $asyncResult.AsyncWaitHandle.WaitOne(3000)
+            if ($ok) {
+                try { $tcp.EndConnect($asyncResult) } catch {}
+            }
             if ($ok) { return $true }
         } catch {}
+        finally {
+            if ($null -ne $asyncResult) {
+                try { $asyncResult.AsyncWaitHandle.Close() } catch {}
+            }
+            if ($null -ne $tcp) {
+                try { $tcp.Close() } catch {}
+                try { $tcp.Dispose() } catch {}
+            }
+        }
     }
     return $false
 }
 
 Write-Header
 
-$logDir = Split-Path -Parent $LogFile
-if (-not (Test-Path -LiteralPath $logDir)) {
-    New-Item -ItemType Directory -LiteralPath $logDir -Force | Out-Null
-}
+Ensure-ParentDirectory -Path $LogFile
 if ((Test-Path -LiteralPath $LogFile) -and (Get-Item -LiteralPath $LogFile).Length -gt $MaxLogSizeB) {
     Clear-Content -LiteralPath $LogFile -Force -ErrorAction SilentlyContinue
 }
@@ -197,12 +236,25 @@ try {
     Write-Host "  [WARN] Log write failed: $($_.Exception.Message)" -ForegroundColor Yellow
 }
 
-Add-Type -AssemblyName System.Windows.Forms
-$balloon                 = [System.Windows.Forms.NotifyIcon]::new()
-$balloon.Icon            = [System.Drawing.SystemIcons]::Information
-$balloon.BalloonTipTitle = "Network Reset Done"
-$balloon.BalloonTipText  = if ($postInternet) { "Internet restored." } else { "Still no internet. Try restarting router." }
-$balloon.Visible         = $true
-$balloon.ShowBalloonTip(5000)
-Start-Sleep -Milliseconds 5500
-$balloon.Dispose()
+try {
+    $resultTitle = if ($postInternet) { "Network Reset Success" } else { "Network Reset Done" }
+    $resultBody  = if ($postInternet) { "Internet restored.`nLogs: Ctrl+Shift+Alt+L" } else { "Still no internet. Try restarting router.`nLogs: Ctrl+Shift+Alt+L" }
+    "$resultTitle|$resultBody" | Set-Content -LiteralPath $ResultFile -Encoding UTF8
+} catch {
+    Write-Host "  [WARN] Result write failed: $($_.Exception.Message)" -ForegroundColor Yellow
+}
+
+try {
+    Ensure-WindowsFormsLoaded
+    Ensure-SystemDrawingLoaded
+    $balloon = [System.Windows.Forms.NotifyIcon]::new()
+    $balloon.Icon = [System.Drawing.SystemIcons]::Information
+    $balloon.BalloonTipTitle = "Network Reset Done"
+    $balloon.BalloonTipText = if ($postInternet) { "Internet restored." } else { "Still no internet. Try restarting router." }
+    $balloon.Visible = $true
+    $balloon.ShowBalloonTip(5000)
+    Start-Sleep -Milliseconds 5500
+    $balloon.Dispose()
+} catch {
+    Write-Host "  [WARN] Notification failed: $($_.Exception.Message)" -ForegroundColor Yellow
+}

@@ -1,9 +1,11 @@
+#Requires -Version 5.1
 #Requires -RunAsAdministrator
+Set-StrictMode -Version Latest
 $ErrorActionPreference = "Continue"
 
 $NetResetScript = Join-Path $PSScriptRoot "network-reset.ps1"
-$TaskName       = "NetworkReset"
-$LoggedInUser   = "$env:USERDOMAIN\$env:USERNAME"
+$TaskName = "NetworkReset"
+$LoggedInUser = "$env:USERDOMAIN\$env:USERNAME"
 
 if (-not (Test-Path -LiteralPath $NetResetScript)) {
     Write-Host "ERROR: network-reset.ps1 not found at $NetResetScript" -ForegroundColor Red
@@ -11,11 +13,15 @@ if (-not (Test-Path -LiteralPath $NetResetScript)) {
     exit 1
 }
 
+if ([string]::IsNullOrWhiteSpace($env:USERNAME)) {
+    Write-Host "ERROR: Could not determine the current username." -ForegroundColor Red
+    exit 1
+}
 Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
 
 $Action = New-ScheduledTaskAction `
     -Execute "powershell.exe" `
-    -Argument "-NonInteractive -NoProfile -WindowStyle Normal -ExecutionPolicy RemoteSigned -File `"$NetResetScript`""
+    -Argument "-NonInteractive -NoProfile -WindowStyle Hidden -ExecutionPolicy RemoteSigned -File `"$NetResetScript`""
 
 $Principal = New-ScheduledTaskPrincipal `
     -UserId    $LoggedInUser `
@@ -43,7 +49,7 @@ try {
 Write-Host ""
 Write-Host "Task '$TaskName' registered successfully." -ForegroundColor Green
 Write-Host "Network reset script : $NetResetScript"           -ForegroundColor Cyan
-Write-Host "Runs as              : $LoggedInUser (elevated, no UAC prompt)" -ForegroundColor Cyan
+Write-Host "Runs as              : $LoggedInUser (elevated, hidden, no UAC prompt)" -ForegroundColor Cyan
 Write-Host "Triggered by         : Ctrl+Shift+Alt+N via AHK" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "You only need to run this registration script once." -ForegroundColor Yellow
