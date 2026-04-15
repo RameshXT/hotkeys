@@ -1,5 +1,4 @@
 #Requires -Version 5.1
-$ErrorActionPreference = "Continue"
 
 param(
     [Parameter(Mandatory = $true)]
@@ -7,11 +6,63 @@ param(
 )
 
 Set-StrictMode -Version Latest
+$ErrorActionPreference = "Continue"
 $ErrorActionPreference = "Stop"
 
 function Write-Info ([string]$Label, [string]$Value, [string]$Color = "White") {
     Write-Host ("  {0,-16}" -f $Label) -NoNewline -ForegroundColor Gray
     Write-Host $Value -ForegroundColor $Color
+}
+function Resolve-NormalizedPath {
+    param([Parameter(Mandatory)][string]$Path)
+
+    $resolved = (Resolve-Path -LiteralPath $Path -ErrorAction Stop).Path
+    return $resolved.TrimEnd('\')
+}
+
+function Test-IsChildPath {
+    param(
+        [Parameter(Mandatory)][string]$ParentPath,
+        [Parameter(Mandatory)][string]$ChildPath
+    )
+
+    $parent = $ParentPath.TrimEnd('\')
+    $child  = $ChildPath.TrimEnd('\')
+
+    if ($child.Length -lt $parent.Length) {
+        return $false
+    }
+
+    return $child.StartsWith($parent, [System.StringComparison]::OrdinalIgnoreCase) -and
+        ($child.Length -eq $parent.Length -or $child[$parent.Length] -eq '\')
+}
+
+function Test-OrganizerLogRow {
+    param(
+        [Parameter(Mandatory)]$Row,
+        [Parameter(Mandatory)][bool]$IsMove,
+        [Parameter(Mandatory)][string]$DestinationRoot
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Row.Action) -or
+        [string]::IsNullOrWhiteSpace($Row.DestinationPath) -or
+        [string]::IsNullOrWhiteSpace($Row.FileName)) {
+        return $false
+    }
+
+    if (-not (Test-IsChildPath -ParentPath $DestinationRoot -ChildPath $Row.DestinationPath)) {
+        return $false
+    }
+
+    if ($IsMove) {
+        foreach ($propertyName in @('SourcePath','CreationTime','LastWriteTime','LastAccessTime')) {
+            if ([string]::IsNullOrWhiteSpace($Row.$propertyName)) {
+                return $false
+            }
+        }
+    }
+
+    return $true
 }
 
 $w       = 62
@@ -50,6 +101,7 @@ $LogDir         = Split-Path -Parent $Log
 $DestinationRoot = Split-Path -Parent $LogDir
 $LogTimestamp   = [System.IO.Path]::GetFileNameWithoutExtension($Log) -replace '^undo_', ''
 $HtmlReportPath = Join-Path $LogDir "report_$LogTimestamp.html"
+$DestinationRootResolved = Resolve-NormalizedPath -Path $DestinationRoot
 
 Write-Info "Log file   :" $Log
 Write-Info "Entries    :" $total
@@ -93,6 +145,14 @@ foreach ($row in $rows) {
 
     $counter++
     $progress = "[{0,$padWidth}/{1}]" -f $counter, $total
+
+    if (-not (Test-OrganizerLogRow -Row $row -IsMove $isMove -DestinationRoot $DestinationRootResolved)) {
+        Write-Host "  $progress " -NoNewline -ForegroundColor DarkGray
+        Write-Host " ERROR    " -NoNewline -ForegroundColor Red
+        Write-Host " invalid or unsafe log entry detected" -ForegroundColor DarkGray
+        $errored++
+        continue
+    }
 
     if ($isMove) {
         $destPath   = $row.DestinationPath

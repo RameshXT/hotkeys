@@ -19,6 +19,7 @@ $LOG_TIMESTAMP     = $SCRIPT_START.ToString("yyyyMMdd_HHmmss")
 $SupportedImages   = @('.jpg','.jpeg','.png','.heic','.raw','.bmp','.tiff','.tif','.webp','.gif','.cr2','.nef','.arw','.dng')
 $SupportedVideos   = @('.mp4','.mov','.avi','.mkv','.m4v','.wmv','.3gp','.flv','.mpg','.mpeg')
 $SupportedAll      = $SupportedImages + $SupportedVideos
+$script:SystemDrawingLoaded = $false
 
 function Write-Header {
     $w    = 62
@@ -43,6 +44,36 @@ function Write-Info ([string]$Label, [string]$Value, [string]$Color = "White") {
 
 function Write-Warn ([string]$Msg) { Write-Host "  [WARN]  $Msg" -ForegroundColor Yellow }
 function Write-Err  ([string]$Msg) { Write-Host "  [ERROR] $Msg" -ForegroundColor Red }
+
+function Ensure-SystemDrawingLoaded {
+    if (-not $script:SystemDrawingLoaded) {
+        Add-Type -AssemblyName System.Drawing
+        $script:SystemDrawingLoaded = $true
+    }
+}
+
+function ConvertTo-HtmlText {
+    param([AllowNull()][string]$Text)
+    return [System.Net.WebUtility]::HtmlEncode($Text)
+}
+
+function Write-UndoRecord {
+    param(
+        [Parameter(Mandatory)][string]$UndoLogPath,
+        [Parameter(Mandatory)][pscustomobject]$Record
+    )
+
+    $csvArgs = @{
+        LiteralPath       = $UndoLogPath
+        NoTypeInformation = $true
+        Encoding          = 'UTF8'
+    }
+    if (Test-Path -LiteralPath $UndoLogPath) {
+        $csvArgs['Append'] = $true
+    }
+
+    $Record | Export-Csv @csvArgs
+}
 
 function Prompt-Choice {
     param([string]$Question, [string[]]$Valid, [string]$Default = "")
@@ -80,7 +111,7 @@ function Get-ExifDateTaken {
 
     if ($ext -in @('.jpg','.jpeg','.png','.bmp','.gif','.tiff','.tif')) {
         try {
-            Add-Type -AssemblyName System.Drawing
+            Ensure-SystemDrawingLoaded
             $image = [System.Drawing.Image]::FromFile($FilePath)
             try {
                 $prop       = $image.GetPropertyItem(36867)
@@ -178,16 +209,6 @@ function Invoke-Organize {
     $padWidth      = ([string]$total).Length
     $destHashCache = [System.Collections.Generic.HashSet[string]]::new()
 
-    if (-not $DryRun -and $null -ne $UndoLogPath) {
-        if ($DoMove) {
-            "Action,SourcePath,DestinationPath,FileName,CreationTime,LastWriteTime,LastAccessTime" |
-                Out-File -FilePath $UndoLogPath -Encoding UTF8
-        } else {
-            "Action,SourcePath,DestinationPath,FileName" |
-                Out-File -FilePath $UndoLogPath -Encoding UTF8
-        }
-    }
-
     Write-Section "Processing files..."
 
     foreach ($file in $allFiles) {
@@ -262,17 +283,21 @@ function Invoke-Organize {
                         $moved.CreationTime   = $ctm
                         $moved.LastWriteTime  = $lwt
                         $moved.LastAccessTime = $lat
-
-                        $undoLine = "MOVE,{0},{1},{2},{3},{4},{5}" -f `
-                            $file.FullName, $finalDest, $file.Name,
-                            $ctm.ToString("o"), $lwt.ToString("o"), $lat.ToString("o")
                     } else {
                         Copy-Item -LiteralPath $file.FullName -Destination $finalDest -Force
-
-                        $undoLine = "COPY,{0},{1},{2}" -f `
-                            $file.FullName, $finalDest, $file.Name
                     }
-                    if ($null -ne $UndoLogPath) { $undoLine | Out-File -FilePath $UndoLogPath -Append -Encoding UTF8 }
+                    if ($null -ne $UndoLogPath) {
+                        $undoRecord = [PSCustomObject]@{
+                            Action         = if ($DoMove) { "MOVE" } else { "COPY" }
+                            SourcePath     = $file.FullName
+                            DestinationPath= $finalDest
+                            FileName       = $file.Name
+                            CreationTime   = if ($DoMove) { $ctm.ToString("o") } else { $null }
+                            LastWriteTime  = if ($DoMove) { $lwt.ToString("o") } else { $null }
+                            LastAccessTime = if ($DoMove) { $lat.ToString("o") } else { $null }
+                        }
+                        Write-UndoRecord -UndoLogPath $UndoLogPath -Record $undoRecord
+                    }
                 }
 
                 if ($null -eq $status) { $status = if ($DryRun) { "WILL $($Verb.ToUpper())" } else { $Verb.ToUpper() } }
@@ -338,12 +363,17 @@ function Invoke-Organize {
     if (-not $DryRun -and $null -ne $HtmlReportPath) {
         $htmlRows = ($UndoEntries | ForEach-Object {
             $rc = if ($_.Action -eq "MOVE") { "moved" } else { "copied" }
-            "<tr class='$rc'><td>$($_.FileName)</td><td>$($_.Action)</td><td>$($_.Date)</td><td>$($_.Source)</td><td>$($_.Destination)</td></tr>"
+            "<tr class='$rc'><td>$(ConvertTo-HtmlText $_.FileName)</td><td>$(ConvertTo-HtmlText $_.Action)</td><td>$(ConvertTo-HtmlText $_.Date)</td><td>$(ConvertTo-HtmlText $_.Source)</td><td>$(ConvertTo-HtmlText $_.Destination)</td></tr>"
         }) -join "`n"
 
         $undoCmd     = ".\undo.ps1 -Log `"$UndoLogPath`""
         $undoDesc    = if ($DoMove) { "Moves all files back to their original locations and restores timestamps exactly." } `
                                     else { "Deletes all copied files from the destination. Your source files are not affected." }
+        $runSummary  = if ($DoMove) {
+            "Files were moved from $Source to $Destination and organized into date-based folders."
+        } else {
+            "Files were copied from $Source to $Destination and organized into date-based folders."
+        }
 
         @"
 <!DOCTYPE html>
@@ -352,61 +382,256 @@ function Invoke-Organize {
 <meta charset="UTF-8">
 <title>Image Organizer Report</title>
 <style>
-  * { box-sizing:border-box; margin:0; padding:0; }
-  body { font-family:'Segoe UI',sans-serif; background:#0f1117; color:#cdd6f4; padding:2rem; }
-  h1 { font-size:1.6rem; color:#89dceb; margin-bottom:0.3rem; }
-  .meta { color:#6c7086; font-size:0.85rem; margin-bottom:2rem; }
-  .stats { display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:2rem; }
-  .stat { background:#1e1e2e; border:1px solid #313244; border-radius:8px; padding:1rem 1.5rem; min-width:120px; }
-  .stat .n { font-size:2rem; font-weight:700; }
-  .stat .l { font-size:0.75rem; color:#6c7086; text-transform:uppercase; letter-spacing:0.05em; }
-  .n.yellow { color:#f9e2af; } .n.cyan { color:#89dceb; }
-  .n.red { color:#f38ba8; } .n.gray { color:#6c7086; }
-  h2 { font-size:1rem; color:#89b4fa; margin:1.5rem 0 0.5rem; }
-  table { width:100%; border-collapse:collapse; font-size:0.82rem; }
-  th { background:#1e1e2e; color:#89b4fa; text-align:left; padding:0.5rem 0.75rem; border-bottom:1px solid #313244; }
-  td { padding:0.4rem 0.75rem; border-bottom:1px solid #1e1e2e; word-break:break-all; }
-  tr:hover td { background:#1e1e2e; }
-  tr.moved td:nth-child(2) { color:#a6e3a1; }
-  tr.copied td:nth-child(2) { color:#89dceb; }
-  .undo-box { background:#1e1e2e; border:1px solid #313244; border-radius:8px; padding:1.2rem 1.5rem; margin-bottom:2rem; }
-  .undo-box .undo-title { font-size:0.75rem; color:#6c7086; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.4rem; }
-  .undo-box .undo-desc  { font-size:0.82rem; color:#6c7086; margin-bottom:1rem; }
-  .undo-cmd-row { display:flex; align-items:center; gap:0.75rem; }
-  .undo-cmd { font-family:'Cascadia Code','Consolas',monospace; font-size:0.88rem; color:#89dceb;
-              background:#0f1117; border:1px solid #313244; border-radius:5px;
-              padding:0.55rem 1rem; flex:1; user-select:all; }
-  .copy-btn { background:#313244; color:#cdd6f4; border:none; border-radius:5px;
-              padding:0.55rem 1.1rem; font-size:0.82rem; cursor:pointer; white-space:nowrap;
-              transition:background 0.15s; }
-  .copy-btn:hover { background:#45475a; }
-  .copy-btn.copied { background:#a6e3a1; color:#1e1e2e; }
+  :root {
+    --bg: #e9edf2;
+    --bg-deep: #dfe5eb;
+    --surface: rgba(255,255,255,0.34);
+    --surface-strong: rgba(255,255,255,0.52);
+    --text: #152033;
+    --muted: #61708a;
+    --line: rgba(21,32,51,0.12);
+    --accent: #0f766e;
+    --warn: #a16207;
+    --danger: #b42318;
+    --credit: #EF233C;
+    color-scheme: light dark;
+
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
+    color: var(--text);
+    background:
+      radial-gradient(circle at top left, rgba(255,255,255,0.65) 0, transparent 34%),
+      radial-gradient(circle at bottom right, rgba(15,118,110,0.06) 0, transparent 24%),
+      linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
+    padding: 32px 20px 48px;
+    position: relative;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.14;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cg fill='%23000000' fill-opacity='0.18'%3E%3Ccircle cx='16' cy='18' r='1'/%3E%3Ccircle cx='58' cy='40' r='1'/%3E%3Ccircle cx='96' cy='24' r='1'/%3E%3Ccircle cx='134' cy='54' r='1'/%3E%3Ccircle cx='126' cy='118' r='1'/%3E%3Ccircle cx='64' cy='122' r='1'/%3E%3Ccircle cx='24' cy='102' r='1'/%3E%3C/g%3E%3C/svg%3E");
+  }
+  .wrap {
+    max-width: 1220px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+  .hero {
+    padding: 8px 0 28px;
+    margin-bottom: 26px;
+    border-bottom: 1px solid var(--line);
+  }
+  .eyebrow {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--accent);
+    margin-bottom: 10px;
+    font-weight: 700;
+  }
+  h1 {
+    font-size: clamp(28px, 4vw, 40px);
+    line-height: 1.05;
+    margin-bottom: 10px;
+    font-weight: 700;
+  }
+  .meta {
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .summary-note {
+    margin-top: 14px;
+    max-width: 820px;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1.7;
+  }
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 14px;
+    margin: 24px 0 0;
+  }
+  .stat {
+    background: linear-gradient(180deg, var(--surface-strong) 0%, var(--surface) 100%);
+    border: 1px solid var(--line);
+    border-radius: 0;
+    padding: 18px 18px 16px;
+    box-shadow: none;
+  }
+  .stat .n {
+    font-size: 32px;
+    line-height: 1;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .stat .l {
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .n.yellow { color: var(--warn); }
+  .n.cyan { color: var(--accent); }
+  .n.red { color: var(--danger); }
+  .n.gray { color: var(--muted); }
+  .section {
+    margin-bottom: 28px;
+  }
+  h2 {
+    font-size: 18px;
+    margin-bottom: 14px;
+    font-weight: 650;
+  }
+  .undo-shell {
+    padding: 20px 0 22px;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  .undo-desc {
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.6;
+    margin-bottom: 16px;
+  }
+  .undo-cmd-row {
+    display: flex;
+    align-items: stretch;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .undo-cmd {
+    flex: 1 1 520px;
+    min-height: 52px;
+    display: flex;
+    align-items: center;
+    padding: 14px 16px;
+    border-radius: 0;
+    border: 1px solid var(--line);
+    background: rgba(255,255,255,0.34);
+    color: #124e49;
+    font-family: 'Cascadia Code', 'Consolas', monospace;
+    font-size: 13px;
+    user-select: all;
+    word-break: break-all;
+  }
+  .copy-btn {
+    border: none;
+    border-radius: 0;
+    background: var(--accent);
+    color: #ffffff;
+    padding: 0 20px;
+    min-height: 52px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, opacity 0.15s ease;
+  }
+  .copy-btn:hover { background: #0d6a63; opacity: 0.98; }
+  .copy-btn.copied { background: #1f9d73; }
+  .table-wrap {
+    overflow: auto;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    background: transparent;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  th {
+    position: sticky;
+    top: 0;
+    background: rgba(233,237,242,0.96);
+    color: var(--muted);
+    text-align: left;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--line);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  td {
+    padding: 13px 16px;
+    border-bottom: 1px solid #e8edf4;
+    vertical-align: top;
+    word-break: break-word;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr.moved td:nth-child(2),
+  tr.copied td:nth-child(2) {
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .credit {
+    margin-top: 34px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .credit a {
+    color: var(--credit);
+    text-decoration: none;
+    font-weight: 700;
+  }
+  @media (max-width: 760px) {
+    body { padding: 18px 12px 32px; }
+    .undo-cmd-row { flex-direction: column; }
+    .copy-btn { width: 100%; }
+    th, td { padding: 11px 12px; }
+  }
 </style>
 </head>
 <body>
-<h1>&#128247; Image Organizer Report</h1>
-<p class="meta">$($SCRIPT_START.ToString("yyyy-MM-dd HH:mm:ss")) &bull; Elapsed: $elapsedStr &bull; v$VERSION</p>
-<div class="stats">
-  <div class="stat"><div class="n gray">$total</div><div class="l">Found</div></div>
-  <div class="stat"><div class="n">$processed</div><div class="l">$Verb</div></div>
-  <div class="stat"><div class="n yellow">$replaced</div><div class="l">Replaced</div></div>
-  <div class="stat"><div class="n cyan">$renamed</div><div class="l">Renamed</div></div>
-  <div class="stat"><div class="n gray">$skipped</div><div class="l">Skipped</div></div>
-  <div class="stat"><div class="n red">$errored</div><div class="l">Errors</div></div>
-</div>
-<div class="undo-box">
-  <div class="undo-title">&#8635; Undo this run</div>
-  <div class="undo-desc">$undoDesc</div>
-  <div class="undo-cmd-row">
-    <div class="undo-cmd" id="undoCmd">$undoCmd</div>
-    <button class="copy-btn" onclick="copyUndo()">Copy</button>
+<div class="wrap">
+  <section class="hero">
+    <div class="eyebrow">Image Organizer Report</div>
+    <h1>Run Summary</h1>
+    <p class="meta">$($SCRIPT_START.ToString("yyyy-MM-dd HH:mm:ss")) &bull; Elapsed: $elapsedStr &bull; v$VERSION</p>
+    <p class="summary-note">$(ConvertTo-HtmlText $runSummary)</p>
+    <div class="stats">
+      <div class="stat"><div class="n gray">$total</div><div class="l">Found</div></div>
+      <div class="stat"><div class="n">$processed</div><div class="l">$Verb</div></div>
+      <div class="stat"><div class="n yellow">$replaced</div><div class="l">Replaced</div></div>
+      <div class="stat"><div class="n cyan">$renamed</div><div class="l">Renamed</div></div>
+      <div class="stat"><div class="n gray">$skipped</div><div class="l">Skipped</div></div>
+      <div class="stat"><div class="n red">$errored</div><div class="l">Errors</div></div>
+    </div>
+  </section>
+  <section class="section">
+    <h2>Undo This Run</h2>
+    <div class="undo-shell">
+      <div class="undo-desc">$(ConvertTo-HtmlText $undoDesc)</div>
+      <div class="undo-cmd-row">
+        <div class="undo-cmd" id="undoCmd">$(ConvertTo-HtmlText $undoCmd)</div>
+        <button class="copy-btn" onclick="copyUndo()">Copy</button>
+      </div>
+    </div>
+  </section>
+  <section class="section">
+    <h2>File Log</h2>
+    <div class="table-wrap">
+      <table>
+      <thead><tr><th>File</th><th>Action</th><th>Date Taken</th><th>Source</th><th>Destination</th></tr></thead>
+      <tbody>$htmlRows</tbody>
+      </table>
+    </div>
+  </section>
+  <footer class="credit">
+    Designed & developed by
+    <a href="https://rameshxt.pages.dev/" target="_blank" rel="noopener noreferrer">Ramesh XT</a>
+  </footer>
   </div>
-</div>
-<h2>File Log</h2>
-<table>
-<thead><tr><th>File</th><th>Action</th><th>Date Taken</th><th>Source</th><th>Destination</th></tr></thead>
-<tbody>$htmlRows</tbody>
-</table>
 <script>
   function copyUndo() {
     var cmd = document.getElementById('undoCmd').innerText;
