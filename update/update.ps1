@@ -1,3 +1,4 @@
+$ErrorActionPreference = "Continue"
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
@@ -606,3 +607,5 @@ $resultPath  = Join-Path $ScriptDir "update_result.txt"
 }
 
 exit $ExitCode
+
+

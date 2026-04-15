@@ -1,5 +1,4 @@
 #Requires -Version 5.1
-$ErrorActionPreference = "Continue"
 
 param(
     [Parameter(Mandatory = $true)]

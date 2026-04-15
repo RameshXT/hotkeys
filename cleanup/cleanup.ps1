@@ -1,3 +1,4 @@
+$ErrorActionPreference = "Continue"
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "SilentlyContinue"
 

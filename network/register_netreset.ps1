@@ -1,4 +1,5 @@
 #Requires -RunAsAdministrator
+$ErrorActionPreference = "Continue"
 
 $NetResetScript = Join-Path $PSScriptRoot "network-reset.ps1"
 $TaskName       = "NetworkReset"
@@ -14,7 +15,7 @@ Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction Silent
 
 $Action = New-ScheduledTaskAction `
     -Execute "powershell.exe" `
-    -Argument "-NoProfile -WindowStyle Normal -ExecutionPolicy RemoteSigned -File `"$NetResetScript`""
+    -Argument "-NonInteractive -NoProfile -WindowStyle Normal -ExecutionPolicy RemoteSigned -File `"$NetResetScript`""
 
 $Principal = New-ScheduledTaskPrincipal `
     -UserId    $LoggedInUser `
