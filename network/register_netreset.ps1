@@ -1,55 +1,69 @@
-#Requires -Version 5.1
-#Requires -RunAsAdministrator
-Set-StrictMode -Version Latest
+<#
+.SYNOPSIS
+    Registers the Network Reset script as a high-privilege scheduled task.
+.DESCRIPTION
+    Handles task registration, principal setup, and settings configuration. 
+    Can be run multiple times to update the task definition.
+#>
+[CmdletBinding()]
+param()
+
 $ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
 
+$TaskName       = "NetworkReset"
 $NetResetScript = Join-Path $PSScriptRoot "network-reset.ps1"
-$TaskName = "NetworkReset"
-$LoggedInUser = "$env:USERDOMAIN\$env:USERNAME"
+$LoggedInUser   = "$env:USERDOMAIN\$env:USERNAME"
 
-if (-not (Test-Path -LiteralPath $NetResetScript)) {
-    Write-Host "ERROR: network-reset.ps1 not found at $NetResetScript" -ForegroundColor Red
-    Write-Host "Place network-reset.ps1 in the correct folder first." -ForegroundColor Yellow
+Write-Host ""
+Write-Host "  NETWORK TASK REGISTRATION" -ForegroundColor Cyan
+Write-Host "  ------------------------------------" -ForegroundColor DarkGray
+
+if (-not (Test-Path $NetResetScript)) {
+    Write-Host "  [ERROR] Script not found: $NetResetScript" -ForegroundColor Red
     exit 1
 }
-
-if ([string]::IsNullOrWhiteSpace($env:USERNAME)) {
-    Write-Host "ERROR: Could not determine the current username." -ForegroundColor Red
-    exit 1
-}
-Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
-
-$Action = New-ScheduledTaskAction `
-    -Execute "powershell.exe" `
-    -Argument "-NoProfile -WindowStyle Normal -ExecutionPolicy RemoteSigned -File `"$NetResetScript`""
-
-$Principal = New-ScheduledTaskPrincipal `
-    -UserId    $LoggedInUser `
-    -RunLevel  Highest `
-    -LogonType Interactive
-
-$Settings = New-ScheduledTaskSettingsSet `
-    -ExecutionTimeLimit (New-TimeSpan -Minutes 5) `
-    -MultipleInstances  IgnoreNew `
-    -Priority           5
 
 try {
+    Write-Host "  Unregistering old task (if exists)..." -ForegroundColor Gray
+    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
+
+    Write-Host "  Configuring task action..." -ForegroundColor Gray
+    $Action = New-ScheduledTaskAction `
+        -Execute "powershell.exe" `
+        -Argument "-NoProfile -WindowStyle Normal -ExecutionPolicy Bypass -File `"$NetResetScript`""
+
+    Write-Host "  Configuring principal ($LoggedInUser)..." -ForegroundColor Gray
+    $Principal = New-ScheduledTaskPrincipal `
+        -UserId    $LoggedInUser `
+        -RunLevel  Highest `
+        -LogonType Interactive
+
+    Write-Host "  Configuring settings..." -ForegroundColor Gray
+    $Settings = New-ScheduledTaskSettingsSet `
+        -ExecutionTimeLimit (New-TimeSpan -Minutes 10) `
+        -MultipleInstances  IgnoreNew `
+        -Priority           5 `
+        -AllowStartIfOnBatteries `
+        -DontStopIfGoingOnBatteries
+
+    Write-Host "  Registering with Task Scheduler..." -ForegroundColor Gray
     Register-ScheduledTask `
         -TaskName  $TaskName `
         -Action    $Action `
         -Principal $Principal `
         -Settings  $Settings `
-        -Force `
-        -ErrorAction Stop | Out-Null
+        -Force | Out-Null
+
+    Write-Host "  [SUCCESS] Task '$TaskName' registered." -ForegroundColor Green
+    Write-Host ""
+    Write-Host "  Details:" -ForegroundColor Gray
+    Write-Host "  - Script: $NetResetScript"
+    Write-Host "  - User  : $LoggedInUser"
+    Write-Host "  - Mode  : Elevated, Visible Window"
+    Write-Host ""
+    
 } catch {
-    Write-Host "ERROR: Failed to register task '$TaskName': $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "  [FATAL ERROR] Failed to register task: $($_.Exception.Message)" -ForegroundColor Red
     exit 1
 }
-
-Write-Host ""
-Write-Host "Task '$TaskName' registered successfully." -ForegroundColor Green
-Write-Host "Network reset script : $NetResetScript"           -ForegroundColor Cyan
-Write-Host "Runs as              : $LoggedInUser (elevated, hidden, no UAC prompt)" -ForegroundColor Cyan
-Write-Host "Triggered by         : Ctrl+Shift+Alt+N via AHK" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "You only need to run this registration script once." -ForegroundColor Yellow
