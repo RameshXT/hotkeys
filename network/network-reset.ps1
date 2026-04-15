@@ -1,170 +1,207 @@
-<#
-.SYNOPSIS
-    Premium Network Reset Utility v1.3
-.DESCRIPTION
-    Minimal, structured network stack recovery with a modern aesthetic.
-#>
-[CmdletBinding()]
-param()
-
+#Requires -Version 5.1
+#Requires -RunAsAdministrator
+Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-# --- Configuration ---
-$VERSION       = "1.3"
+$VERSION       = "1.0"
 $SCRIPT_START  = Get-Date
-$ScriptDir     = $PSScriptRoot
-if (-not $ScriptDir) { $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path }
+$ScriptDir     = Split-Path -Parent $MyInvocation.MyCommand.Path
 $LogFile       = Join-Path (Split-Path -Parent $ScriptDir) "logs\netreset_log.txt"
-$ResultFile    = Join-Path $ScriptDir "netreset_result.txt"
 $MaxLogSizeB   = 2MB
-$ColWidth      = 40
 
-# --- Aesthetic Helpers ---
 function Write-Header {
+    $w    = 62
+    $line = "=" * $w
     Write-Host ""
-    Write-Host "  NETWORK RESET" -ForegroundColor Cyan -NoNewline
-    Write-Host " v$VERSION" -ForegroundColor DarkGray
-    Write-Host "  " + ("-" * 30) -ForegroundColor DarkGray
-    Write-Host ""
-}
-
-function Write-Section {
-    param([string]$Text)
-    Write-Host "`n  $($Text.ToUpper())" -ForegroundColor White
-}
-
-function Write-Status {
-    param([string]$Label, [string]$Status, [string]$Color = "White")
-    $dots = "." * ($ColWidth - $Label.Length)
-    Write-Host "  $Label" -NoNewline -ForegroundColor Gray
-    Write-Host $dots -NoNewline -ForegroundColor DarkGray
-    Write-Host " [ " -NoNewline -ForegroundColor DarkGray
-    Write-Host $Status -NoNewline -ForegroundColor $Color
-    Write-Host " ]" -ForegroundColor DarkGray
-}
-
-function Invoke-WithStatus {
-    param(
-        [string]$Label,
-        [scriptblock]$Script,
-        [object[]]$Args = @()
-    )
-    
-    $dots = "." * ($ColWidth - $Label.Length)
-    Write-Host "  $Label" -NoNewline -ForegroundColor Gray
-    Write-Host $dots -NoNewline -ForegroundColor DarkGray
-    Write-Host " [ " -NoNewline -ForegroundColor DarkGray
-    Write-Host "...." -NoNewline -ForegroundColor Cyan
-    Write-Host " ]" -NoNewline -ForegroundColor DarkGray
-
-    $job = Start-Job -ScriptBlock $Script -ArgumentList $Args
-    $spinner = @('|', '/', '-', '\')
-    $i = 0
-    
-    while ($job.State -eq 'Running') {
-        Write-Host -NoNewline "`b`b`b`b`b" 
-        Write-Host -NoNewline " $($spinner[$i % 4])  " -ForegroundColor Cyan
-        $i++
-        Start-Sleep -Milliseconds 150
-    }
-    
-    $result = Receive-Job -Job $job -Wait
-    Remove-Job $job
-    
-    Write-Host -NoNewline "`b`b`b`b`b"
-    Write-Host " OK " -ForegroundColor Green
-    Write-Host " ]" -ForegroundColor DarkGray -NoNewline
+    Write-Host $line -ForegroundColor Cyan
+    Write-Host ("  NETWORK RESET  v{0}  |  Fast Network Recovery" -f $VERSION).PadRight($w) -ForegroundColor Cyan
+    Write-Host $line -ForegroundColor Cyan
     Write-Host ""
 }
 
-# --- Core Logic ---
-try {
-    # 1. Initialization
-    $hwnd = $null
+function Write-Section ([string]$Text) {
+    Write-Host ""
+    Write-Host "  >> $Text" -ForegroundColor DarkCyan
+    Write-Host ""
+}
+
+function Write-Info ([string]$Label, [string]$Value, [string]$Color = "White") {
+    Write-Host ("  {0,-22}" -f $Label) -NoNewline -ForegroundColor Gray
+    Write-Host $Value -ForegroundColor $Color
+}
+
+function Write-Step ([string]$Label, [scriptblock]$Action) {
+    Write-Host ("  {0,-38}" -f $Label) -NoNewline -ForegroundColor Gray
     try {
-        $src = @'
-        using System;
-        using System.Runtime.InteropServices;
-        public class Win {
-            [DllImport("kernel32.dll")] public static extern IntPtr GetConsoleWindow();
-            [DllImport("user32.dll")]   public static extern bool MoveWindow(IntPtr h, int x, int y, int w, int h2, bool r);
-            [DllImport("user32.dll")]   public static extern int  GetSystemMetrics(int n);
-        }
-'@
-        if (-not ('Win' -as [type])) { Add-Type -TypeDefinition $src }
-        $hwnd = [Win]::GetConsoleWindow()
-        if ($hwnd -ne [IntPtr]::Zero) {
-            $sw = [Win]::GetSystemMetrics(0); $sh = [Win]::GetSystemMetrics(1)
-            $ww = [int]($sw * 0.30); $wh = [int]($sh * 0.50)
-            [void][Win]::MoveWindow($hwnd, ($sw - $ww), 0, $ww, $wh, $true)
-        }
-    } catch {}
-
-    Write-Header
-    
-    # 2. Checks
-    if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-        throw "Admin privileges required."
+        & $Action | Out-Null
+        Write-Host " OK" -ForegroundColor Green
+    } catch {
+        Write-Host " FAILED  $_" -ForegroundColor Red
     }
-
-    $adapter = Get-NetAdapter | Where-Object { $_.PhysicalMediaType -match '802.11|Wireless' -or $_.Name -match 'Wi-Fi|Wireless' } | Sort-Object Status -Descending | Select-Object -First 1
-    if (-not $adapter) { throw "No Wi-Fi adapter found." }
-
-    Write-Section "Diagnostics"
-    Write-Status "Adapter" $adapter.Name "Cyan"
-    Write-Status "Current Status" $adapter.Status $(if ($adapter.Status -eq 'Up'){'Green'}else{'Yellow'})
-
-    # 3. Actions
-    Write-Section "Recovery Actions"
-    Invoke-WithStatus "Releasing IP lease"   { ipconfig /release "$($args[0])" 2>&1 } $adapter.Name
-    Invoke-WithStatus "Flushing DNS cache"   { Clear-DnsClientCache }
-    Invoke-WithStatus "Resetting Winsock"    { netsh winsock reset 2>&1 }
-    Invoke-WithStatus "Resetting IP stack"   { netsh int ip reset 2>&1 }
-    Invoke-WithStatus "Cycling Hardware"     { 
-        Disable-NetAdapter -Name "$($args[0])" -Confirm:$false
-        Start-Sleep -Seconds 1
-        Enable-NetAdapter -Name "$($args[0])" -Confirm:$false
-    } $adapter.Name
-
-    # 4. Reconnection
-    Write-Section "Network Handshake"
-    Write-Host "  Waiting for connectivity" -NoNewline -ForegroundColor Gray
-    $timeout = 45; $elapsed = 0; $connected = $false
-    while ($elapsed -lt $timeout) {
-        Write-Host -NoNewline "." -ForegroundColor DarkGray
-        $elapsed++; Start-Sleep -Seconds 1
-        if ((Get-NetAdapter -Name $adapter.Name).Status -eq 'Up') {
-            $handshake = try { $t = [System.Net.Sockets.TcpClient]::new(); $ar = $t.BeginConnect("8.8.8.8", 443, $null, $null); $ok = $ar.AsyncWaitHandle.WaitOne(2000); $t.Close(); $ok } catch { $false }
-            if ($handshake) { $connected = $true; break }
-        }
-    }
-    Write-Host ""
-    if ($connected) { 
-        Invoke-WithStatus "Renewing IP lease" { ipconfig /renew "$($args[0])" 2>&1 } $adapter.Name
-    } else {
-        Write-Status "Connection" "TIMED OUT" "Red"
-    }
-
-    # 5. Summary
-    $FinalOnline = try { $t = [System.Net.Sockets.TcpClient]::new(); $ar = $t.BeginConnect("1.1.1.1", 443, $null, $null); $ok = $ar.AsyncWaitHandle.WaitOne(2000); $t.Close(); $ok } catch { $false }
-    $Duration = "{0:mm\:ss}" -f ((Get-Date) - $SCRIPT_START)
-
-    Write-Section "Summary"
-    Write-Status "Final Result" $(if ($FinalOnline){'RESTORED'}else{'CHECK ROUTER'}) $(if ($FinalOnline){'Green'}else{'Red'})
-    Write-Status "Time Elapsed" $Duration "Gray"
-
-    # Finish
-    if ($FinalOnline) { 
-        "$($adapter.Name)|Network Reset Success`nInternet is online." | Set-Content $ResultFile 
-    } else {
-        "$($adapter.Name)|Network Reset Partial`nConnection not verified." | Set-Content $ResultFile
-    }
-
-    Write-Host "`n  Done. Closing..." -ForegroundColor DarkGray
-    Start-Sleep -Seconds 3
-
-} catch {
-    Write-Host "`n  [ERROR] $($_.Exception.Message)" -ForegroundColor Red
-    if ($null -ne $ResultFile) { "ERROR|$($_.Exception.Message)" | Set-Content $ResultFile }
-    Start-Sleep -Seconds 20
 }
+
+function Get-WifiAdapter {
+    $adapters = @(Get-NetAdapter | Where-Object {
+        $_.Status -in @("Up","Disabled") -and
+        $_.PhysicalMediaType -in @("Native 802.11","Wireless LAN")
+    })
+
+    if ($adapters.Count -eq 0) {
+        $adapters = @(Get-NetAdapter | Where-Object {
+            $_.Status -in @("Up","Disabled") -and
+            $_.Name -match "Wi.?Fi|Wireless|WLAN|802\.11"
+        })
+    }
+
+    if ($adapters.Count -eq 0) { return $null }
+    return ($adapters | Sort-Object -Property { $_.Status -eq "Up" } -Descending | Select-Object -First 1)
+}
+
+function Test-Gateway {
+    $gateways = @(Get-NetRoute -DestinationPrefix "0.0.0.0/0" -ErrorAction SilentlyContinue |
+        Where-Object { $_.NextHop -ne "0.0.0.0" } |
+        Select-Object -ExpandProperty NextHop)
+
+    foreach ($gw in $gateways) {
+        if (Test-Connection -ComputerName $gw -Count 1 -Quiet -ErrorAction SilentlyContinue) {
+            return @{ Reachable = $true; Gateway = $gw }
+        }
+    }
+    return @{ Reachable = $false; Gateway = ($gateways | Select-Object -First 1) }
+}
+
+function Test-Internet {
+    $hosts = @("8.8.8.8", "1.1.1.1", "9.9.9.9")
+    foreach ($h in $hosts) {
+        try {
+            $tcp = [System.Net.Sockets.TcpClient]::new()
+            $ar  = $tcp.BeginConnect($h, 443, $null, $null)
+            $ok  = $ar.AsyncWaitHandle.WaitOne(3000)
+            try { $tcp.EndConnect($ar) } catch {}
+            $tcp.Close()
+            if ($ok) { return $true }
+        } catch {}
+    }
+    return $false
+}
+
+Write-Header
+
+$logDir = Split-Path -Parent $LogFile
+if (-not (Test-Path -LiteralPath $logDir)) {
+    New-Item -ItemType Directory -LiteralPath $logDir -Force | Out-Null
+}
+if ((Test-Path -LiteralPath $LogFile) -and (Get-Item -LiteralPath $LogFile).Length -gt $MaxLogSizeB) {
+    Clear-Content -LiteralPath $LogFile -Force -ErrorAction SilentlyContinue
+}
+
+Write-Section "Diagnostics"
+
+$adapter = Get-WifiAdapter
+if ($null -eq $adapter) {
+    Write-Host "  [ERROR] No Wi-Fi adapter found." -ForegroundColor Red
+    exit 1
+}
+
+Write-Info "Adapter        :" $adapter.Name
+Write-Info "Status         :" $adapter.Status $(if ($adapter.Status -eq "Up") {"Green"} else {"Yellow"})
+
+$preGateway = Test-Gateway
+$preInternet = Test-Internet
+
+Write-Info "Gateway        :" $(if ($preGateway.Gateway) { $preGateway.Gateway } else { "None" }) $(if ($preGateway.Reachable) {"Green"} else {"Red"})
+Write-Info "Internet       :" $(if ($preInternet) {"Reachable"} else {"Unreachable"}) $(if ($preInternet) {"Green"} else {"Red"})
+
+Write-Section "Resetting..."
+
+Write-Step "Releasing IP lease          " { $n = $adapter.Name; ipconfig /release "$n" 2>&1 }
+Write-Step "Flushing DNS cache          " { Clear-DnsClientCache }
+Write-Step "Resetting Winsock           " { netsh winsock reset 2>&1 }
+Write-Step "Resetting TCP/IP stack      " { netsh int ip reset 2>&1 }
+Write-Step "Resetting IPv6 stack        " { netsh int ipv6 reset 2>&1 }
+Write-Step "Disabling adapter           " { Disable-NetAdapter -Name $adapter.Name -Confirm:$false }
+
+Start-Sleep -Seconds 2
+
+Write-Step "Enabling adapter            " { Enable-NetAdapter -Name $adapter.Name -Confirm:$false }
+
+Write-Host ""
+Write-Host "  Waiting for adapter to reconnect..." -ForegroundColor DarkGray
+
+$timeout  = 20
+$interval = 1
+$elapsed  = 0
+$connected = $false
+
+while ($elapsed -lt $timeout) {
+    Start-Sleep -Seconds $interval
+    $elapsed += $interval
+    $current = Get-NetAdapter -Name $adapter.Name -ErrorAction SilentlyContinue
+    if ($current -and $current.Status -eq "Up") { $connected = $true; break }
+    Write-Host "  ." -NoNewline -ForegroundColor DarkGray
+}
+Write-Host ""
+
+if (-not $connected) {
+    Write-Host "  [WARN] Adapter did not come back up within $timeout seconds." -ForegroundColor Yellow
+} else {
+    Write-Step "Renewing IP lease           " { $n = $adapter.Name; ipconfig /renew "$n" 2>&1 }
+    Write-Step "Registering DNS             " { Register-DnsClient }
+}
+
+Write-Section "Post-reset check"
+
+Start-Sleep -Seconds 2
+
+$postGateway  = Test-Gateway
+$postInternet = Test-Internet
+
+Write-Info "Gateway        :" $(if ($postGateway.Gateway) { $postGateway.Gateway } else { "None" }) $(if ($postGateway.Reachable) {"Green"} else {"Red"})
+Write-Info "Internet       :" $(if ($postInternet) {"Reachable"} else {"Unreachable"}) $(if ($postInternet) {"Green"} else {"Red"})
+
+$elapsed    = (Get-Date) - $SCRIPT_START
+$elapsedStr = "{0:mm\:ss}" -f $elapsed
+$divider    = "=" * 62
+
+Write-Host ""
+Write-Host $divider -ForegroundColor DarkGray
+Write-Host "  SUMMARY" -ForegroundColor Cyan
+Write-Host $divider -ForegroundColor DarkGray
+Write-Info "Adapter        :" $adapter.Name
+Write-Info "Elapsed        :" $elapsedStr
+Write-Info "Result         :" $(if ($postInternet) {"Network restored"} else {"Still no internet - try restarting router"}) $(if ($postInternet) {"Green"} else {"Yellow"})
+Write-Host $divider -ForegroundColor DarkGray
+Write-Host ""
+Write-Host "  Done." -ForegroundColor Cyan
+Write-Host ""
+
+$logLine = "=" * 62
+$logEntry = @"
+$logLine
+  NETWORK RESET  v$VERSION  |  $($SCRIPT_START.ToString('dd-MM-yyyy | hh.mm.ss tt'))
+$logLine
+  Adapter        : $($adapter.Name)
+  Pre-Gateway    : $(if ($preGateway.Gateway) { $preGateway.Gateway } else { "None" })  Reachable: $($preGateway.Reachable)
+  Pre-Internet   : $preInternet
+  Post-Gateway   : $(if ($postGateway.Gateway) { $postGateway.Gateway } else { "None" })  Reachable: $($postGateway.Reachable)
+  Post-Internet  : $postInternet
+  Elapsed        : $elapsedStr
+  Result         : $(if ($postInternet) { "Network restored" } else { "Still no internet" })
+$logLine
+
+"@
+try {
+    Add-Content -LiteralPath $LogFile -Value $logEntry -Encoding UTF8
+} catch {
+    Write-Host "  [WARN] Log write failed: $($_.Exception.Message)" -ForegroundColor Yellow
+}
+
+Add-Type -AssemblyName System.Windows.Forms
+$balloon                 = [System.Windows.Forms.NotifyIcon]::new()
+$balloon.Icon            = [System.Drawing.SystemIcons]::Information
+$balloon.BalloonTipTitle = "Network Reset Done"
+$balloon.BalloonTipText  = if ($postInternet) { "Internet restored." } else { "Still no internet. Try restarting router." }
+$balloon.Visible         = $true
+$balloon.ShowBalloonTip(5000)
+Start-Sleep -Milliseconds 5500
+$balloon.Dispose()
