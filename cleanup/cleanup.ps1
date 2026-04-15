@@ -1,12 +1,12 @@
-$ErrorActionPreference = "Continue"
+#Requires -Version 5.1
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "SilentlyContinue"
 
-$ScriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Path
-$LogFile     = Join-Path (Split-Path -Parent $ScriptDir) "logs\cleanup_log.txt"
-$StartTime   = Get-Date
-$TotalFreed  = [long]0
-$Results     = [System.Collections.Generic.List[string]]::new()
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$LogFile = Join-Path (Split-Path -Parent $ScriptDir) "logs\cleanup_log.txt"
+$StartTime = Get-Date
+$TotalFreed = [long]0
+$Results = [System.Collections.Generic.List[string]]::new()
 
 $currentPrincipal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
@@ -20,29 +20,65 @@ foreach ($envVar in @('TEMP', 'LOCALAPPDATA', 'USERPROFILE')) {
     }
 }
 
+function Ensure-ParentDirectory {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Path)
+
+    $parentPath = Split-Path -Parent $Path
+    if (-not [string]::IsNullOrWhiteSpace($parentPath) -and -not (Test-Path -LiteralPath $parentPath)) {
+        New-Item -ItemType Directory -Path $parentPath -Force | Out-Null
+    }
+}
+
+function Get-ParentProcessName {
+    [CmdletBinding()]
+    param()
+
+    try {
+        $selfProcess = Get-CimInstance Win32_Process -Filter "ProcessId=$PID" -ErrorAction Stop
+        return (Get-Process -Id $selfProcess.ParentProcessId -ErrorAction Stop).Name
+    } catch {
+        return "Unknown"
+    }
+}
+
 $TriggerFile = Join-Path $ScriptDir "cleanup_trigger.txt"
 if (Test-Path -LiteralPath $TriggerFile) {
     $TriggerLabel = "hotkey (Manual)"
     Remove-Item -LiteralPath $TriggerFile -Force -ErrorAction SilentlyContinue
 } else {
-    $parentName = try { (Get-Process -Id (Get-CimInstance Win32_Process -Filter "ProcessId=$PID").ParentProcessId).Name } catch { "Unknown" }
+    $parentName = Get-ParentProcessName
     $TriggerLabel = if ($parentName -match "^(svchost|taskeng|taskhostw)$") { "task (Auto)" } else { "shell (Manual)" }
 }
 
 function Get-FastSize {
-    param([string]$Path)
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Path)
+
     if (-not (Test-Path -LiteralPath $Path)) { return [long]0 }
+
+    $resolvedPath = try {
+        (Resolve-Path -LiteralPath $Path -ErrorAction Stop).Path
+    } catch {
+        $Path
+    }
+
     $sz = [long]0
     try {
-        $di = New-Object System.IO.DirectoryInfo($Path)
-        $fs = $di.GetFiles("*", [System.IO.SearchOption]::AllDirectories)
-        foreach ($f in $fs) { $sz += $f.Length }
+        foreach ($filePath in [System.IO.Directory]::EnumerateFiles($resolvedPath, '*', [System.IO.SearchOption]::AllDirectories)) {
+            try {
+                $sz += ([System.IO.FileInfo]::new($filePath)).Length
+            } catch { }
+        }
     } catch { }
+
     return $sz
 }
 
 function Format-Size {
-    param([long]$Bytes)
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][long]$Bytes)
+
     if ($Bytes -le 0)   { return "0 B" }
     if ($Bytes -ge 1GB) { return "{0:N2} GB" -f ($Bytes / 1GB) }
     if ($Bytes -ge 1MB) { return "{0:N2} MB" -f ($Bytes / 1MB) }
@@ -50,19 +86,29 @@ function Format-Size {
 }
 
 function Assert-SafePath {
-    param([string]$Path)
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Path)
+
     $resolved = try { (Resolve-Path -LiteralPath $Path -ErrorAction Stop).Path.TrimEnd('\') } catch { $Path.TrimEnd('\') }
-    $blocked = @("$env:SystemRoot", "$env:ProgramFiles", "${env:ProgramFiles(x86)}", "$env:SystemRoot\System32")
+    $blocked = @("$env:SystemRoot", "$env:ProgramFiles", "${env:ProgramFiles(x86)}", "$env:SystemRoot\System32") |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+
     foreach ($b in $blocked) {
         if ($resolved -ieq $b) { throw "SAFETY BLOCK: Protected path '$resolved'" }
     }
 }
 
 function Clean-Target {
-    param([string]$Path, [string]$Label, [int]$DaysOld = 0)
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Label,
+        [int]$DaysOld = 0
+    )
+
     if (-not (Test-Path -LiteralPath $Path)) { $script:Results.Add("SKIP|$Label|not found"); return }
     try { Assert-SafePath $Path } catch { $script:Results.Add("BLOCK|$Label|$($_.Exception.Message)"); return }
-    
+
     $before = Get-FastSize $Path
     try {
         if ($DaysOld -gt 0) {
@@ -99,7 +145,7 @@ Clean-Target "$env:LOCALAPPDATA\Microsoft\Windows\WER\ReportArchive" "User WER R
 Clean-Target "$env:SystemRoot\Logs" "Windows Logs (>7d)" 7
 Clean-Target "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Cache\Cache_Data" "Edge Browser Cache"
 
-if (Test-Path "$env:SystemDrive\Windows.old") {
+if (Test-Path -LiteralPath "$env:SystemDrive\Windows.old") {
     Clean-Target "$env:SystemDrive\Windows.old" "Windows.old"
 }
 
@@ -132,6 +178,7 @@ $lineBot
 
 "@
 
+Ensure-ParentDirectory -Path $LogFile
 Add-Content -LiteralPath $LogFile -Value $LogEntry -Encoding UTF8
 
 $ResultFile = Join-Path $ScriptDir "cleanup_result.txt"
