@@ -2,17 +2,17 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$HardPath    = ""
-$HardPrefix  = ""
-$HardDryRun  = ""
+$HardPath = ""
+$HardPrefix = ""
+$HardDryRun = ""
 
-$VERSION      = "1.0"
+$VERSION = "1.0"
 $SCRIPT_START = Get-Date
 
-$SupportedImages = @('.jpg','.jpeg','.png','.heic','.raw','.bmp','.tiff','.tif','.webp','.gif','.cr2','.nef','.arw','.dng')
+$SupportedImages = @('.jpg', '.jpeg', '.png', '.heic', '.raw', '.bmp', '.tiff', '.tif', '.webp', '.gif', '.cr2', '.nef', '.arw', '.dng')
 
 function Write-Header {
-    $w    = 62
+    $w = 62
     $line = "=" * $w
     Write-Host ""
     Write-Host $line -ForegroundColor Cyan
@@ -38,7 +38,7 @@ function Write-Err  ([string]$Msg) { Write-Host "  [ERROR] $Msg" -ForegroundColo
 function Prompt-Choice {
     param([string]$Question, [string[]]$Valid, [string]$Default = "")
     do {
-        $hint   = if ($Default) { " [$($Valid -join '/'), default=$Default]" } else { " [$($Valid -join '/')]" }
+        $hint = if ($Default) { " [$($Valid -join '/'), default=$Default]" } else { " [$($Valid -join '/')]" }
         Write-Host "  $Question$hint : " -NoNewline -ForegroundColor Gray
         $answer = (Read-Host).Trim()
         if ($answer -eq "" -and $Default -ne "") { $answer = $Default }
@@ -67,9 +67,9 @@ function Invoke-RenameFolder {
     foreach ($file in $files) {
         $counter++
         $progress = "[{0}/{1}]" -f $counter, $files.Count
-        $ext      = $file.Extension.ToLower()
-        $newName  = "{0}{1}{2}" -f $Prefix, ($counter.ToString("D$padWidth")), $ext
-        $newPath  = Join-Path $FolderPath $newName
+        $ext = $file.Extension.ToLower()
+        $newName = "{0}{1}{2}" -f $Prefix, ($counter.ToString("D$padWidth")), $ext
+        $newPath = Join-Path $FolderPath $newName
 
         Write-Host "  $progress " -NoNewline -ForegroundColor DarkGray
 
@@ -99,7 +99,8 @@ function Invoke-RenameFolder {
             Write-Host " RENAMED  " -NoNewline -ForegroundColor Green
             Write-Host " $($file.Name)  ->  $newName" -ForegroundColor DarkGray
             $renamed++
-        } catch {
+        }
+        catch {
             Write-Host " ERROR    " -NoNewline -ForegroundColor Red
             Write-Host " $($file.Name)  --  $_" -ForegroundColor DarkGray
             $errored++
@@ -116,11 +117,11 @@ function Invoke-Rename {
         [bool]   $DryRun
     )
 
-    $totalRenamed  = 0
-    $totalSkipped  = 0
-    $totalErrored  = 0
-    $totalFiles    = 0
-    $foldersFound  = 0
+    $totalRenamed = 0
+    $totalSkipped = 0
+    $totalErrored = 0
+    $totalFiles = 0
+    $foldersFound = 0
 
     $folders = [System.Collections.Generic.List[string]]::new()
     $folders.Add($TargetPath)
@@ -142,11 +143,11 @@ function Invoke-Rename {
         Write-Host "  Folder : $relPath  ($imgCount image(s))" -ForegroundColor DarkCyan
         Write-Host ""
 
-        $result        = Invoke-RenameFolder -FolderPath $folder -Prefix $Prefix -DryRun $DryRun
+        $result = Invoke-RenameFolder -FolderPath $folder -Prefix $Prefix -DryRun $DryRun
         $totalRenamed += $result.Renamed
         $totalSkipped += $result.Skipped
         $totalErrored += $result.Errored
-        $totalFiles   += $result.Total
+        $totalFiles += $result.Total
     }
 
     if ($foldersFound -eq 0) {
@@ -166,7 +167,8 @@ Write-Section "Configuration"
 if ($HardPath -ne "") {
     $TargetPath = $HardPath
     Write-Info "Path           :" $TargetPath
-} else {
+}
+else {
     Write-Host "  Enter target path : " -NoNewline -ForegroundColor Gray
     $TargetPath = (Read-Host).Trim()
 }
@@ -174,17 +176,19 @@ if (-not (Test-Path -LiteralPath $TargetPath)) { Write-Err "Path does not exist:
 
 if ($HardPrefix -ne "") {
     $Prefix = $HardPrefix
-} else {
+}
+else {
     Write-Host "  Prefix (leave blank for none, e.g. IMG_) : " -NoNewline -ForegroundColor Gray
     $Prefix = (Read-Host).Trim()
 }
 
 if ($HardDryRun -ne "") {
     $DryRunInput = $HardDryRun.ToUpper()
-} else {
+}
+else {
     Write-Host ""
     Write-Host "  Test run? (shows what will happen without renaming any files)" -ForegroundColor Gray
-    $DryRunInput = Prompt-Choice "Proceed" @("Y","N") "N"
+    $DryRunInput = Prompt-Choice "Proceed" @("Y", "N") "N"
 }
 $DryRun = ($DryRunInput -eq "Y")
 
@@ -202,15 +206,16 @@ if ($DryRun -and $null -ne $result) {
     Write-Host ""
     Write-Host "  This was a test run. No files were renamed." -ForegroundColor Yellow
     Write-Host ""
-    $go = Prompt-Choice "Ready to run the real rename now?" @("Y","N") "N"
+    $go = Prompt-Choice "Ready to run the real rename now?" @("Y", "N") "N"
 
     if ($go -eq "Y") {
         Write-Host ""
         Write-Host "  Starting real run..." -ForegroundColor Cyan
         $result = Invoke-Rename -TargetPath $TargetPath -Prefix $Prefix -DryRun $false
-    } else {
+    }
+    else {
         $cancelled = $true
-        $result    = $null
+        $result = $null
         Write-Host ""
         Write-Host "  Cancelled. No files were changed." -ForegroundColor DarkGray
     }
@@ -239,21 +244,23 @@ Write-Host ""
 
 try {
     Add-Type -AssemblyName System.Windows.Forms
-    $balloon         = [System.Windows.Forms.NotifyIcon]::new()
-    $balloon.Icon    = [System.Drawing.SystemIcons]::Information
+    $balloon = [System.Windows.Forms.NotifyIcon]::new()
+    $balloon.Icon = [System.Drawing.SystemIcons]::Information
     $balloon.Visible = $true
     if ($cancelled) {
         $balloon.BalloonTipTitle = "Image Renamer"
-        $balloon.BalloonTipText  = "Cancelled. No files were changed."
-        $balloon.BalloonTipIcon  = [System.Windows.Forms.ToolTipIcon]::Info
+        $balloon.BalloonTipText = "Cancelled. No files were changed."
+        $balloon.BalloonTipIcon = [System.Windows.Forms.ToolTipIcon]::Info
         $balloon.ShowBalloonTip(4000)
         Start-Sleep -Milliseconds 4500
-    } elseif ($null -ne $result) {
+    }
+    elseif ($null -ne $result) {
         $balloon.BalloonTipTitle = "Image Renamer Done"
-        $balloon.BalloonTipText  = "$($result.Renamed) renamed, $($result.Skipped) skipped, $($result.Errored) error(s)"
-        $balloon.BalloonTipIcon  = [System.Windows.Forms.ToolTipIcon]::Info
+        $balloon.BalloonTipText = "$($result.Renamed) renamed, $($result.Skipped) skipped, $($result.Errored) error(s)"
+        $balloon.BalloonTipIcon = [System.Windows.Forms.ToolTipIcon]::Info
         $balloon.ShowBalloonTip(4000)
         Start-Sleep -Milliseconds 4500
     }
     $balloon.Dispose()
-} catch { }
+}
+catch { }

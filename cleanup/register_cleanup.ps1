@@ -42,7 +42,8 @@ try {
         -Settings  $Settings `
         -Force `
         -ErrorAction Stop | Out-Null
-} catch {
+}
+catch {
     Write-Host "ERROR: Failed to register task '$TaskName': $($_.Exception.Message)" -ForegroundColor Red
     exit 1
 }

@@ -2,19 +2,19 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$HardPath       = ""
+$HardPath = ""
 $HardKeepSource = ""
-$HardDryRun     = ""
-$HardQuality    = ""
+$HardDryRun = ""
+$HardQuality = ""
 
-$VERSION      = "1.0"
+$VERSION = "1.0"
 $SCRIPT_START = Get-Date
 
-$SupportedFormats = @('.jpg','.jpeg','.png','.bmp','.tiff','.tif','.gif','.heic','.raw','.cr2','.nef','.arw','.dng','.webp')
-$DefaultQuality   = 85
+$SupportedFormats = @('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif', '.gif', '.heic', '.raw', '.cr2', '.nef', '.arw', '.dng', '.webp')
+$DefaultQuality = 85
 
 function Write-Header {
-    $w    = 62
+    $w = 62
     $line = "=" * $w
     Write-Host ""
     Write-Host $line -ForegroundColor Cyan
@@ -40,7 +40,7 @@ function Write-Err  ([string]$Msg) { Write-Host "  [ERROR] $Msg" -ForegroundColo
 function Prompt-Choice {
     param([string]$Question, [string[]]$Valid, [string]$Default = "")
     do {
-        $hint   = if ($Default) { " [$($Valid -join '/'), default=$Default]" } else { " [$($Valid -join '/')]" }
+        $hint = if ($Default) { " [$($Valid -join '/'), default=$Default]" } else { " [$($Valid -join '/')]" }
         Write-Host "  $Question$hint : " -NoNewline -ForegroundColor Gray
         $answer = (Read-Host).Trim()
         if ($answer -eq "" -and $Default -ne "") { $answer = $Default }
@@ -52,7 +52,8 @@ function Test-ImageMagick {
     try {
         $null = & magick --version 2>&1
         return $true
-    } catch {
+    }
+    catch {
         return $false
     }
 }
@@ -77,8 +78,8 @@ function Invoke-ConvertFolder {
         $counter++
         $progress = "[{0}/{1}]" -f $counter, $files.Count
         $baseName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
-        $newName  = "$baseName.webp"
-        $newPath  = Join-Path $FolderPath $newName
+        $newName = "$baseName.webp"
+        $newPath = Join-Path $FolderPath $newName
 
         Write-Host "  $progress " -NoNewline -ForegroundColor DarkGray
 
@@ -109,7 +110,7 @@ function Invoke-ConvertFolder {
         try {
             $magickArgs = @($file.FullName, "-quality", $Quality, $newPath)
             $proc = Start-Process -FilePath "magick" -ArgumentList $magickArgs `
-                        -NoNewWindow -Wait -PassThru -RedirectStandardError "$env:TEMP\magick_err.txt"
+                -NoNewWindow -Wait -PassThru -RedirectStandardError "$env:TEMP\magick_err.txt"
 
             if ($proc.ExitCode -ne 0) {
                 $errMsg = if (Test-Path "$env:TEMP\magick_err.txt") { Get-Content "$env:TEMP\magick_err.txt" -Raw } else { "unknown error" }
@@ -125,7 +126,8 @@ function Invoke-ConvertFolder {
             Write-Host " $($file.Name)  ->  $newName" -ForegroundColor DarkGray
             $converted++
 
-        } catch {
+        }
+        catch {
             if (Test-Path -LiteralPath $newPath) {
                 try { Remove-Item -LiteralPath $newPath -Force } catch { }
             }
@@ -147,11 +149,11 @@ function Invoke-Convert {
     )
 
     $totalConverted = 0
-    $totalSkipped   = 0
-    $totalErrored   = 0
-    $totalDeleted   = 0
-    $totalFiles     = 0
-    $foldersFound   = 0
+    $totalSkipped = 0
+    $totalErrored = 0
+    $totalDeleted = 0
+    $totalFiles = 0
+    $foldersFound = 0
 
     $folders = [System.Collections.Generic.List[string]]::new()
     $folders.Add($TargetPath)
@@ -173,12 +175,12 @@ function Invoke-Convert {
         Write-Host "  Folder : $relPath  ($imgCount image(s))" -ForegroundColor DarkCyan
         Write-Host ""
 
-        $result          = Invoke-ConvertFolder -FolderPath $folder -KeepSource $KeepSource -Quality $Quality -DryRun $DryRun
+        $result = Invoke-ConvertFolder -FolderPath $folder -KeepSource $KeepSource -Quality $Quality -DryRun $DryRun
         $totalConverted += $result.Converted
-        $totalSkipped   += $result.Skipped
-        $totalErrored   += $result.Errored
-        $totalDeleted   += $result.Deleted
-        $totalFiles     += $result.Total
+        $totalSkipped += $result.Skipped
+        $totalErrored += $result.Errored
+        $totalDeleted += $result.Deleted
+        $totalFiles += $result.Total
     }
 
     if ($foldersFound -eq 0) {
@@ -209,7 +211,8 @@ Write-Section "Configuration"
 if ($HardPath -ne "") {
     $TargetPath = $HardPath
     Write-Info "Path           :" $TargetPath
-} else {
+}
+else {
     Write-Host "  Enter target path : " -NoNewline -ForegroundColor Gray
     $TargetPath = (Read-Host).Trim()
 }
@@ -217,25 +220,28 @@ if (-not (Test-Path -LiteralPath $TargetPath)) { Write-Err "Path does not exist:
 
 if ($HardQuality -ne "") {
     $Quality = [int]$HardQuality
-} else {
+}
+else {
     Write-Host "  WebP quality 1-100 [default=$DefaultQuality] : " -NoNewline -ForegroundColor Gray
     $qualInput = (Read-Host).Trim()
-    $Quality   = if ($qualInput -match '^\d+$' -and [int]$qualInput -in 1..100) { [int]$qualInput } else { $DefaultQuality }
+    $Quality = if ($qualInput -match '^\d+$' -and [int]$qualInput -in 1..100) { [int]$qualInput } else { $DefaultQuality }
 }
 
 if ($HardKeepSource -ne "") {
     $KeepInput = $HardKeepSource.ToUpper()
-} else {
-    $KeepInput = Prompt-Choice "Keep original files after conversion?" @("Y","N") "Y"
+}
+else {
+    $KeepInput = Prompt-Choice "Keep original files after conversion?" @("Y", "N") "Y"
 }
 $KeepSource = ($KeepInput -eq "Y")
 
 if ($HardDryRun -ne "") {
     $DryRunInput = $HardDryRun.ToUpper()
-} else {
+}
+else {
     Write-Host ""
     Write-Host "  Test run? (shows what will happen without converting any files)" -ForegroundColor Gray
-    $DryRunInput = Prompt-Choice "Proceed" @("Y","N") "N"
+    $DryRunInput = Prompt-Choice "Proceed" @("Y", "N") "N"
 }
 $DryRun = ($DryRunInput -eq "Y")
 
@@ -254,15 +260,16 @@ if ($DryRun -and $null -ne $result) {
     Write-Host ""
     Write-Host "  This was a test run. No files were converted." -ForegroundColor Yellow
     Write-Host ""
-    $go = Prompt-Choice "Ready to run the real conversion now?" @("Y","N") "N"
+    $go = Prompt-Choice "Ready to run the real conversion now?" @("Y", "N") "N"
 
     if ($go -eq "Y") {
         Write-Host ""
         Write-Host "  Starting real run..." -ForegroundColor Cyan
         $result = Invoke-Convert -TargetPath $TargetPath -KeepSource $KeepSource -Quality $Quality -DryRun $false
-    } else {
+    }
+    else {
         $cancelled = $true
-        $result    = $null
+        $result = $null
         Write-Host ""
         Write-Host "  Cancelled. No files were changed." -ForegroundColor DarkGray
     }
@@ -282,7 +289,7 @@ if ($null -ne $result) {
     Write-Info "Skipped        :" $result.Skipped                                                       "DarkGray"
     Write-Info "Errors         :" $result.Errored          $(if ($result.Errored -gt 0) { "Red" } else { "White" })
     if (-not $KeepSource) {
-    Write-Info "Originals del. :" $result.Deleted                                                       "DarkGray"
+        Write-Info "Originals del. :" $result.Deleted                                                       "DarkGray"
     }
     Write-Info "Time taken     :" ("{0:N1}s" -f $elapsed)                                               "DarkGray"
     Write-Host ("=" * $w) -ForegroundColor DarkGray
@@ -294,21 +301,23 @@ Write-Host ""
 
 try {
     Add-Type -AssemblyName System.Windows.Forms
-    $balloon         = [System.Windows.Forms.NotifyIcon]::new()
-    $balloon.Icon    = [System.Drawing.SystemIcons]::Information
+    $balloon = [System.Windows.Forms.NotifyIcon]::new()
+    $balloon.Icon = [System.Drawing.SystemIcons]::Information
     $balloon.Visible = $true
     if ($cancelled) {
         $balloon.BalloonTipTitle = "Image Converter"
-        $balloon.BalloonTipText  = "Cancelled. No files were changed."
-        $balloon.BalloonTipIcon  = [System.Windows.Forms.ToolTipIcon]::Info
+        $balloon.BalloonTipText = "Cancelled. No files were changed."
+        $balloon.BalloonTipIcon = [System.Windows.Forms.ToolTipIcon]::Info
         $balloon.ShowBalloonTip(4000)
         Start-Sleep -Milliseconds 4500
-    } elseif ($null -ne $result) {
+    }
+    elseif ($null -ne $result) {
         $balloon.BalloonTipTitle = "Image Converter Done"
-        $balloon.BalloonTipText  = "$($result.Converted) converted, $($result.Skipped) skipped, $($result.Errored) error(s)"
-        $balloon.BalloonTipIcon  = [System.Windows.Forms.ToolTipIcon]::Info
+        $balloon.BalloonTipText = "$($result.Converted) converted, $($result.Skipped) skipped, $($result.Errored) error(s)"
+        $balloon.BalloonTipIcon = [System.Windows.Forms.ToolTipIcon]::Info
         $balloon.ShowBalloonTip(4000)
         Start-Sleep -Milliseconds 4500
     }
     $balloon.Dispose()
-} catch { }
+}
+catch { }

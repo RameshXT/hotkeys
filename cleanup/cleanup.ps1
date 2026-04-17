@@ -37,7 +37,8 @@ function Get-ParentProcessName {
     try {
         $selfProcess = Get-CimInstance Win32_Process -Filter "ProcessId=$PID" -ErrorAction Stop
         return (Get-Process -Id $selfProcess.ParentProcessId -ErrorAction Stop).Name
-    } catch {
+    }
+    catch {
         return "Unknown"
     }
 }
@@ -46,7 +47,8 @@ $TriggerFile = Join-Path $ScriptDir "cleanup_trigger.txt"
 if (Test-Path -LiteralPath $TriggerFile) {
     $TriggerLabel = "hotkey (Manual)"
     Remove-Item -LiteralPath $TriggerFile -Force -ErrorAction SilentlyContinue
-} else {
+}
+else {
     $parentName = Get-ParentProcessName
     $TriggerLabel = if ($parentName -match "^(svchost|taskeng|taskhostw)$") { "task (Auto)" } else { "shell (Manual)" }
 }
@@ -59,7 +61,8 @@ function Get-FastSize {
 
     $resolvedPath = try {
         (Resolve-Path -LiteralPath $Path -ErrorAction Stop).Path
-    } catch {
+    }
+    catch {
         $Path
     }
 
@@ -68,9 +71,11 @@ function Get-FastSize {
         foreach ($filePath in [System.IO.Directory]::EnumerateFiles($resolvedPath, '*', [System.IO.SearchOption]::AllDirectories)) {
             try {
                 $sz += ([System.IO.FileInfo]::new($filePath)).Length
-            } catch { }
+            }
+            catch { }
         }
-    } catch { }
+    }
+    catch { }
 
     return $sz
 }
@@ -79,7 +84,7 @@ function Format-Size {
     [CmdletBinding()]
     param([Parameter(Mandatory)][long]$Bytes)
 
-    if ($Bytes -le 0)   { return "0 B" }
+    if ($Bytes -le 0) { return "0 B" }
     if ($Bytes -ge 1GB) { return "{0:N2} GB" -f ($Bytes / 1GB) }
     if ($Bytes -ge 1MB) { return "{0:N2} MB" -f ($Bytes / 1MB) }
     return "{0:N2} KB" -f ($Bytes / 1KB)
@@ -91,7 +96,7 @@ function Assert-SafePath {
 
     $resolved = try { (Resolve-Path -LiteralPath $Path -ErrorAction Stop).Path.TrimEnd('\') } catch { $Path.TrimEnd('\') }
     $blocked = @("$env:SystemRoot", "$env:ProgramFiles", "${env:ProgramFiles(x86)}", "$env:SystemRoot\System32") |
-        Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
 
     foreach ($b in $blocked) {
         if ($resolved -ieq $b) { throw "SAFETY BLOCK: Protected path '$resolved'" }
@@ -114,10 +119,12 @@ function Clean-Target {
         if ($DaysOld -gt 0) {
             $cutoff = (Get-Date).AddDays(-$DaysOld)
             Get-ChildItem -LiteralPath $Path -Recurse -Force | Where-Object { -not $_.PSIsContainer -and $_.LastWriteTime -lt $cutoff } | Remove-Item -Force
-        } else {
+        }
+        else {
             Remove-Item -LiteralPath "$Path\*" -Recurse -Force
         }
-    } catch { }
+    }
+    catch { }
 
     $after = Get-FastSize $Path
     $freed = [math]::Max([long]0, $before - $after)
@@ -134,7 +141,8 @@ Clean-Target "$env:SystemRoot\Temp" "Windows Temp"
 $wuService = Get-Service -Name wuauserv -ErrorAction SilentlyContinue
 if ($wuService -and $wuService.Status -eq "Stopped") {
     Clean-Target "$env:SystemRoot\SoftwareDistribution\Download" "Windows Update Cache"
-} else {
+}
+else {
     $script:Results.Add("SKIP|Windows Update Cache|service running")
 }
 
@@ -149,14 +157,14 @@ if (Test-Path -LiteralPath "$env:SystemDrive\Windows.old") {
     Clean-Target "$env:SystemDrive\Windows.old" "Windows.old"
 }
 
-$EndTime  = Get-Date
+$EndTime = Get-Date
 $Duration = ($EndTime - $StartTime).TotalSeconds
-$W        = 55
-$line1    = "=" * $W
-$line2    = "-" * $W
-$lineBot  = [string][char]0x2570 + ([string][char]0x2500 * ($W - 2)) + [string][char]0x256F
-$tagW     = 8
-$labelW   = 26
+$W = 55
+$line1 = "=" * $W
+$line2 = "-" * $W
+$lineBot = [string][char]0x2570 + ([string][char]0x2500 * ($W - 2)) + [string][char]0x256F
+$tagW = 8
+$labelW = 26
 
 $rowLines = foreach ($r in $Results) {
     $p = $r -split '\|'

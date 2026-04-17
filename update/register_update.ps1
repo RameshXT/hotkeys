@@ -2,8 +2,8 @@
 $ErrorActionPreference = "Stop"
 
 $UpdateScript = Join-Path $PSScriptRoot "update.ps1"
-$TaskName      = "WindowsUpdater"
-$LoggedInUser  = "$env:USERDOMAIN\$env:USERNAME"
+$TaskName = "WindowsUpdater"
+$LoggedInUser = "$env:USERDOMAIN\$env:USERNAME"
 
 if (-not (Test-Path -LiteralPath $UpdateScript)) {
     Write-Host "ERROR: update.ps1 not found at $UpdateScript" -ForegroundColor Red
@@ -40,7 +40,8 @@ try {
         -Settings  $Settings `
         -Force `
         -ErrorAction Stop | Out-Null
-} catch {
+}
+catch {
     Write-Host "ERROR: Failed to register task '$TaskName': $($_.Exception.Message)" -ForegroundColor Red
     exit 1
 }

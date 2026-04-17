@@ -3,26 +3,26 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$HardSource        = ""
-$HardDestination   = ""
-$HardAction        = ""
-$HardRecurse       = ""
-$HardDryRun        = ""
+$HardSource = ""
+$HardDestination = ""
+$HardAction = ""
+$HardRecurse = ""
+$HardDryRun = ""
 
-$FolderFormat      = "1"
-$OnConflict        = "R"
+$FolderFormat = "1"
+$OnConflict = "R"
 
-$VERSION           = "2.1"
-$SCRIPT_START      = Get-Date
-$LOG_TIMESTAMP     = $SCRIPT_START.ToString("yyyyMMdd_HHmmss")
+$VERSION = "2.1"
+$SCRIPT_START = Get-Date
+$LOG_TIMESTAMP = $SCRIPT_START.ToString("yyyyMMdd_HHmmss")
 
-$SupportedImages   = @('.jpg','.jpeg','.png','.heic','.raw','.bmp','.tiff','.tif','.webp','.gif','.cr2','.nef','.arw','.dng')
-$SupportedVideos   = @('.mp4','.mov','.avi','.mkv','.m4v','.wmv','.3gp','.flv','.mpg','.mpeg')
-$SupportedAll      = $SupportedImages + $SupportedVideos
+$SupportedImages = @('.jpg', '.jpeg', '.png', '.heic', '.raw', '.bmp', '.tiff', '.tif', '.webp', '.gif', '.cr2', '.nef', '.arw', '.dng')
+$SupportedVideos = @('.mp4', '.mov', '.avi', '.mkv', '.m4v', '.wmv', '.3gp', '.flv', '.mpg', '.mpeg')
+$SupportedAll = $SupportedImages + $SupportedVideos
 $script:SystemDrawingLoaded = $false
 
 function Write-Header {
-    $w    = 62
+    $w = 62
     $line = "=" * $w
     Write-Host ""
     Write-Host $line -ForegroundColor Cyan
@@ -79,10 +79,10 @@ function Prompt-Choice {
     param([string]$Question, [string[]]$Valid, [string]$Default = "")
     $wordMap = @{
         "MOVE" = "M"; "COPY" = "C"
-        "YES"  = "Y"; "NO"   = "N"
+        "YES" = "Y"; "NO" = "N"
     }
     do {
-        $hint   = if ($Default) { " [$($Valid -join '/'), default=$Default]" } else { " [$($Valid -join '/')]" }
+        $hint = if ($Default) { " [$($Valid -join '/'), default=$Default]" } else { " [$($Valid -join '/')]" }
         Write-Host "  $Question$hint : " -NoNewline -ForegroundColor Gray
         $answer = (Read-Host).Trim()
         if ($answer -eq "" -and $Default -ne "") { $answer = $Default }
@@ -95,13 +95,15 @@ function Prompt-Choice {
 function Get-FileMD5 {
     param ([string]$FilePath)
     try {
-        $md5    = [System.Security.Cryptography.MD5]::Create()
+        $md5 = [System.Security.Cryptography.MD5]::Create()
         $stream = [System.IO.File]::OpenRead($FilePath)
         try {
             $hashBytes = $md5.ComputeHash($stream)
-            return [BitConverter]::ToString($hashBytes).Replace("-","").ToLower()
-        } finally { $stream.Close(); $md5.Dispose() }
-    } catch { return $null }
+            return [BitConverter]::ToString($hashBytes).Replace("-", "").ToLower()
+        }
+        finally { $stream.Close(); $md5.Dispose() }
+    }
+    catch { return $null }
 }
 
 function Get-ExifDateTaken {
@@ -109,22 +111,24 @@ function Get-ExifDateTaken {
 
     $ext = [System.IO.Path]::GetExtension($FilePath).ToLower()
 
-    if ($ext -in @('.jpg','.jpeg','.png','.bmp','.gif','.tiff','.tif')) {
+    if ($ext -in @('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff', '.tif')) {
         try {
             Ensure-SystemDrawingLoaded
             $image = [System.Drawing.Image]::FromFile($FilePath)
             try {
-                $prop       = $image.GetPropertyItem(36867)
+                $prop = $image.GetPropertyItem(36867)
                 $dateString = [System.Text.Encoding]::ASCII.GetString($prop.Value).TrimEnd([char]0)
                 if ($dateString -match '^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})$') {
                     return [datetime]"$($Matches[1])-$($Matches[2])-$($Matches[3]) $($Matches[4]):$($Matches[5]):$($Matches[6])"
                 }
-            } catch { }
+            }
+            catch { }
             finally { $image.Dispose() }
-        } catch { }
+        }
+        catch { }
     }
 
-    $name     = [System.IO.Path]::GetFileNameWithoutExtension($FilePath)
+    $name = [System.IO.Path]::GetFileNameWithoutExtension($FilePath)
     $patterns = @(
         '(?<y>\d{4})(?<m>\d{2})(?<d>\d{2})[_\-](?<H>\d{2})(?<M>\d{2})(?<S>\d{2})',
         '(?<y>\d{4})[_\-](?<m>\d{2})[_\-](?<d>\d{2})',
@@ -133,14 +137,15 @@ function Get-ExifDateTaken {
     foreach ($pat in $patterns) {
         if ($name -match $pat) {
             try {
-                $y  = [int]$Matches['y']; $mo = [int]$Matches['m']; $day = [int]$Matches['d']
-                $H  = if ($Matches['H']) { [int]$Matches['H'] } else { 0 }
+                $y = [int]$Matches['y']; $mo = [int]$Matches['m']; $day = [int]$Matches['d']
+                $H = if ($Matches['H']) { [int]$Matches['H'] } else { 0 }
                 $Mi = if ($Matches['M']) { [int]$Matches['M'] } else { 0 }
-                $S  = if ($Matches['S']) { [int]$Matches['S'] } else { 0 }
+                $S = if ($Matches['S']) { [int]$Matches['S'] } else { 0 }
                 if ($mo -in 1..12 -and $day -in 1..31) {
                     return [datetime]::new($y, $mo, $day, $H, $Mi, $S)
                 }
-            } catch { }
+            }
+            catch { }
         }
     }
 
@@ -158,19 +163,19 @@ function Get-FileDate {
 function Get-SubFolder {
     param ([datetime]$Date, [string]$Format)
     switch ($Format) {
-        "1"     { return $Date.ToString("yyyy") + "\" + $Date.ToString("MM-MMMM") }
-        "2"     { return $Date.ToString("yyyy") + "\" + $Date.ToString("MM") }
-        "3"     { return $Date.ToString("yyyy") + "\" + $Date.ToString("MMM") }
+        "1" { return $Date.ToString("yyyy") + "\" + $Date.ToString("MM-MMMM") }
+        "2" { return $Date.ToString("yyyy") + "\" + $Date.ToString("MM") }
+        "3" { return $Date.ToString("yyyy") + "\" + $Date.ToString("MMM") }
         default { return $Date.ToString("yyyy") + "\" + $Date.ToString("MM-MMMM") }
     }
 }
 
 function Get-UniqueDestPath {
     param ([string]$DestDir, [string]$FileName)
-    $base      = [System.IO.Path]::GetFileNameWithoutExtension($FileName)
-    $ext       = [System.IO.Path]::GetExtension($FileName)
+    $base = [System.IO.Path]::GetFileNameWithoutExtension($FileName)
+    $ext = [System.IO.Path]::GetExtension($FileName)
     $candidate = Join-Path $DestDir $FileName
-    $i         = 1
+    $i = 1
     while (Test-Path -LiteralPath $candidate) {
         $candidate = Join-Path $DestDir ("{0}_{1:D3}{2}" -f $base, $i, $ext)
         $i++
@@ -204,9 +209,9 @@ function Invoke-Organize {
     if ($total -eq 0) { Write-Warn "No supported media files found in: $Source"; return $null }
     Write-Info "Files found    :" "$total file(s) to process"
 
-    $UndoEntries   = [System.Collections.Generic.List[PSCustomObject]]::new()
-    $processed     = 0; $skipped = 0; $replaced = 0; $renamed = 0; $errored = 0; $counter = 0
-    $padWidth      = ([string]$total).Length
+    $UndoEntries = [System.Collections.Generic.List[PSCustomObject]]::new()
+    $processed = 0; $skipped = 0; $replaced = 0; $renamed = 0; $errored = 0; $counter = 0
+    $padWidth = ([string]$total).Length
     $destHashCache = [System.Collections.Generic.HashSet[string]]::new()
 
     Write-Section "Processing files..."
@@ -215,11 +220,11 @@ function Invoke-Organize {
         $counter++
         $progress = "[{0,$padWidth}/{1}]" -f $counter, $total
 
-        $dateInfo   = Get-FileDate -File $file
-        $dateTaken  = $dateInfo.Date
+        $dateInfo = Get-FileDate -File $file
+        $dateTaken = $dateInfo.Date
         $dateSource = $dateInfo.Source
-        $subFolder  = Get-SubFolder -Date $dateTaken -Format $FolderFormat
-        $destDir    = Join-Path -Path $Destination -ChildPath $subFolder
+        $subFolder = Get-SubFolder -Date $dateTaken -Format $FolderFormat
+        $destDir = Join-Path -Path $Destination -ChildPath $subFolder
 
         if (-not $DryRun -and -not (Test-Path -LiteralPath $destDir)) {
             try { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
@@ -231,32 +236,34 @@ function Invoke-Organize {
             }
         }
 
-        $destFile   = Join-Path -Path $destDir -ChildPath $file.Name
+        $destFile = Join-Path -Path $destDir -ChildPath $file.Name
         $sourceHash = $null
-        $status     = $null
-        $finalDest  = $destFile
-        $skipFile   = $false
+        $status = $null
+        $finalDest = $destFile
+        $skipFile = $false
 
         if (Test-Path -LiteralPath $destFile) {
             $sourceHash = Get-FileMD5 -FilePath $file.FullName
-            $existHash  = Get-FileMD5 -FilePath $destFile
+            $existHash = Get-FileMD5 -FilePath $destFile
 
             if ($null -ne $sourceHash -and $sourceHash -eq $existHash) {
                 $status = "SKIPPED"; $skipFile = $true; $skipped++
-            } else {
+            }
+            else {
                 switch ($OnConflict) {
                     "S" { $status = "SKIPPED"; $skipFile = $true; $skipped++ }
                     "R" {
                         if ($file.Length -gt (Get-Item -LiteralPath $destFile).Length) {
                             if (-not $DryRun) { Remove-Item -LiteralPath $destFile -Force }
                             $status = "REPLACED"; $replaced++
-                        } else {
+                        }
+                        else {
                             $status = "SKIPPED"; $skipFile = $true; $skipped++
                         }
                     }
                     "N" {
                         $finalDest = Get-UniqueDestPath -DestDir $destDir -FileName $file.Name
-                        $status    = "RENAMED"; $renamed++
+                        $status = "RENAMED"; $renamed++
                     }
                 }
             }
@@ -279,22 +286,23 @@ function Invoke-Organize {
 
                         Move-Item -LiteralPath $file.FullName -Destination $finalDest -Force
 
-                        $moved                = Get-Item -LiteralPath $finalDest
-                        $moved.CreationTime   = $ctm
-                        $moved.LastWriteTime  = $lwt
+                        $moved = Get-Item -LiteralPath $finalDest
+                        $moved.CreationTime = $ctm
+                        $moved.LastWriteTime = $lwt
                         $moved.LastAccessTime = $lat
-                    } else {
+                    }
+                    else {
                         Copy-Item -LiteralPath $file.FullName -Destination $finalDest -Force
                     }
                     if ($null -ne $UndoLogPath) {
                         $undoRecord = [PSCustomObject]@{
-                            Action         = if ($DoMove) { "MOVE" } else { "COPY" }
-                            SourcePath     = $file.FullName
-                            DestinationPath= $finalDest
-                            FileName       = $file.Name
-                            CreationTime   = if ($DoMove) { $ctm.ToString("o") } else { $null }
-                            LastWriteTime  = if ($DoMove) { $lwt.ToString("o") } else { $null }
-                            LastAccessTime = if ($DoMove) { $lat.ToString("o") } else { $null }
+                            Action          = if ($DoMove) { "MOVE" } else { "COPY" }
+                            SourcePath      = $file.FullName
+                            DestinationPath = $finalDest
+                            FileName        = $file.Name
+                            CreationTime    = if ($DoMove) { $ctm.ToString("o") } else { $null }
+                            LastWriteTime   = if ($DoMove) { $lwt.ToString("o") } else { $null }
+                            LastAccessTime  = if ($DoMove) { $lat.ToString("o") } else { $null }
                         }
                         Write-UndoRecord -UndoLogPath $UndoLogPath -Record $undoRecord
                     }
@@ -305,14 +313,15 @@ function Invoke-Organize {
                 if ($null -ne $sourceHash) { $destHashCache.Add($sourceHash) | Out-Null }
 
                 $UndoEntries.Add([PSCustomObject]@{
-                    Action      = if ($DoMove) { "MOVE" } else { "COPY" }
-                    Source      = $file.FullName
-                    Destination = $finalDest
-                    FileName    = $file.Name
-                    Date        = $dateTaken.ToString("yyyy-MM-dd HH:mm:ss")
-                })
+                        Action      = if ($DoMove) { "MOVE" } else { "COPY" }
+                        Source      = $file.FullName
+                        Destination = $finalDest
+                        FileName    = $file.Name
+                        Date        = $dateTaken.ToString("yyyy-MM-dd HH:mm:ss")
+                    })
 
-            } catch {
+            }
+            catch {
                 Write-Host "  $progress " -NoNewline -ForegroundColor DarkGray
                 Write-Host " ERROR    " -NoNewline -ForegroundColor Red
                 Write-Host " $($file.Name) -- $_" -ForegroundColor DarkGray
@@ -322,29 +331,30 @@ function Invoke-Organize {
 
         Write-Host "  $progress " -NoNewline -ForegroundColor DarkGray
         switch ($status) {
-            "WILL MOVED"  { Write-Host " WILL MOVE" -NoNewline -ForegroundColor Cyan }
+            "WILL MOVED" { Write-Host " WILL MOVE" -NoNewline -ForegroundColor Cyan }
             "WILL COPIED" { Write-Host " WILL COPY" -NoNewline -ForegroundColor Cyan }
-            "MOVED"    { Write-Host " MOVED    " -NoNewline -ForegroundColor Green }
-            "COPIED"   { Write-Host " COPIED   " -NoNewline -ForegroundColor Green }
+            "MOVED" { Write-Host " MOVED    " -NoNewline -ForegroundColor Green }
+            "COPIED" { Write-Host " COPIED   " -NoNewline -ForegroundColor Green }
             "REPLACED" { Write-Host " REPLACED " -NoNewline -ForegroundColor Yellow }
-            "RENAMED"  { Write-Host " RENAMED  " -NoNewline -ForegroundColor Cyan }
-            "SKIPPED"  { Write-Host " SKIPPED  " -NoNewline -ForegroundColor DarkGray }
-            "ERROR"    { Write-Host " ERROR    " -NoNewline -ForegroundColor Red }
-            default    { Write-Host " $status  " -NoNewline -ForegroundColor Gray }
+            "RENAMED" { Write-Host " RENAMED  " -NoNewline -ForegroundColor Cyan }
+            "SKIPPED" { Write-Host " SKIPPED  " -NoNewline -ForegroundColor DarkGray }
+            "ERROR" { Write-Host " ERROR    " -NoNewline -ForegroundColor Red }
+            default { Write-Host " $status  " -NoNewline -ForegroundColor Gray }
         }
         Write-Host " $(if ($dateSource -eq 'EXIF'){'[EXIF]'} else {'[FILE]'}) " -NoNewline -ForegroundColor DarkGray
         Write-Host $file.Name -NoNewline -ForegroundColor White
         Write-Host "  ->  "   -NoNewline -ForegroundColor DarkGray
         if ($status -eq "RENAMED") {
             Write-Host "$subFolder\$([System.IO.Path]::GetFileName($finalDest))" -ForegroundColor DarkCyan
-        } else {
+        }
+        else {
             Write-Host $subFolder -ForegroundColor DarkCyan
         }
     }
 
-    $elapsed    = (Get-Date) - $SCRIPT_START
+    $elapsed = (Get-Date) - $SCRIPT_START
     $elapsedStr = "{0:mm\:ss}" -f $elapsed
-    $divider    = "=" * 62
+    $divider = "=" * 62
 
     Write-Host ""
     Write-Host $divider -ForegroundColor DarkGray
@@ -356,22 +366,23 @@ function Invoke-Organize {
     Write-Info "Replaced       :" $replaced "Yellow"
     Write-Info "Renamed        :" $renamed  "Cyan"
     Write-Info "Skipped        :" $skipped  "DarkGray"
-    Write-Info "Errors         :" $errored  $(if ($errored -gt 0){"Red"} else {"White"})
+    Write-Info "Errors         :" $errored  $(if ($errored -gt 0) { "Red" } else { "White" })
     Write-Info "Elapsed        :" $elapsedStr
     Write-Host $divider -ForegroundColor DarkGray
 
     if (-not $DryRun -and $null -ne $HtmlReportPath) {
         $htmlRows = ($UndoEntries | ForEach-Object {
-            $rc = if ($_.Action -eq "MOVE") { "moved" } else { "copied" }
-            "<tr class='$rc'><td>$(ConvertTo-HtmlText $_.FileName)</td><td>$(ConvertTo-HtmlText $_.Action)</td><td>$(ConvertTo-HtmlText $_.Date)</td><td>$(ConvertTo-HtmlText $_.Source)</td><td>$(ConvertTo-HtmlText $_.Destination)</td></tr>"
-        }) -join "`n"
+                $rc = if ($_.Action -eq "MOVE") { "moved" } else { "copied" }
+                "<tr class='$rc'><td>$(ConvertTo-HtmlText $_.FileName)</td><td>$(ConvertTo-HtmlText $_.Action)</td><td>$(ConvertTo-HtmlText $_.Date)</td><td>$(ConvertTo-HtmlText $_.Source)</td><td>$(ConvertTo-HtmlText $_.Destination)</td></tr>"
+            }) -join "`n"
 
-        $undoCmd     = ".\undo.ps1 -Log `"$UndoLogPath`""
-        $undoDesc    = if ($DoMove) { "Moves all files back to their original locations and restores timestamps exactly." } `
-                                    else { "Deletes all copied files from the destination. Your source files are not affected." }
-        $runSummary  = if ($DoMove) {
+        $undoCmd = ".\undo.ps1 -Log `"$UndoLogPath`""
+        $undoDesc = if ($DoMove) { "Moves all files back to their original locations and restores timestamps exactly." } `
+            else { "Deletes all copied files from the destination. Your source files are not affected." }
+        $runSummary = if ($DoMove) {
             "Files were moved from $Source to $Destination and organized into date-based folders."
-        } else {
+        }
+        else {
             "Files were copied from $Source to $Destination and organized into date-based folders."
         }
 
@@ -658,7 +669,8 @@ Write-Section "Configuration"
 if ($HardSource -ne "") {
     $Source = $HardSource
     Write-Info "Source         :" $Source
-} else {
+}
+else {
     Write-Host "  Enter Source path : " -NoNewline -ForegroundColor Gray
     $Source = (Read-Host).Trim()
 }
@@ -667,7 +679,8 @@ if (-not (Test-Path -LiteralPath $Source)) { Write-Err "Source path does not exi
 if ($HardDestination -ne "") {
     $Destination = $HardDestination
     Write-Info "Destination    :" $Destination
-} else {
+}
+else {
     Write-Host "  Enter Destination path : " -NoNewline -ForegroundColor Gray
     $Destination = (Read-Host).Trim()
 }
@@ -678,52 +691,56 @@ if ($srcFull -ieq $dstFull) { Write-Err "Source and Destination cannot be the sa
 
 if ($HardAction -ne "") {
     $Action = $HardAction.ToUpper()
-} else {
-    $Action = Prompt-Choice "Move or Copy?" @("M","C")
 }
-if ($Action -notin @("M","C")) { Write-Err "Invalid action '$Action'"; exit 1 }
+else {
+    $Action = Prompt-Choice "Move or Copy?" @("M", "C")
+}
+if ($Action -notin @("M", "C")) { Write-Err "Invalid action '$Action'"; exit 1 }
 $DoMove = ($Action -eq "M")
-$Verb   = if ($DoMove) { "Moved" } else { "Copied" }
+$Verb = if ($DoMove) { "Moved" } else { "Copied" }
 
 if ($HardRecurse -ne "") {
     $RecurseInput = $HardRecurse.ToUpper()
-} else {
+}
+else {
     $subDirs = @(Get-ChildItem -LiteralPath $Source -Directory -ErrorAction SilentlyContinue)
     if ($subDirs.Count -gt 0) {
         Write-Host "  Subfolders found:" -ForegroundColor Gray
         $subDirs | Select-Object -First 10 | ForEach-Object { Write-Host "    - $($_.Name)" -ForegroundColor DarkGray }
         if ($subDirs.Count -gt 10) { Write-Host "    ... and $($subDirs.Count - 10) more" -ForegroundColor DarkGray }
     }
-    $RecurseInput = Prompt-Choice "Include subfolders?" @("Y","N")
+    $RecurseInput = Prompt-Choice "Include subfolders?" @("Y", "N")
 }
-if ($RecurseInput -notin @("Y","N")) { Write-Err "Invalid choice '$RecurseInput'"; exit 1 }
+if ($RecurseInput -notin @("Y", "N")) { Write-Err "Invalid choice '$RecurseInput'"; exit 1 }
 $DoRecurse = ($RecurseInput -eq "Y")
 
 if ($HardDryRun -ne "") {
     $DryRunInput = $HardDryRun.ToUpper()
-} else {
+}
+else {
     Write-Host ""
     Write-Host "  Test run? (shows what will happen without touching any files)" -ForegroundColor Gray
-    $DryRunInput = Prompt-Choice "Proceed" @("Y","N") "N"
+    $DryRunInput = Prompt-Choice "Proceed" @("Y", "N") "N"
 }
 $DryRun = ($DryRunInput -eq "Y")
 
 Write-Host ""
-Write-Info "Action         :" $(if ($DoMove){"Move"} else {"Copy"})
-Write-Info "Subfolders     :" $(if ($DoRecurse){"Yes"} else {"No"})
+Write-Info "Action         :" $(if ($DoMove) { "Move" } else { "Copy" })
+Write-Info "Subfolders     :" $(if ($DoRecurse) { "Yes" } else { "No" })
 if ($DryRun) { Write-Info "Mode           :" "TEST RUN - nothing will be changed" "Yellow" }
 
-$LogDir         = Join-Path $Destination "_organizer_logs"
-$UndoLogPath    = Join-Path $LogDir "undo_$LOG_TIMESTAMP.csv"
+$LogDir = Join-Path $Destination "_organizer_logs"
+$UndoLogPath = Join-Path $LogDir "undo_$LOG_TIMESTAMP.csv"
 $HtmlReportPath = Join-Path $LogDir "report_$LOG_TIMESTAMP.html"
 
 if (-not $DryRun) {
     if (-not (Test-Path -LiteralPath $LogDir)) {
         try {
             New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
-        } catch {
+        }
+        catch {
             Write-Warn "Cannot create log directory '$LogDir': $($_.Exception.Message). Logs will be skipped."
-            $UndoLogPath    = $null
+            $UndoLogPath = $null
             $HtmlReportPath = $null
         }
     }
@@ -746,7 +763,7 @@ if ($DryRun -and $null -ne $result) {
     Write-Host ""
     Write-Host "  This was a test run. No files were touched." -ForegroundColor Yellow
     Write-Host ""
-    $go = Prompt-Choice "Ready to run the real $($Verb.ToLower()) now?" @("Y","N") "N"
+    $go = Prompt-Choice "Ready to run the real $($Verb.ToLower()) now?" @("Y", "N") "N"
 
     if ($go -eq "Y") {
         Write-Host ""
@@ -755,9 +772,10 @@ if ($DryRun -and $null -ne $result) {
         if (-not (Test-Path -LiteralPath $LogDir)) {
             try {
                 New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
-            } catch {
+            }
+            catch {
                 Write-Warn "Cannot create log directory: $($_.Exception.Message). Logs will be skipped."
-                $UndoLogPath    = $null
+                $UndoLogPath = $null
                 $HtmlReportPath = $null
             }
         }
@@ -775,24 +793,26 @@ if ($DryRun -and $null -ne $result) {
 
         if ($null -ne $UndoLogPath -and (Test-Path -LiteralPath $UndoLogPath)) {
             $undoDesc = if ($DoMove) { "move all files back to their original locations" } `
-                                     else { "delete all copied files from destination" }
+                else { "delete all copied files from destination" }
             Write-Host ""
             Write-Host "  Report saved : $HtmlReportPath" -ForegroundColor DarkGray
             Write-Host ""
             Write-Host "  To undo ($undoDesc):" -ForegroundColor Gray
             Write-Host "  .\undo.ps1 -Log `"$UndoLogPath`"" -ForegroundColor Cyan
         }
-    } else {
+    }
+    else {
         $cancelled = $true
-        $result    = $null
+        $result = $null
         Write-Host ""
         Write-Host "  Cancelled. No files were changed." -ForegroundColor DarkGray
     }
 
-} elseif (-not $DryRun -and $null -ne $result) {
+}
+elseif (-not $DryRun -and $null -ne $result) {
     if ($null -ne $UndoLogPath -and (Test-Path -LiteralPath $UndoLogPath)) {
         $undoDesc = if ($DoMove) { "move all files back to their original locations" } `
-                                 else { "delete all copied files from destination" }
+            else { "delete all copied files from destination" }
         Write-Host ""
         Write-Host "  Report saved : $HtmlReportPath" -ForegroundColor DarkGray
         Write-Host ""
@@ -807,21 +827,23 @@ Write-Host ""
 
 try {
     Add-Type -AssemblyName System.Windows.Forms
-    $balloon         = [System.Windows.Forms.NotifyIcon]::new()
-    $balloon.Icon    = [System.Drawing.SystemIcons]::Information
+    $balloon = [System.Windows.Forms.NotifyIcon]::new()
+    $balloon.Icon = [System.Drawing.SystemIcons]::Information
     $balloon.Visible = $true
     if ($cancelled) {
         $balloon.BalloonTipTitle = "Image Organizer"
-        $balloon.BalloonTipText  = "Cancelled. No files were changed."
-        $balloon.BalloonTipIcon  = [System.Windows.Forms.ToolTipIcon]::Info
+        $balloon.BalloonTipText = "Cancelled. No files were changed."
+        $balloon.BalloonTipIcon = [System.Windows.Forms.ToolTipIcon]::Info
         $balloon.ShowBalloonTip(4000)
         Start-Sleep -Milliseconds 4500
-    } elseif ($null -ne $result) {
+    }
+    elseif ($null -ne $result) {
         $balloon.BalloonTipTitle = "Image Organizer Done"
-        $balloon.BalloonTipText  = "$($result.Processed) $Verb, $($result.Skipped) skipped, $($result.Errored) error(s)"
-        $balloon.BalloonTipIcon  = [System.Windows.Forms.ToolTipIcon]::Info
+        $balloon.BalloonTipText = "$($result.Processed) $Verb, $($result.Skipped) skipped, $($result.Errored) error(s)"
+        $balloon.BalloonTipIcon = [System.Windows.Forms.ToolTipIcon]::Info
         $balloon.ShowBalloonTip(4000)
         Start-Sleep -Milliseconds 4500
     }
     $balloon.Dispose()
-} catch { }
+}
+catch { }

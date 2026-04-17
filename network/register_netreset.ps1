@@ -3,14 +3,14 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$VERSION       = "1.0"
-$SCRIPT_START  = Get-Date
-$ScriptDir     = Split-Path -Parent $MyInvocation.MyCommand.Path
-$LogFile       = Join-Path (Split-Path -Parent $ScriptDir) "logs\netreset_log.txt"
-$MaxLogSizeB   = 2MB
+$VERSION = "1.0"
+$SCRIPT_START = Get-Date
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$LogFile = Join-Path (Split-Path -Parent $ScriptDir) "logs\netreset_log.txt"
+$MaxLogSizeB = 2MB
 
 function Write-Header {
-    $w    = 62
+    $w = 62
     $line = "=" * $w
     Write-Host ""
     Write-Host $line -ForegroundColor Cyan
@@ -35,22 +35,23 @@ function Write-Step ([string]$Label, [scriptblock]$Action) {
     try {
         & $Action | Out-Null
         Write-Host " OK" -ForegroundColor Green
-    } catch {
+    }
+    catch {
         Write-Host " FAILED  $_" -ForegroundColor Red
     }
 }
 
 function Get-WifiAdapter {
     $adapters = @(Get-NetAdapter | Where-Object {
-        $_.Status -in @("Up","Disabled") -and
-        $_.PhysicalMediaType -in @("Native 802.11","Wireless LAN")
-    })
+            $_.Status -in @("Up", "Disabled") -and
+            $_.PhysicalMediaType -in @("Native 802.11", "Wireless LAN")
+        })
 
     if ($adapters.Count -eq 0) {
         $adapters = @(Get-NetAdapter | Where-Object {
-            $_.Status -in @("Up","Disabled") -and
-            $_.Name -match "Wi.?Fi|Wireless|WLAN|802\.11"
-        })
+                $_.Status -in @("Up", "Disabled") -and
+                $_.Name -match "Wi.?Fi|Wireless|WLAN|802\.11"
+            })
     }
 
     if ($adapters.Count -eq 0) { return $null }
@@ -75,12 +76,13 @@ function Test-Internet {
     foreach ($h in $hosts) {
         try {
             $tcp = [System.Net.Sockets.TcpClient]::new()
-            $ar  = $tcp.BeginConnect($h, 443, $null, $null)
-            $ok  = $ar.AsyncWaitHandle.WaitOne(3000)
+            $ar = $tcp.BeginConnect($h, 443, $null, $null)
+            $ok = $ar.AsyncWaitHandle.WaitOne(3000)
             try { $tcp.EndConnect($ar) } catch {}
             $tcp.Close()
             if ($ok) { return $true }
-        } catch {}
+        }
+        catch {}
     }
     return $false
 }
@@ -104,13 +106,13 @@ if ($null -eq $adapter) {
 }
 
 Write-Info "Adapter        :" $adapter.Name
-Write-Info "Status         :" $adapter.Status $(if ($adapter.Status -eq "Up") {"Green"} else {"Yellow"})
+Write-Info "Status         :" $adapter.Status $(if ($adapter.Status -eq "Up") { "Green" } else { "Yellow" })
 
 $preGateway = Test-Gateway
 $preInternet = Test-Internet
 
-Write-Info "Gateway        :" $(if ($preGateway.Gateway) { $preGateway.Gateway } else { "None" }) $(if ($preGateway.Reachable) {"Green"} else {"Red"})
-Write-Info "Internet       :" $(if ($preInternet) {"Reachable"} else {"Unreachable"}) $(if ($preInternet) {"Green"} else {"Red"})
+Write-Info "Gateway        :" $(if ($preGateway.Gateway) { $preGateway.Gateway } else { "None" }) $(if ($preGateway.Reachable) { "Green" } else { "Red" })
+Write-Info "Internet       :" $(if ($preInternet) { "Reachable" } else { "Unreachable" }) $(if ($preInternet) { "Green" } else { "Red" })
 
 Write-Section "Resetting..."
 
@@ -128,9 +130,9 @@ Write-Step "Enabling adapter            " { Enable-NetAdapter -Name $adapter.Nam
 Write-Host ""
 Write-Host "  Waiting for adapter to reconnect..." -ForegroundColor DarkGray
 
-$timeout  = 20
+$timeout = 20
 $interval = 1
-$elapsed  = 0
+$elapsed = 0
 $connected = $false
 
 while ($elapsed -lt $timeout) {
@@ -144,7 +146,8 @@ Write-Host ""
 
 if (-not $connected) {
     Write-Host "  [WARN] Adapter did not come back up within $timeout seconds." -ForegroundColor Yellow
-} else {
+}
+else {
     Write-Step "Renewing IP lease           " { $n = $adapter.Name; ipconfig /renew "$n" 2>&1 }
     Write-Step "Registering DNS             " { Register-DnsClient }
 }
@@ -153,15 +156,15 @@ Write-Section "Post-reset check"
 
 Start-Sleep -Seconds 2
 
-$postGateway  = Test-Gateway
+$postGateway = Test-Gateway
 $postInternet = Test-Internet
 
-Write-Info "Gateway        :" $(if ($postGateway.Gateway) { $postGateway.Gateway } else { "None" }) $(if ($postGateway.Reachable) {"Green"} else {"Red"})
-Write-Info "Internet       :" $(if ($postInternet) {"Reachable"} else {"Unreachable"}) $(if ($postInternet) {"Green"} else {"Red"})
+Write-Info "Gateway        :" $(if ($postGateway.Gateway) { $postGateway.Gateway } else { "None" }) $(if ($postGateway.Reachable) { "Green" } else { "Red" })
+Write-Info "Internet       :" $(if ($postInternet) { "Reachable" } else { "Unreachable" }) $(if ($postInternet) { "Green" } else { "Red" })
 
-$elapsed    = (Get-Date) - $SCRIPT_START
+$elapsed = (Get-Date) - $SCRIPT_START
 $elapsedStr = "{0:mm\:ss}" -f $elapsed
-$divider    = "=" * 62
+$divider = "=" * 62
 
 Write-Host ""
 Write-Host $divider -ForegroundColor DarkGray
@@ -169,7 +172,7 @@ Write-Host "  SUMMARY" -ForegroundColor Cyan
 Write-Host $divider -ForegroundColor DarkGray
 Write-Info "Adapter        :" $adapter.Name
 Write-Info "Elapsed        :" $elapsedStr
-Write-Info "Result         :" $(if ($postInternet) {"Network restored"} else {"Still no internet - try restarting router"}) $(if ($postInternet) {"Green"} else {"Yellow"})
+Write-Info "Result         :" $(if ($postInternet) { "Network restored" } else { "Still no internet - try restarting router" }) $(if ($postInternet) { "Green" } else { "Yellow" })
 Write-Host $divider -ForegroundColor DarkGray
 Write-Host ""
 Write-Host "  Done." -ForegroundColor Cyan
@@ -192,16 +195,17 @@ $logLine
 "@
 try {
     Add-Content -LiteralPath $LogFile -Value $logEntry -Encoding UTF8
-} catch {
+}
+catch {
     Write-Host "  [WARN] Log write failed: $($_.Exception.Message)" -ForegroundColor Yellow
 }
 
 Add-Type -AssemblyName System.Windows.Forms
-$balloon                 = [System.Windows.Forms.NotifyIcon]::new()
-$balloon.Icon            = [System.Drawing.SystemIcons]::Information
+$balloon = [System.Windows.Forms.NotifyIcon]::new()
+$balloon.Icon = [System.Drawing.SystemIcons]::Information
 $balloon.BalloonTipTitle = "Network Reset Done"
-$balloon.BalloonTipText  = if ($postInternet) { "Internet restored." } else { "Still no internet. Try restarting router." }
-$balloon.Visible         = $true
+$balloon.BalloonTipText = if ($postInternet) { "Internet restored." } else { "Still no internet. Try restarting router." }
+$balloon.Visible = $true
 $balloon.ShowBalloonTip(5000)
 Start-Sleep -Milliseconds 5500
 $balloon.Dispose()

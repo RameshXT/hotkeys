@@ -2,8 +2,8 @@
 $ErrorActionPreference = "Stop"
 
 $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
-$principal   = New-Object Security.Principal.WindowsPrincipal($currentUser)
-$isAdmin     = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+$principal = New-Object Security.Principal.WindowsPrincipal($currentUser)
+$isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
 if (-not $isAdmin) {
     $scriptPath = if ($PSCommandPath) { $PSCommandPath } else { $MyInvocation.MyCommand.Path }
@@ -25,19 +25,20 @@ public class ConsoleWindow {
 "@
 
 try {
-    $hwnd       = [ConsoleWindow]::GetConsoleWindow()
-    $screenW    = [ConsoleWindow]::GetSystemMetrics(0)
-    $screenH    = [ConsoleWindow]::GetSystemMetrics(1)
-    $winW       = [int]($screenW * 0.50)
-    $winH       = [int]($screenH * 0.50)
-    $posX       = [int](($screenW - $winW) / 2)
-    $posY       = [int](($screenH - $winH) / 2)
+    $hwnd = [ConsoleWindow]::GetConsoleWindow()
+    $screenW = [ConsoleWindow]::GetSystemMetrics(0)
+    $screenH = [ConsoleWindow]::GetSystemMetrics(1)
+    $winW = [int]($screenW * 0.50)
+    $winH = [int]($screenH * 0.50)
+    $posX = [int](($screenW - $winW) / 2)
+    $posY = [int](($screenH - $winH) / 2)
     [ConsoleWindow]::MoveWindow($hwnd, $posX, $posY, $winW, $winH, $true) | Out-Null
     $bufferSize = New-Object System.Management.Automation.Host.Size(120, 9999)
     $Host.UI.RawUI.BufferSize = $bufferSize
     $windowSize = New-Object System.Management.Automation.Host.Size(80, 30)
     $Host.UI.RawUI.WindowSize = $windowSize
-} catch { Write-Warning "Console window resize failed: $_" }
+}
+catch { Write-Warning "Console window resize failed: $_" }
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -47,14 +48,15 @@ function Show-Balloon {
     try {
         $allowedTypes = @("Info", "Warning", "Error", "None")
         if ($allowedTypes -notcontains $Type) { $Type = "Info" }
-        $notify         = New-Object System.Windows.Forms.NotifyIcon
-        $notify.Icon    = [System.Drawing.SystemIcons]::Application
+        $notify = New-Object System.Windows.Forms.NotifyIcon
+        $notify.Icon = [System.Drawing.SystemIcons]::Application
         $notify.Visible = $true
-        $tipIcon        = [System.Windows.Forms.ToolTipIcon]::$Type
+        $tipIcon = [System.Windows.Forms.ToolTipIcon]::$Type
         $notify.ShowBalloonTip(6000, $Title, $Message, $tipIcon)
         Start-Sleep -Milliseconds 200
         $notify.Dispose()
-    } catch { Write-Warning "Balloon notification failed: $_" }
+    }
+    catch { Write-Warning "Balloon notification failed: $_" }
 }
 
 
@@ -77,18 +79,20 @@ $TestDestination = ""
 
 if ($PSScriptRoot -and (Test-Path $PSScriptRoot)) {
     $Source = $PSScriptRoot
-} else {
+}
+else {
     $Source = Split-Path -Parent $MyInvocation.MyCommand.Definition
 }
 
 if ($TestDestination -ne "") {
     $Destination = $TestDestination
-} else {
+}
+else {
     $Destination = Join-Path $env:USERPROFILE "sys-scripts"
 }
 $StartupFolder = [Environment]::GetFolderPath("Startup")
-$SourceNorm    = $Source.TrimEnd('\').ToLower()
-$DestNorm      = $Destination.TrimEnd('\').ToLower()
+$SourceNorm = $Source.TrimEnd('\').ToLower()
+$DestNorm = $Destination.TrimEnd('\').ToLower()
 
 $checkFiles = @(
     (Join-Path $Destination "install.ps1"),
@@ -98,7 +102,7 @@ $checkFiles = @(
     (Join-Path $Destination "hotkeys\hotkeys.ahk")
 )
 
-$installedCount  = ($checkFiles | Where-Object { Test-Path $_ }).Count
+$installedCount = ($checkFiles | Where-Object { Test-Path $_ }).Count
 $alreadyInstalled = ($SourceNorm -eq $DestNorm) -or ($installedCount -eq $checkFiles.Count)
 
 if ($alreadyInstalled) {
@@ -134,10 +138,10 @@ Write-Host "  Installing to  $Destination" -ForegroundColor DarkGray
 Write-Host "  ----------------------------------------" -ForegroundColor DarkGray
 Write-Host ""
 
-$TotalSteps  = 5
-$StepNum     = 0
-$ErrorCount  = 0
-$WarnCount   = 0
+$TotalSteps = 5
+$StepNum = 0
+$ErrorCount = 0
+$WarnCount = 0
 
 $StepNum++
 Write-Host ""
@@ -146,18 +150,19 @@ Write-Host "  Copying files" -ForegroundColor DarkGray
 try {
     $items = Get-ChildItem -Path $Source -Recurse -ErrorAction Stop
     $total = $items.Count
-    $i     = 0
+    $i = 0
 
     foreach ($item in $items) {
         $i++
         $relPath = $item.FullName.Substring($Source.Length).TrimStart('\')
-        $dest    = Join-Path $Destination $relPath
+        $dest = Join-Path $Destination $relPath
 
         if ($item.PSIsContainer) {
             if (-not (Test-Path $dest)) {
                 New-Item -ItemType Directory -Path $dest -Force | Out-Null
             }
-        } else {
+        }
+        else {
             $destDir = Split-Path $dest -Parent
             if (-not (Test-Path $destDir)) {
                 New-Item -ItemType Directory -Path $destDir -Force | Out-Null
@@ -168,7 +173,8 @@ try {
     }
 
     Write-OK "Files copied ($total items)"
-} catch {
+}
+catch {
     Write-Err "File copy failed : $_"
     $ErrorCount++
 }
@@ -178,7 +184,7 @@ Write-Host ""
 Write-Host "  Preparing logs" -ForegroundColor DarkGray
 
 try {
-    $LogDir   = Join-Path $Destination "logs"
+    $LogDir = Join-Path $Destination "logs"
     $LogFiles = @("cleanup_log.txt", "netreset_log.txt", "update_log.txt")
 
     if (-not (Test-Path $LogDir)) {
@@ -192,7 +198,8 @@ try {
         }
     }
     Write-OK "Log files ready"
-} catch {
+}
+catch {
     Write-Warn "Log file setup issue : $_"
     $WarnCount++
 }
@@ -208,8 +215,8 @@ function Register-PSTask {
         [string]$ScriptPath,
         [ValidateSet("Weekly", "Daily", "AtLogon")]
         [string]$TriggerType,
-        [string]$At  = "02:00",
-        [ValidateSet("Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday")]
+        [string]$At = "02:00",
+        [ValidateSet("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")]
         [string]$Day = "Sunday"
     )
     try {
@@ -218,13 +225,15 @@ function Register-PSTask {
             return "WARN"
         }
 
-        $action   = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File `"$ScriptPath`""
+        $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File `"$ScriptPath`""
 
         if ($TriggerType -eq "Weekly") {
             $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $Day -At $At
-        } elseif ($TriggerType -eq "Daily") {
+        }
+        elseif ($TriggerType -eq "Daily") {
             $trigger = New-ScheduledTaskTrigger -Daily -At $At
-        } else {
+        }
+        else {
             $trigger = New-ScheduledTaskTrigger -AtLogOn
         }
 
@@ -233,7 +242,8 @@ function Register-PSTask {
         Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -RunLevel Highest -Force -ErrorAction Stop | Out-Null
         Write-OK "Task registered : $TaskName"
         return "OK"
-    } catch {
+    }
+    catch {
         Write-Err "Task failed : $TaskName - $_"
         return "FAIL"
     }
@@ -266,15 +276,18 @@ try {
 
         if ($ahkFound.Count -gt 0) {
             Write-OK "Hotkey placed in startup"
-        } else {
+        }
+        else {
             Write-Warn "Hotkey placed but AutoHotkey is not installed"
             $WarnCount++
         }
-    } else {
+    }
+    else {
         Write-Warn "hotkeys.ahk not found, skipping"
         $WarnCount++
     }
-} catch {
+}
+catch {
     Write-Err "Startup hotkey failed : $_"
     $ErrorCount++
 }
@@ -287,15 +300,17 @@ Write-Host "  ----------------------------------------" -ForegroundColor DarkGra
 if ($ErrorCount -eq 0 -and $WarnCount -eq 0) {
     Write-Host "  All done." -ForegroundColor Green
     $balloonType = "Info"
-    $balloonMsg  = "Installation complete."
-} elseif ($ErrorCount -eq 0) {
+    $balloonMsg = "Installation complete."
+}
+elseif ($ErrorCount -eq 0) {
     Write-Host "  Done with $WarnCount warning(s)." -ForegroundColor Yellow
     $balloonType = "Warning"
-    $balloonMsg  = "Installed with $WarnCount warning(s)."
-} else {
+    $balloonMsg = "Installed with $WarnCount warning(s)."
+}
+else {
     Write-Host "  Failed. $ErrorCount error(s)." -ForegroundColor Red
     $balloonType = "Error"
-    $balloonMsg  = "$ErrorCount error(s) during install."
+    $balloonMsg = "$ErrorCount error(s) during install."
 }
 
 Write-Host "  ----------------------------------------" -ForegroundColor DarkGray

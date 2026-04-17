@@ -13,9 +13,9 @@ function Write-Info ([string]$Label, [string]$Value, [string]$Color = "White") {
     Write-Host $Value -ForegroundColor $Color
 }
 
-$w       = 62
+$w = 62
 $divider = "=" * $w
-$line    = "=" * $w
+$line = "=" * $w
 
 Write-Host ""
 Write-Host $line -ForegroundColor Cyan
@@ -43,11 +43,11 @@ if (-not ($rows[0].PSObject.Properties.Name -contains 'Action') -or
 
 $opType = $rows[0].Action.ToUpper()
 $isMove = ($opType -eq "MOVE")
-$total  = $rows.Count
+$total = $rows.Count
 
-$LogDir         = Split-Path -Parent $Log
+$LogDir = Split-Path -Parent $Log
 $DestinationRoot = Split-Path -Parent $LogDir
-$LogTimestamp   = [System.IO.Path]::GetFileNameWithoutExtension($Log) -replace '^undo_', ''
+$LogTimestamp = [System.IO.Path]::GetFileNameWithoutExtension($Log) -replace '^undo_', ''
 $HtmlReportPath = Join-Path $LogDir "report_$LogTimestamp.html"
 
 Write-Info "Log file   :" $Log
@@ -60,7 +60,8 @@ if ($isMove) {
     Write-Host "    Original timestamps (created, modified, accessed) will be restored exactly." -ForegroundColor Green
     Write-Host "    Empty destination folders will be removed automatically." -ForegroundColor DarkGray
     Write-Host "    Organizer logs for this run will be deleted." -ForegroundColor DarkGray
-} else {
+}
+else {
     Write-Host "  What will happen:" -ForegroundColor Gray
     Write-Host "    $total file(s) will be permanently deleted from the destination." -ForegroundColor White
     Write-Host "    Your original source files are NOT affected." -ForegroundColor Green
@@ -81,12 +82,12 @@ if ($confirm -ne "Y") {
 
 Write-Host ""
 
-$restored     = 0
-$deleted      = 0
-$skipped      = 0
-$errored      = 0
-$counter      = 0
-$padWidth     = ([string]$total).Length
+$restored = 0
+$deleted = 0
+$skipped = 0
+$errored = 0
+$counter = 0
+$padWidth = ([string]$total).Length
 
 foreach ($row in $rows) {
 
@@ -94,9 +95,9 @@ foreach ($row in $rows) {
     $progress = "[{0,$padWidth}/{1}]" -f $counter, $total
 
     if ($isMove) {
-        $destPath   = $row.DestinationPath
+        $destPath = $row.DestinationPath
         $sourcePath = $row.SourcePath
-        $fileName   = $row.FileName
+        $fileName = $row.FileName
 
         Write-Host "  $progress " -NoNewline -ForegroundColor DarkGray
 
@@ -122,22 +123,24 @@ foreach ($row in $rows) {
 
             Move-Item -LiteralPath $destPath -Destination $sourcePath -Force
 
-            $f                = Get-Item -LiteralPath $sourcePath
-            $f.CreationTime   = [datetime]::Parse($row.CreationTime)
-            $f.LastWriteTime  = [datetime]::Parse($row.LastWriteTime)
+            $f = Get-Item -LiteralPath $sourcePath
+            $f.CreationTime = [datetime]::Parse($row.CreationTime)
+            $f.LastWriteTime = [datetime]::Parse($row.LastWriteTime)
             $f.LastAccessTime = [datetime]::Parse($row.LastAccessTime)
 
             Write-Host " RESTORED " -NoNewline -ForegroundColor Green
             Write-Host " $fileName" -ForegroundColor DarkGray
             $restored++
 
-        } catch {
+        }
+        catch {
             Write-Host " ERROR    " -NoNewline -ForegroundColor Red
             Write-Host " $fileName -- $_" -ForegroundColor DarkGray
             $errored++
         }
 
-    } else {
+    }
+    else {
         $destPath = $row.DestinationPath
         $fileName = $row.FileName
 
@@ -157,7 +160,8 @@ foreach ($row in $rows) {
             Write-Host " $fileName" -ForegroundColor DarkGray
             $deleted++
 
-        } catch {
+        }
+        catch {
             Write-Host " ERROR    " -NoNewline -ForegroundColor Red
             Write-Host " $fileName -- $_" -ForegroundColor DarkGray
             $errored++
@@ -179,7 +183,8 @@ if (Test-Path -LiteralPath $DestinationRoot) {
                 try {
                     Remove-Item -LiteralPath $dir.FullName -Force -ErrorAction Stop
                     $foldersRemoved++
-                } catch { }
+                }
+                catch { }
             }
         }
     }
@@ -205,12 +210,13 @@ Write-Host $divider -ForegroundColor DarkGray
 
 if ($isMove) {
     Write-Info "Restored   :" $restored       "Green"
-} else {
+}
+else {
     Write-Info "Deleted    :" $deleted        "Red"
 }
 
 Write-Info "Skipped    :" $skipped           "DarkGray"
-Write-Info "Errors     :" $errored           $(if ($errored -gt 0){"Red"} else {"White"})
+Write-Info "Errors     :" $errored           $(if ($errored -gt 0) { "Red" } else { "White" })
 Write-Info "Folders rm :" $foldersRemoved    "DarkGray"
 Write-Host $divider -ForegroundColor DarkGray
 Write-Host ""
