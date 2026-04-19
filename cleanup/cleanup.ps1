@@ -20,7 +20,7 @@ foreach ($envVar in @('TEMP', 'LOCALAPPDATA', 'USERPROFILE')) {
     }
 }
 
-function Ensure-ParentDirectory {
+function New-ParentDirectory {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$Path)
 
@@ -103,7 +103,7 @@ function Assert-SafePath {
     }
 }
 
-function Clean-Target {
+function Clear-Target {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$Path,
@@ -134,28 +134,28 @@ function Clean-Target {
 
 Write-Host "Modern Cleanup Pipeline Initialized..." -ForegroundColor Cyan
 
-Clean-Target $env:TEMP "User Temp"
-Clean-Target "$env:LOCALAPPDATA\Temp" "LocalAppData Temp"
-Clean-Target "$env:SystemRoot\Temp" "Windows Temp"
-
-$wuService = Get-Service -Name wuauserv -ErrorAction SilentlyContinue
-if ($wuService -and $wuService.Status -eq "Stopped") {
-    Clean-Target "$env:SystemRoot\SoftwareDistribution\Download" "Windows Update Cache"
-}
-else {
-    $script:Results.Add("SKIP|Windows Update Cache|service running")
-}
-
-Clean-Target "$env:SystemRoot\SoftwareDistribution\DeliveryOptimization" "Delivery Opt Cache"
-Clean-Target "$env:SystemRoot\Minidump" "Crash Minidumps"
-Clean-Target "$env:ProgramData\Microsoft\Windows\WER\ReportArchive" "System WER Reports"
-Clean-Target "$env:LOCALAPPDATA\Microsoft\Windows\WER\ReportArchive" "User WER Reports"
-Clean-Target "$env:SystemRoot\Logs" "Windows Logs (>7d)" 7
-Clean-Target "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Cache\Cache_Data" "Edge Browser Cache"
-
-if (Test-Path -LiteralPath "$env:SystemDrive\Windows.old") {
-    Clean-Target "$env:SystemDrive\Windows.old" "Windows.old"
-}
+    Clear-Target $env:TEMP "User Temp"
+    Clear-Target "$env:LOCALAPPDATA\Temp" "LocalAppData Temp"
+    Clear-Target "$env:SystemRoot\Temp" "Windows Temp"
+    
+    $wuService = Get-Service -Name wuauserv -ErrorAction SilentlyContinue
+    if ($wuService -and $wuService.Status -eq "Stopped") {
+        Clear-Target "$env:SystemRoot\SoftwareDistribution\Download" "Windows Update Cache"
+    }
+    else {
+        $script:Results.Add("SKIP|Windows Update Cache|service running")
+    }
+    
+    Clear-Target "$env:SystemRoot\SoftwareDistribution\DeliveryOptimization" "Delivery Opt Cache"
+    Clear-Target "$env:SystemRoot\Minidump" "Crash Minidumps"
+    Clear-Target "$env:ProgramData\Microsoft\Windows\WER\ReportArchive" "System WER Reports"
+    Clear-Target "$env:LOCALAPPDATA\Microsoft\Windows\WER\ReportArchive" "User WER Reports"
+    Clear-Target "$env:SystemRoot\Logs" "Windows Logs (>7d)" 7
+    Clear-Target "$env:LOCALAPPDATA\Microsoft\Edge\User Data\Default\Cache\Cache_Data" "Edge Browser Cache"
+    
+    if (Test-Path -LiteralPath "$env:SystemDrive\Windows.old") {
+        Clear-Target "$env:SystemDrive\Windows.old" "Windows.old"
+    }
 
 $EndTime = Get-Date
 $Duration = ($EndTime - $StartTime).TotalSeconds
@@ -186,7 +186,7 @@ $lineBot
 
 "@
 
-Ensure-ParentDirectory -Path $LogFile
+New-ParentDirectory -Path $LogFile
 Add-Content -LiteralPath $LogFile -Value $LogEntry -Encoding UTF8
 
 $ResultFile = Join-Path $ScriptDir "cleanup_result.txt"

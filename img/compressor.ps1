@@ -3,7 +3,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Continue"
 
 $VERSION = "1.1"
-$SCRIPT_START = Get-Date
+
 
 function Write-Header {
     $w = 62

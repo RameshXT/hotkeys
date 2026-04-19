@@ -35,7 +35,7 @@ function Write-Info ([string]$Label, [string]$Value, [string]$Color = "White") {
 function Write-Warn ([string]$Msg) { Write-Host "  [WARN]  $Msg" -ForegroundColor Yellow }
 function Write-Err  ([string]$Msg) { Write-Host "  [ERROR] $Msg" -ForegroundColor Red }
 
-function Prompt-Choice {
+function Read-Choice {
     param([string]$Question, [string[]]$Valid, [string]$Default = "")
     do {
         $hint = if ($Default) { " [$($Valid -join '/'), default=$Default]" } else { " [$($Valid -join '/')]" }
@@ -188,7 +188,7 @@ if ($HardDryRun -ne "") {
 else {
     Write-Host ""
     Write-Host "  Test run? (shows what will happen without renaming any files)" -ForegroundColor Gray
-    $DryRunInput = Prompt-Choice "Proceed" @("Y", "N") "N"
+    $DryRunInput = Read-Choice "Proceed" @("Y", "N") "N"
 }
 $DryRun = ($DryRunInput -eq "Y")
 
@@ -206,7 +206,7 @@ if ($DryRun -and $null -ne $result) {
     Write-Host ""
     Write-Host "  This was a test run. No files were renamed." -ForegroundColor Yellow
     Write-Host ""
-    $go = Prompt-Choice "Ready to run the real rename now?" @("Y", "N") "N"
+    $go = Read-Choice "Ready to run the real rename now?" @("Y", "N") "N"
 
     if ($go -eq "Y") {
         Write-Host ""

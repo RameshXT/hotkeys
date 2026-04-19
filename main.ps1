@@ -138,7 +138,6 @@ Write-Host "  Installing to  $Destination" -ForegroundColor DarkGray
 Write-Host "  ----------------------------------------" -ForegroundColor DarkGray
 Write-Host ""
 
-$TotalSteps = 5
 $StepNum = 0
 $ErrorCount = 0
 $WarnCount = 0

@@ -43,7 +43,7 @@ function Write-Info ([string]$Label, [string]$Value, [string]$Color = "White") {
 function Write-Warn ([string]$Msg) { Write-Host "  [WARN]  $Msg" -ForegroundColor Yellow }
 function Write-Err  ([string]$Msg) { Write-Host "  [ERROR] $Msg" -ForegroundColor Red }
 
-function Prompt-Choice {
+function Read-Choice {
     param([string]$Question, [string[]]$Valid, [string]$Default = "")
     $wordMap = @{
         "MOVE" = "M"; "COPY" = "C"
@@ -467,7 +467,7 @@ if ($HardAction -ne "") {
     $Action = $HardAction.ToUpper()
 }
 else {
-    $Action = Prompt-Choice "Move or Copy?" @("M", "C")
+    $Action = Read-Choice "Move or Copy?" @("M", "C")
 }
 if ($Action -notin @("M", "C")) { Write-Err "Invalid action '$Action'"; exit 1 }
 $DoMove = ($Action -eq "M")
@@ -483,7 +483,7 @@ else {
         $subDirs | Select-Object -First 10 | ForEach-Object { Write-Host "    - $($_.Name)" -ForegroundColor DarkGray }
         if ($subDirs.Count -gt 10) { Write-Host "    ... and $($subDirs.Count - 10) more" -ForegroundColor DarkGray }
     }
-    $RecurseInput = Prompt-Choice "Include subfolders?" @("Y", "N")
+    $RecurseInput = Read-Choice "Include subfolders?" @("Y", "N")
 }
 if ($RecurseInput -notin @("Y", "N")) { Write-Err "Invalid choice '$RecurseInput'"; exit 1 }
 $DoRecurse = ($RecurseInput -eq "Y")
@@ -494,7 +494,7 @@ if ($HardDryRun -ne "") {
 else {
     Write-Host ""
     Write-Host "  Test run? (shows what will happen without touching any files)" -ForegroundColor Gray
-    $DryRunInput = Prompt-Choice "Proceed" @("Y", "N") "N"
+    $DryRunInput = Read-Choice "Proceed" @("Y", "N") "N"
 }
 $DryRun = ($DryRunInput -eq "Y")
 
@@ -537,7 +537,7 @@ if ($DryRun -and $null -ne $result) {
     Write-Host ""
     Write-Host "  This was a test run. No files were touched." -ForegroundColor Yellow
     Write-Host ""
-    $go = Prompt-Choice "Ready to run the real $($Verb.ToLower()) now?" @("Y", "N") "N"
+    $go = Read-Choice "Ready to run the real $($Verb.ToLower()) now?" @("Y", "N") "N"
 
     if ($go -eq "Y") {
         Write-Host ""
