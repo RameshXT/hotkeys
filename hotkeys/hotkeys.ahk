@@ -13,6 +13,7 @@
 ; Alt + N        → Notepad
 ; Alt + Q        → Close Active Window (hold to keep closing)
 ; Alt + 0        → Calculator
+; Alt + Z        → Unzip selected .zip file
 
 ; Ctrl+Shift+Alt+C       → Run Windows Cleanup Script
 ; Ctrl+Shift+Alt+U       → Run Windows Updater Script
@@ -611,7 +612,7 @@ ExtractSelectedZip()
     targetDir := fileDir . "\" . nameNoExt . "\"
     winrarPath := "C:\Program Files\WinRAR\WinRAR.exe"
     if FileExist(winrarPath)
-        Run, "%winrarPath%" x "%selectedPath%" "%targetDir%"
+        Run, "%winrarPath%" x -o+ "%selectedPath%" "%targetDir%"
     else
     {
         StringReplace, safeSelectedPath, selectedPath, ', '', All
