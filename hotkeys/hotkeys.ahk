@@ -576,6 +576,13 @@ return
 return
 
 ^+!u::
+    FormatTime, today,, yyyy-MM-dd
+    FileRead, lastRun, %USER_HOME%\sys-scripts\update\update_lastrun.txt
+    if (Trim(lastRun) = today)
+    {
+        ShowTransientToolTip("Update already completed today")
+        return
+    }
     TriggerScheduledTask("WindowsUpdater", "Update"
         , USER_HOME . "\sys-scripts\update\update_trigger.txt"
         , USER_HOME . "\sys-scripts\update\update_result.txt", 180)
