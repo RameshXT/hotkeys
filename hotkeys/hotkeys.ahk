@@ -300,6 +300,23 @@ GetValidExplorerPath()
     return path
 }
 
+GetSelectedFilePath()
+{
+    local hwnd, window, sel, item
+    hwnd := WinExist("A")
+    for window in ComObjCreate("Shell.Application").Windows
+    {
+        if (window.hwnd = hwnd)
+        {
+            for item in window.Document.SelectedItems
+            {
+                return item.Path
+            }
+        }
+    }
+    return ""
+}
+
 RemoveToolTip:
     ToolTip
 return
@@ -576,3 +593,29 @@ return
         }
     }
 return
+
+!z::ExtractSelectedZip()
+
+ExtractSelectedZip()
+{
+    local class, selectedPath, fileDir, fileExtension, nameNoExt, targetDir, winrarPath, safeSelectedPath, safeTargetDir
+    WinGetClass, class, A
+    if (class != "CabinetWClass" && class != "ExploreWClass")
+        return
+    selectedPath := GetSelectedFilePath()
+    if (selectedPath = "")
+        return
+    SplitPath, selectedPath, , fileDir, fileExtension, nameNoExt
+    if (fileExtension != "zip" && fileExtension != "ZIP")
+        return
+    targetDir := fileDir . "\" . nameNoExt . "\"
+    winrarPath := "C:\Program Files\WinRAR\WinRAR.exe"
+    if FileExist(winrarPath)
+        Run, "%winrarPath%" x "%selectedPath%" "%targetDir%"
+    else
+    {
+        StringReplace, safeSelectedPath, selectedPath, ', '', All
+        StringReplace, safeTargetDir, targetDir, ', '', All
+        Run, powershell.exe -NoProfile -Command "Expand-Archive -Path '%safeSelectedPath%' -DestinationPath '%safeTargetDir%' -Force",, Hide
+    }
+}
