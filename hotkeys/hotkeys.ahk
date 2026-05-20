@@ -34,7 +34,6 @@ SetWorkingDir %A_ScriptDir%
 SetTimer, WatchScript, 1000
 
 EnvGet, USER_HOME, USERPROFILE
-global ANTIGRAVITY_LNK  := USER_HOME . "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Antigravity\Antigravity.lnk"
 global CHROME_LNK       := "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Google Chrome.lnk"
 global CHROME_PATH      := "C:\Program Files\Google\Chrome\Application\chrome.exe"
 global DOUBLE_PRESS_DELAY   := 400
@@ -102,6 +101,25 @@ ExtractSelectedZip()
         StringReplace, safeTargetDir, targetDir, ', '', All
         Run, powershell.exe -NoProfile -Command "Expand-Archive -Path '%safeSelectedPath%' -DestinationPath '%safeTargetDir%' -Force",, Hide
     }
+}
+
+GetAntigravityPath()
+{
+    local userHome, paths, index, path
+    EnvGet, userHome, USERPROFILE
+    paths := [ userHome . "\AppData\Local\Programs\Antigravity IDE\Antigravity IDE.exe"
+             , "C:\Program Files\Antigravity IDE\Antigravity IDE.exe"
+             , "C:\Program Files (x86)\Antigravity IDE\Antigravity IDE.exe"
+             , userHome . "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Antigravity\Antigravity.lnk"
+             , userHome . "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Antigravity IDE\Antigravity IDE.lnk" ]
+    
+    for index, path in paths
+    {
+        if FileExist(path)
+            return path
+    }
+    
+    return "antigravity-ide.cmd"
 }
 
 GetExplorerPath()
@@ -351,7 +369,7 @@ return
 
 !0::RunApp("calc.exe", "", "Calculator")
 
-!a::HandleContextHotkey("a", "Antigravity", ANTIGRAVITY_LNK)
+!a::HandleContextHotkey("a", "Antigravity", GetAntigravityPath())
 
 #MaxThreadsPerHotkey 1
 !c::
