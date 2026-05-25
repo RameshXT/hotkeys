@@ -1,5 +1,6 @@
 ; ==================[ Hotkey Reference ]==================
 ; Alt + 0 →     Calculator
+; Alt + 1 →     Photoshop
 ; Alt + A →     Antigravity  |  Double → Antigravity in Explorer folder
 ; Alt + C →     Chrome  |  Long Press → Chrome Incognito
 ; Alt + G →     Git Bash  |  Double → Git Bash in Explorer folder
@@ -150,6 +151,28 @@ GetExplorerPath()
         ShowLaunchError("Error getting Explorer path", e)
     }
     return ""
+}
+
+GetPhotoshopPath()
+{
+    local paths, index, path, userHome
+    EnvGet, userHome, USERPROFILE
+    paths := [ "C:\Program Files\Adobe\Adobe Photoshop 2024\Photoshop.exe"
+             , "C:\Program Files\Adobe\Adobe Photoshop 2023\Photoshop.exe"
+             , "C:\Program Files\Adobe\Adobe Photoshop 2022\Photoshop.exe"
+             , "C:\Program Files\Adobe\Adobe Photoshop 2021\Photoshop.exe"
+             , "C:\Program Files\Adobe\Adobe Photoshop 2020\Photoshop.exe"
+             , "C:\Program Files\Adobe\Adobe Photoshop CC 2019\Photoshop.exe"
+             , "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Adobe Photoshop.lnk"
+             , userHome . "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Adobe Photoshop.lnk" ]
+    
+    for index, path in paths
+    {
+        if FileExist(path)
+            return path
+    }
+    
+    return "Photoshop.exe"
 }
 
 GetSelectedFilePath()
@@ -368,6 +391,8 @@ return
 ; ====================[ Hotkeys ]====================
 
 !0::RunApp("calc.exe", "", "Calculator")
+
+!1::RunApp(GetPhotoshopPath(), "", "Photoshop")
 
 !a::HandleContextHotkey("a", "Antigravity", GetAntigravityPath())
 
