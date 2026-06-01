@@ -1,6 +1,6 @@
 ; ==================[ Hotkey Reference ]==================
 ; Alt + 0 →     Calculator
-; Alt + 1 →     Photoshop
+; Alt + 1 →     Photoshop (Double Tap)
 ; Alt + A →     Antigravity  |  Double → Antigravity in Explorer folder
 ; Alt + C →     Chrome  |  Long Press → Chrome Incognito
 ; Alt + G →     Git Bash  |  Double → Git Bash in Explorer folder
@@ -43,6 +43,7 @@ global GIT_BASH_EXE     := "C:\Program Files\Git\git-bash.exe"
 global INSTAGRAM_APP    := "C:\Program Files\Instagram.lnk"
 global LOGS_DIR         := USER_HOME . "\sys-scripts\logs"
 global LONG_PRESS_THRESHOLD := 600
+global one_LastPress := 0
 global ScriptModTime := "" ; Used for Auto-Reload
 global t_LastPress := 0
 global TOOLTIP_DURATION_MS  := 2000
@@ -411,7 +412,16 @@ return
 
 !0::RunApp("calc.exe", "", "Calculator")
 
-!1::RunApp(GetPhotoshopPath(), "", "Photoshop")
+!1::
+    now := A_TickCount
+    timeSinceLastPress := now - one_LastPress
+    one_LastPress := now
+    if (timeSinceLastPress > 0 && timeSinceLastPress < DOUBLE_PRESS_DELAY)
+    {
+        one_LastPress := 0
+        RunApp(GetPhotoshopPath(), "", "Photoshop")
+    }
+return
 
 !a::HandleContextHotkey("a", "Antigravity", GetAntigravityPath())
 
