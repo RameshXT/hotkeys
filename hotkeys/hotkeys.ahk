@@ -55,6 +55,18 @@ global YOUTUBE_LNK      := USER_HOME . "\AppData\Roaming\Microsoft\Windows\Start
 
 ; ====================[ Helper Functions ]====================
 
+DisableRedirection() {
+    local oldRedir := 0
+    if (A_Is64bitOS && A_PtrSize = 4)
+        DllCall("Wow64DisableWow64FsRedirection", "Ptr*", oldRedir)
+    return oldRedir
+}
+
+RevertRedirection(oldRedir) {
+    if (A_Is64bitOS && A_PtrSize = 4)
+        DllCall("Wow64RevertWow64FsRedirection", "Ptr", oldRedir)
+}
+
 ConvertToWSLPath(winPath)
 {
     local unixPath, drive
@@ -95,13 +107,18 @@ ExtractSelectedZip()
         return
     targetDir := fileDir . "\" . nameNoExt . "\"
     winrarPath := "C:\Program Files\WinRAR\WinRAR.exe"
-    if FileExist(winrarPath)
+    if FileExist(winrarPath) {
+        oldR := DisableRedirection()
         Run, "%winrarPath%" x -o+ "%selectedPath%" "%targetDir%"
+        RevertRedirection(oldR)
+    }
     else
     {
         StringReplace, safeSelectedPath, selectedPath, ', '', All
         StringReplace, safeTargetDir, targetDir, ', '', All
+        oldR := DisableRedirection()
         Run, powershell.exe -NoProfile -Command "Expand-Archive -Path '%safeSelectedPath%' -DestinationPath '%safeTargetDir%' -Force",, Hide
+        RevertRedirection(oldR)
     }
 }
 
@@ -273,6 +290,7 @@ LaunchAndMaximize(appPath, windowIdentifier := "", timeout := 5)
         return false
     }
 
+    oldR := DisableRedirection()
     try
     {
         if InStr(appPath, "://")
@@ -282,9 +300,11 @@ LaunchAndMaximize(appPath, windowIdentifier := "", timeout := 5)
     }
     catch e
     {
+        RevertRedirection(oldR)
         MsgBox, 16, Launch Error, Failed to launch:`n%appPath%`n`nError: %e%
         return false
     }
+    RevertRedirection(oldR)
 
     if (windowIdentifier != "")
     {
@@ -306,12 +326,14 @@ RunApp(path, args := "", name := "") {
     if (name != "") {
         ShowTransientToolTip(name)
     }
+    oldR := DisableRedirection()
     try {
         if InStr(path, "://") {
             Run, %path%
         } else {
             ; Only check for existence if a specific path is provided (contains a backslash)
             if (InStr(path, "\") && !FileExist(path)) {
+                RevertRedirection(oldR)
                 MsgBox, 16, Error, Target not found:`n%path%
                 return
             }
@@ -324,6 +346,7 @@ RunApp(path, args := "", name := "") {
     } catch e {
         ShowLaunchError("Launch Error", e)
     }
+    RevertRedirection(oldR)
 }
 
 RunAppAndNotify(path, args, name) {
@@ -362,13 +385,16 @@ TriggerScheduledTask(taskName, friendlyName, triggerFile := "", resultFile := ""
         }
     }
 
+    oldR := DisableRedirection()
     try {
         Run, schtasks.exe /Run /TN "%taskName%" /I,, Hide
         ShowTransientToolTip(friendlyName . " in progress...")
     } catch e {
+        RevertRedirection(oldR)
         ShowLaunchError("Failed to trigger " . friendlyName, e)
         return
     }
+    RevertRedirection(oldR)
 
     if (resultFile == "")
         return
@@ -443,14 +469,17 @@ return
             KeyWait, c
             return
         }
+        oldR := DisableRedirection()
         try
             Run, "%CHROME_PATH%" --incognito
         catch e
         {
+            RevertRedirection(oldR)
             ShowLaunchError("Failed to launch Chrome", e)
             KeyWait, c
             return
         }
+        RevertRedirection(oldR)
         KeyWait, c
     }
     else
@@ -462,13 +491,16 @@ return
             MsgBox, 16, Error, Chrome shortcut not found:`n%CHROME_LNK%
             return
         }
+        oldR := DisableRedirection()
         try
             Run, "%CHROME_LNK%"
         catch e
         {
+            RevertRedirection(oldR)
             ShowLaunchError("Failed to launch Chrome", e)
             return
         }
+        RevertRedirection(oldR)
     }
 
     WinWait, ahk_exe chrome.exe,, %WINDOW_WAIT_TIMEOUT%
@@ -491,6 +523,7 @@ return
 !n::RunApp("notepad.exe", "", "Notepad")
 
 !p::
+    oldR := DisableRedirection()
     try
         Run, *RunAs powershell.exe
     catch e
@@ -500,6 +533,7 @@ return
             ShowLaunchError("Failed to launch Admin PowerShell", e)
         }
     }
+    RevertRedirection(oldR)
 return
 
 !q::
@@ -530,6 +564,7 @@ return
         SetTimer, T_SinglePress, Off
 
         ShowTransientToolTip("Admin CMD")
+        oldR := DisableRedirection()
         try
             Run, *RunAs cmd.exe, %USER_HOME%
         catch e
@@ -539,6 +574,7 @@ return
                 ShowLaunchError("Failed to launch Admin CMD", e)
             }
         }
+        RevertRedirection(oldR)
     }
     else
     {
@@ -549,12 +585,14 @@ return
 
 T_SinglePress:
     ShowTransientToolTip("CMD")
+    oldR := DisableRedirection()
     try
         Run, cmd.exe, %USER_HOME%
     catch e
     {
         ShowLaunchError("Failed to launch CMD", e)
     }
+    RevertRedirection(oldR)
 return
 
 !u::
@@ -571,10 +609,12 @@ return
         {
             unixPath := ConvertToWSLPath(dir)
             ShowTransientToolTip("WSL")
+            oldR := DisableRedirection()
             try
                 Run, wsl.exe -d Ubuntu-22.04 -- bash -lc "cd '%unixPath%'; exec bash"
             catch e
                 ShowTransientToolTip("Failed to launch Ubuntu 22.04`nIs WSL installed? " . e)
+            RevertRedirection(oldR)
         }
     }
     else
@@ -586,12 +626,14 @@ return
 
 U_SinglePress:
     ShowTransientToolTip("WSL")
+    oldR := DisableRedirection()
     try
         Run, wsl.exe -d Ubuntu-22.04 -- bash -lc "cd ~; exec bash"
     catch e
     {
         ShowTransientToolTip("Failed to launch Ubuntu 22.04`nIs WSL installed? " . e)
     }
+    RevertRedirection(oldR)
 return
 
 !v::HandleContextHotkey("v", "VS Code", VSCODE_PATH)
@@ -635,12 +677,14 @@ return
         ShowTransientToolTip("Logs folder not found: " . LOGS_DIR)
         return
     }
+    oldR := DisableRedirection()
     try
         Run, explorer.exe "%LOGS_DIR%"
     catch e
     {
         ShowLaunchError("Failed to open logs folder", e)
     }
+    RevertRedirection(oldR)
 return
 
 ^+!n::
