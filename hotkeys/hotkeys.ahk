@@ -274,28 +274,29 @@ GetValidExplorerPath()
     return path
 }
 
-HandleContextHotkey(key, name, path, sArgs := "", dPre := "") {
-
+HandleContextHotkey(key, name, path, sArgs := "", dPre := "", maximize := false) {
+    global DOUBLE_PRESS_DELAY
     static lastPresses := {}
     static timers := {}
-    local now, last, timerObj, dir
 
-    now := A_TickCount
+    tickNow := A_TickCount
     last := lastPresses[key] ? lastPresses[key] : 0
-    
-    if (now - last < DOUBLE_PRESS_DELAY) {
+
+    if (tickNow - last < DOUBLE_PRESS_DELAY) {
         lastPresses[key] := 0
-        timerObj := timers[key]
-        SetTimer, % timerObj, Off
-        
-        dir := GetValidExplorerPath()
-        if (dir != "") {
+        if (timers[key]) {
+            SetTimer, % timers[key], Off
+            timers[key] := ""
+        }
+
+        activeFolder := GetValidExplorerPath()
+        if (activeFolder != "") {
             ShowTransientToolTip(name)
-            RunApp(path, dPre . """" . dir . """")
+            RunApp(path, dPre . """" . activeFolder . """", name, maximize)
         }
     } else {
-        lastPresses[key] := now
-        timerObj := Func("RunAppAndNotify").Bind(path, sArgs, name)
+        lastPresses[key] := tickNow
+        timerObj := Func("RunAppAndNotify").Bind(path, sArgs, name, maximize)
         timers[key] := timerObj
         SetTimer, % timerObj, % -DOUBLE_PRESS_DELAY
     }
@@ -305,28 +306,27 @@ IsProtectedWindowClass(windowClass) {
     return (windowClass = "Shell_TrayWnd" || windowClass = "Progman" || windowClass = "WorkerW")
 }
 
-LaunchAndMaximize(appPath, windowIdentifier := "", timeout := 5)
+LaunchAndMaximize(appPath, windowIdentifier := "", timeout := 5, args := "")
 {
-    local e
-    if (InStr(appPath, "\") && !FileExist(appPath))
-    {
-        MsgBox, 16, Error, Application not found:`n%appPath%
-        return false
-    }
-
+    local e, oldR
     oldR := DisableRedirection()
     try
     {
-        if InStr(appPath, "://")
-            Run, %appPath%
+        if InStr(appPath, "://") || InStr(appPath, "ms-windows-store:")
+            Run, %appPath% %args%
         else
-            Run, "%appPath%"
+        {
+            if (args != "")
+                Run, "%appPath%" %args%
+            else
+                Run, "%appPath%"
+        }
     }
     catch e
     {
         RevertRedirection(oldR)
-        MsgBox, 16, Launch Error, Failed to launch:`n%appPath%`n`nError: %e%
-        return false
+        ShowLaunchError("Failed to launch app", e)
+        return
     }
     RevertRedirection(oldR)
 
@@ -336,46 +336,36 @@ LaunchAndMaximize(appPath, windowIdentifier := "", timeout := 5)
         if (!ErrorLevel)
             WinMaximize
         else
-        {
-            ToolTip, Window not detected: %windowIdentifier%
-            SetTimer, RemoveToolTip, -2000
-        }
+            ShowTransientToolTip("Window not detected: " . windowIdentifier)
     }
-
-    return true
 }
 
-RunApp(path, args := "", name := "") {
-    local e
-    if (name != "") {
-        ShowTransientToolTip(name)
-    }
+RunApp(path, args := "", name := "", maximize := false) {
+    local e, oldR
     oldR := DisableRedirection()
     try {
-        if InStr(path, "://") {
-            Run, %path%
+        if InStr(path, "://") || InStr(path, "ms-windows-store:") {
+            Run, %path% %args%, , % maximize ? "Max" : ""
         } else {
-            ; Only check for existence if a specific path is provided (contains a backslash)
-            if (InStr(path, "\") && !FileExist(path)) {
+            if !FileExist(path) {
+                ShowTransientToolTip(name . " not found at:`n" . path)
                 RevertRedirection(oldR)
-                MsgBox, 16, Error, Target not found:`n%path%
                 return
             }
-            
             if (args != "")
-                Run, "%path%" %args%
+                Run, "%path%" %args%, , % maximize ? "Max" : ""
             else
-                Run, "%path%"
+                Run, "%path%", , % maximize ? "Max" : ""
         }
     } catch e {
-        ShowLaunchError("Launch Error", e)
+        ShowLaunchError("Failed to launch " . name, e)
     }
     RevertRedirection(oldR)
 }
 
-RunAppAndNotify(path, args, name) {
+RunAppAndNotify(path, args := "", name := "", maximize := false) {
     ShowTransientToolTip(name)
-    RunApp(path, args)
+    RunApp(path, args, name, maximize)
 }
 
 ShowLaunchError(prefix, err) {
@@ -469,11 +459,11 @@ return
     if (timeSinceLastPress > 0 && timeSinceLastPress < DOUBLE_PRESS_DELAY)
     {
         one_LastPress := 0
-        RunApp(GetPhotoshopPath(), "", "Photoshop")
+        RunApp(GetPhotoshopPath(), "", "Photoshop", true)
     }
 return
 
-!a::HandleContextHotkey("a", "Antigravity", GetAntigravityPath())
+!a::HandleContextHotkey("a", "Antigravity", GetAntigravityPath(), "", "", true)
 
 #MaxThreadsPerHotkey 1
 !c::
@@ -544,10 +534,10 @@ return
     if (path != "")
         LaunchAndMaximize(path, "Instagram", WINDOW_WAIT_TIMEOUT)
     else
-        RunApp(GetDynamicAppPath("chrome.exe"), "--app=https://www.instagram.com/", "Instagram")
+        LaunchAndMaximize(GetDynamicAppPath("chrome.exe"), "Instagram", WINDOW_WAIT_TIMEOUT, "--app=https://www.instagram.com/")
 return
 
-!m::RunApp("ms-windows-store:", "", "Microsoft Store")
+!m::RunApp("ms-windows-store:", "", "Microsoft Store", true)
 
 !n::RunApp("notepad.exe", "", "Notepad")
 
@@ -735,7 +725,7 @@ U_SinglePress:
     RevertRedirection(oldR)
 return
 
-!v::HandleContextHotkey("v", "VS Code", GetDynamicAppPath("Code.exe"))
+!v::HandleContextHotkey("v", "VS Code", GetDynamicAppPath("Code.exe"), "", "", true)
 
 !w::
     ShowTransientToolTip("WhatsApp")
@@ -743,7 +733,7 @@ return
 return
 
 !y::
-    RunApp(GetDynamicAppPath("chrome.exe"), "--app=https://www.youtube.com/", "YouTube")
+    LaunchAndMaximize(GetDynamicAppPath("chrome.exe"), "YouTube", WINDOW_WAIT_TIMEOUT, "--app=https://www.youtube.com/")
 return
 
 !z::ExtractSelectedZip()
