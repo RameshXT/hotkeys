@@ -213,23 +213,6 @@ GetSlackPath()
     return "slack.exe"
 }
 
-GetTelegramPath()
-{
-    local paths, index, path, userHome
-    EnvGet, userHome, USERPROFILE
-    paths := [ userHome . "\AppData\Roaming\Telegram Desktop\Telegram.exe"
-             , "C:\Program Files\Telegram Desktop\Telegram.exe"
-             , userHome . "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Telegram Desktop\Telegram.lnk" ]
-    
-    for index, path in paths
-    {
-        if FileExist(path)
-            return path
-    }
-    
-    return "Telegram.exe"
-}
-
 GetSelectedFilePath()
 {
     local hwnd, window, sel, item
@@ -614,7 +597,7 @@ return
 return
 
 !t::
-    LaunchAndMaximize(GetTelegramPath(), "ahk_exe Telegram.exe", WINDOW_WAIT_TIMEOUT)
+    LaunchAndMaximize("tg://", "ahk_exe Telegram.exe", WINDOW_WAIT_TIMEOUT)
 return
 
 !u::
