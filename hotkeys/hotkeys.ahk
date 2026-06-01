@@ -7,10 +7,11 @@
 ; Alt + I →     Instagram
 ; Alt + M →     Microsoft Store
 ; Alt + N →     Notepad
+; Alt + O →     CMD  |  Double → CMD (Admin)
 ; Alt + P →     PowerShell (Admin)
 ; Alt + Q →     Close Active Window (hold to keep closing)
 ; Alt + S →     Slack
-; Alt + T →     CMD  |  Double → CMD (Admin)
+; Alt + T →     Telegram
 ; Alt + U →     Ubuntu 22.04 WSL
 ; Alt + V →     VS Code  |  Double → VS Code in Explorer folder
 ; Alt + W →     WhatsApp
@@ -43,9 +44,9 @@ global GIT_BASH_EXE     := "C:\Program Files\Git\git-bash.exe"
 global INSTAGRAM_APP    := "C:\Program Files\Instagram.lnk"
 global LOGS_DIR         := USER_HOME . "\sys-scripts\logs"
 global LONG_PRESS_THRESHOLD := 600
+global o_LastPress := 0
 global one_LastPress := 0
 global ScriptModTime := "" ; Used for Auto-Reload
-global t_LastPress := 0
 global TOOLTIP_DURATION_MS  := 2000
 global u_LastPress := 0
 global VSCODE_PATH      := USER_HOME . "\AppData\Local\Programs\Microsoft VS Code\Code.exe"
@@ -210,6 +211,23 @@ GetSlackPath()
     }
     
     return "slack.exe"
+}
+
+GetTelegramPath()
+{
+    local paths, index, path, userHome
+    EnvGet, userHome, USERPROFILE
+    paths := [ userHome . "\AppData\Roaming\Telegram Desktop\Telegram.exe"
+             , "C:\Program Files\Telegram Desktop\Telegram.exe"
+             , userHome . "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Telegram Desktop\Telegram.lnk" ]
+    
+    for index, path in paths
+    {
+        if FileExist(path)
+            return path
+    }
+    
+    return "Telegram.exe"
 }
 
 GetSelectedFilePath()
@@ -550,18 +568,14 @@ return
     }
 return
 
-!s::
-    LaunchAndMaximize(GetSlackPath(), "ahk_exe slack.exe", WINDOW_WAIT_TIMEOUT)
-return
-
-!t::
+!o::
     now := A_TickCount
-    timeSinceLastPress := now - t_LastPress
+    timeSinceLastPress := now - o_LastPress
 
     if (timeSinceLastPress > 0 && timeSinceLastPress < DOUBLE_PRESS_DELAY)
     {
-        t_LastPress := 0
-        SetTimer, T_SinglePress, Off
+        o_LastPress := 0
+        SetTimer, O_SinglePress, Off
 
         ShowTransientToolTip("Admin CMD")
         oldR := DisableRedirection()
@@ -578,12 +592,12 @@ return
     }
     else
     {
-        t_LastPress := now
-        SetTimer, T_SinglePress, -%DOUBLE_PRESS_DELAY%
+        o_LastPress := now
+        SetTimer, O_SinglePress, -%DOUBLE_PRESS_DELAY%
     }
 return
 
-T_SinglePress:
+O_SinglePress:
     ShowTransientToolTip("CMD")
     oldR := DisableRedirection()
     try
@@ -593,6 +607,14 @@ T_SinglePress:
         ShowLaunchError("Failed to launch CMD", e)
     }
     RevertRedirection(oldR)
+return
+
+!s::
+    LaunchAndMaximize(GetSlackPath(), "ahk_exe slack.exe", WINDOW_WAIT_TIMEOUT)
+return
+
+!t::
+    LaunchAndMaximize(GetTelegramPath(), "ahk_exe Telegram.exe", WINDOW_WAIT_TIMEOUT)
 return
 
 !u::
