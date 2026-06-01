@@ -37,10 +37,12 @@ SetWorkingDir %A_ScriptDir%
 SetTimer, WatchScript, 1000
 
 EnvGet, USER_HOME, USERPROFILE
-global SYS_SCRIPTS_DIR  := A_ScriptDir . "\.."
-global LOGS_DIR         := SYS_SCRIPTS_DIR . "\logs"
-
+global CHROME_LNK       := "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Google Chrome.lnk"
+global CHROME_PATH      := "C:\Program Files\Google\Chrome\Application\chrome.exe"
 global DOUBLE_PRESS_DELAY   := 400
+global GIT_BASH_EXE     := "C:\Program Files\Git\git-bash.exe"
+global INSTAGRAM_APP    := "C:\Program Files\Instagram.lnk"
+global LOGS_DIR         := USER_HOME . "\sys-scripts\logs"
 global LONG_PRESS_THRESHOLD := 600
 global o_LastPress := 0
 global one_LastPress := 0
@@ -48,57 +50,12 @@ global p_LastPress := 0
 global ScriptModTime := "" ; Used for Auto-Reload
 global TOOLTIP_DURATION_MS  := 2000
 global u_LastPress := 0
+global VSCODE_PATH      := USER_HOME . "\AppData\Local\Programs\Microsoft VS Code\Code.exe"
+global WHATSAPP_APP     := "C:\Program Files\WhatsApp.lnk"
 global WINDOW_WAIT_TIMEOUT  := 5
+global YOUTUBE_LNK      := USER_HOME . "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Chrome Apps\YouTube.lnk"
 
 ; ====================[ Helper Functions ]====================
-
-GetDynamicAppPath(exeName)
-{
-    local appPath
-    RegRead, appPath, HKLM, SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\%exeName%
-    if (appPath != "" && FileExist(appPath))
-        return appPath
-    RegRead, appPath, HKCU, SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\%exeName%
-    if (appPath != "" && FileExist(appPath))
-        return appPath
-    return exeName ; fallback to PATH
-}
-
-FindAppShortcut(appName)
-{
-    local pattern, commonPrograms, userPrograms, found
-    EnvGet, commonPrograms, ALLUSERSPROFILE
-    commonPrograms := commonPrograms . "\Microsoft\Windows\Start Menu\Programs"
-    userPrograms := A_Programs
-
-    Loop, Files, %commonPrograms%\*.lnk, R
-    {
-        if InStr(A_LoopFileName, appName)
-            return A_LoopFileFullPath
-    }
-
-    Loop, Files, %userPrograms%\*.lnk, R
-    {
-        if InStr(A_LoopFileName, appName)
-            return A_LoopFileFullPath
-    }
-    return ""
-}
-
-GetGitBashPath()
-{
-    local appPath
-    RegRead, appPath, HKLM, SOFTWARE\GitForWindows, InstallPath
-    if (appPath != "" && FileExist(appPath . "\git-bash.exe"))
-        return appPath . "\git-bash.exe"
-    
-    appPath := GetDynamicAppPath("git-bash.exe")
-    if (appPath != "git-bash.exe")
-        return appPath
-
-    return "git-bash.exe"
-}
-
 
 DisableRedirection() {
     local oldRedir := 0
@@ -140,9 +97,9 @@ DeleteFileIfExists(path) {
 
 ExtractSelectedZip()
 {
-    local winClass, selectedPath, fileDir, fileExtension, nameNoExt, targetDir, winrarPath, safeSelectedPath, safeTargetDir, oldRedir
-    WinGetClass, winClass, A
-    if (winClass != "CabinetWClass" && winClass != "ExploreWClass")
+    local class, selectedPath, fileDir, fileExtension, nameNoExt, targetDir, winrarPath, safeSelectedPath, safeTargetDir
+    WinGetClass, class, A
+    if (class != "CabinetWClass" && class != "ExploreWClass")
         return
     selectedPath := GetSelectedFilePath()
     if (selectedPath = "")
@@ -151,38 +108,44 @@ ExtractSelectedZip()
     if (fileExtension != "zip" && fileExtension != "ZIP")
         return
     targetDir := fileDir . "\" . nameNoExt . "\"
-    winrarPath := GetDynamicAppPath("WinRAR.exe")
+    winrarPath := "C:\Program Files\WinRAR\WinRAR.exe"
     if FileExist(winrarPath) {
-        oldRedir := DisableRedirection()
+        oldR := DisableRedirection()
         Run, "%winrarPath%" x -o+ "%selectedPath%" "%targetDir%"
-        RevertRedirection(oldRedir)
+        RevertRedirection(oldR)
     }
     else
     {
         StringReplace, safeSelectedPath, selectedPath, ', '', All
         StringReplace, safeTargetDir, targetDir, ', '', All
-        oldRedir := DisableRedirection()
-        Run, powershell.exe -NoProfile -Command "Expand-Archive -LiteralPath '%safeSelectedPath%' -DestinationPath '%safeTargetDir%' -Force",, Hide
-        RevertRedirection(oldRedir)
+        oldR := DisableRedirection()
+        Run, powershell.exe -NoProfile -Command "Expand-Archive -Path '%safeSelectedPath%' -DestinationPath '%safeTargetDir%' -Force",, Hide
+        RevertRedirection(oldR)
     }
 }
 
 GetAntigravityPath()
 {
-    local appPath := GetDynamicAppPath("Antigravity IDE.exe")
-    if (appPath != "Antigravity IDE.exe")
-        return appPath
+    local userHome, paths, index, path
+    EnvGet, userHome, USERPROFILE
+    paths := [ userHome . "\AppData\Local\Programs\Antigravity IDE\Antigravity IDE.exe"
+             , "C:\Program Files\Antigravity IDE\Antigravity IDE.exe"
+             , "C:\Program Files (x86)\Antigravity IDE\Antigravity IDE.exe"
+             , userHome . "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Antigravity\Antigravity.lnk"
+             , userHome . "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Antigravity IDE\Antigravity IDE.lnk" ]
     
-    appPath := FindAppShortcut("Antigravity")
-    if (appPath != "")
-        return appPath
-
-    return "Antigravity IDE.exe"
+    for index, path in paths
+    {
+        if FileExist(path)
+            return path
+    }
+    
+    return "antigravity-ide.cmd"
 }
 
 GetExplorerPath()
 {
-    local folderPath, window, err
+    local folderPath, window, e
 
     try
     {
@@ -203,37 +166,52 @@ GetExplorerPath()
             }
         }
     }
-    catch err
+    catch e
     {
-        ShowLaunchError("Error getting Explorer path", err)
+        ShowLaunchError("Error getting Explorer path", e)
     }
     return ""
 }
 
 GetPhotoshopPath()
 {
-    local appPath := GetDynamicAppPath("Photoshop.exe")
-    if (appPath != "Photoshop.exe")
-        return appPath
+    local paths, index, path, userHome
+    EnvGet, userHome, USERPROFILE
+    paths := [ "C:\Program Files\Adobe\Adobe Photoshop 2024\Photoshop.exe"
+             , "C:\Program Files\Adobe\Adobe Photoshop 2023\Photoshop.exe"
+             , "C:\Program Files\Adobe\Adobe Photoshop 2022\Photoshop.exe"
+             , "C:\Program Files\Adobe\Adobe Photoshop 2021\Photoshop.exe"
+             , "C:\Program Files\Adobe\Adobe Photoshop 2020\Photoshop.exe"
+             , "C:\Program Files\Adobe\Adobe Photoshop CC 2019\Photoshop.exe"
+             , "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Adobe Photoshop.lnk"
+             , userHome . "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Adobe Photoshop.lnk" ]
     
-    appPath := FindAppShortcut("Adobe Photoshop")
-    if (appPath != "")
-        return appPath
-
+    for index, path in paths
+    {
+        if FileExist(path)
+            return path
+    }
+    
     return "Photoshop.exe"
 }
 
 GetSlackPath()
 {
-    local appPath := GetDynamicAppPath("slack.exe")
-    if (appPath != "slack.exe")
-        return appPath
+    local paths, index, path, userHome
+    EnvGet, userHome, USERPROFILE
+    paths := [ userHome . "\AppData\Local\slack\slack.exe"
+             , "C:\Program Files\Slack\slack.exe"
+             , "C:\Program Files\Slack.lnk"
+             , "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Slack Technologies Inc\Slack.lnk"
+             , userHome . "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Slack Technologies Inc\Slack.lnk" ]
     
-    appPath := FindAppShortcut("Slack")
-    if (appPath != "")
-        return appPath
-
-    return "slack://"
+    for index, path in paths
+    {
+        if FileExist(path)
+            return path
+    }
+    
+    return "slack.exe"
 }
 
 GetSelectedFilePath()
@@ -255,51 +233,49 @@ GetSelectedFilePath()
 
 GetValidExplorerPath()
 {
-    local winClass, folderPath
+    local class, path
 
-    WinGetClass, winClass, A
-    if (winClass != "CabinetWClass" && winClass != "ExploreWClass")
+    WinGetClass, class, A
+    if (class != "CabinetWClass" && class != "ExploreWClass")
     {
         ShowTransientToolTip("Please focus on a File Explorer window")
         return ""
     }
 
-    folderPath := GetExplorerPath()
-    if (folderPath = "")
+    path := GetExplorerPath()
+    if (path = "")
     {
         ShowTransientToolTip("Could not get folder path")
         return ""
     }
 
-    return folderPath
+    return path
 }
 
-HandleContextHotkey(key, name, appPath, sArgs := "", dPre := "", maximize := false) {
-    global DOUBLE_PRESS_DELAY
+HandleContextHotkey(key, name, path, sArgs := "", dPre := "") {
+
     static lastPresses := {}
     static timers := {}
+    local now, last, timerObj, dir
 
-    tickNow := A_TickCount
+    now := A_TickCount
     last := lastPresses[key] ? lastPresses[key] : 0
-
-    if (tickNow - last < DOUBLE_PRESS_DELAY) {
+    
+    if (now - last < DOUBLE_PRESS_DELAY) {
         lastPresses[key] := 0
-        if (timers[key]) {
-            timerObj := timers[key]
-            SetTimer, %timerObj%, Off
-            timers[key] := ""
-        }
-
-        activeFolder := GetValidExplorerPath()
-        if (activeFolder != "") {
+        timerObj := timers[key]
+        SetTimer, % timerObj, Off
+        
+        dir := GetValidExplorerPath()
+        if (dir != "") {
             ShowTransientToolTip(name)
-            RunApp(appPath, dPre . """" . activeFolder . """", name, maximize)
+            RunApp(path, dPre . """" . dir . """")
         }
     } else {
-        lastPresses[key] := tickNow
-        timerObj := Func("RunAppAndNotify").Bind(appPath, sArgs, name, maximize)
+        lastPresses[key] := now
+        timerObj := Func("RunAppAndNotify").Bind(path, sArgs, name)
         timers[key] := timerObj
-        SetTimer, %timerObj%, % -DOUBLE_PRESS_DELAY
+        SetTimer, % timerObj, % -DOUBLE_PRESS_DELAY
     }
 }
 
@@ -307,29 +283,30 @@ IsProtectedWindowClass(windowClass) {
     return (windowClass = "Shell_TrayWnd" || windowClass = "Progman" || windowClass = "WorkerW")
 }
 
-LaunchAndMaximize(appPath, windowIdentifier := "", timeout := 5, args := "")
+LaunchAndMaximize(appPath, windowIdentifier := "", timeout := 5)
 {
-    local err, oldRedir
-    oldRedir := DisableRedirection()
+    local e
+    if (InStr(appPath, "\") && !FileExist(appPath))
+    {
+        MsgBox, 16, Error, Application not found:`n%appPath%
+        return false
+    }
+
+    oldR := DisableRedirection()
     try
     {
-        if InStr(appPath, "://") || InStr(appPath, "ms-windows-store:")
-            Run, %appPath% %args%
+        if InStr(appPath, "://")
+            Run, %appPath%
         else
-        {
-            if (args != "")
-                Run, "%appPath%" %args%
-            else
-                Run, "%appPath%"
-        }
+            Run, "%appPath%"
     }
-    catch err
+    catch e
     {
-        RevertRedirection(oldRedir)
-        ShowLaunchError("Failed to launch app", err)
-        return
+        RevertRedirection(oldR)
+        MsgBox, 16, Launch Error, Failed to launch:`n%appPath%`n`nError: %e%
+        return false
     }
-    RevertRedirection(oldRedir)
+    RevertRedirection(oldR)
 
     if (windowIdentifier != "")
     {
@@ -337,36 +314,46 @@ LaunchAndMaximize(appPath, windowIdentifier := "", timeout := 5, args := "")
         if (!ErrorLevel)
             WinMaximize
         else
-            ShowTransientToolTip("Window not detected: " . windowIdentifier)
+        {
+            ToolTip, Window not detected: %windowIdentifier%
+            SetTimer, RemoveToolTip, -2000
+        }
     }
+
+    return true
 }
 
-RunApp(appPath, args := "", name := "", maximize := false) {
-    local err, oldRedir
-    oldRedir := DisableRedirection()
+RunApp(path, args := "", name := "") {
+    local e
+    if (name != "") {
+        ShowTransientToolTip(name)
+    }
+    oldR := DisableRedirection()
     try {
-        if InStr(appPath, "://") || InStr(appPath, "ms-windows-store:") {
-            Run, %appPath% %args%, , % maximize ? "Max" : ""
+        if InStr(path, "://") {
+            Run, %path%
         } else {
-            if (InStr(appPath, ":\") && !FileExist(appPath)) {
-                ShowTransientToolTip(name . " not found at:`n" . appPath)
-                RevertRedirection(oldRedir)
+            ; Only check for existence if a specific path is provided (contains a backslash)
+            if (InStr(path, "\") && !FileExist(path)) {
+                RevertRedirection(oldR)
+                MsgBox, 16, Error, Target not found:`n%path%
                 return
             }
+            
             if (args != "")
-                Run, "%appPath%" %args%, , % maximize ? "Max" : ""
+                Run, "%path%" %args%
             else
-                Run, "%appPath%", , % maximize ? "Max" : ""
+                Run, "%path%"
         }
-    } catch err {
-        ShowLaunchError("Failed to launch " . name, err)
+    } catch e {
+        ShowLaunchError("Launch Error", e)
     }
-    RevertRedirection(oldRedir)
+    RevertRedirection(oldR)
 }
 
-RunAppAndNotify(appPath, args := "", name := "", maximize := false) {
+RunAppAndNotify(path, args, name) {
     ShowTransientToolTip(name)
-    RunApp(appPath, args, name, maximize)
+    RunApp(path, args)
 }
 
 ShowLaunchError(prefix, err) {
@@ -381,7 +368,7 @@ ShowTransientToolTip(message, durationMs := "") {
 }
 
 TriggerScheduledTask(taskName, friendlyName, triggerFile := "", resultFile := "", timeoutSec := 60) {
-    local ResultData, Parts, err, oldRedir
+    local ResultData, Parts, e
 
     if (taskName = "" || friendlyName = "") {
         ShowTransientToolTip("Scheduled task configuration is invalid")
@@ -394,22 +381,22 @@ TriggerScheduledTask(taskName, friendlyName, triggerFile := "", resultFile := ""
         DeleteFileIfExists(triggerFile)
         try
             FileAppend, hotkey, %triggerFile%
-        catch err {
-            ShowLaunchError("Failed to write trigger file", err)
+        catch e {
+            ShowLaunchError("Failed to write trigger file", e)
             return
         }
     }
 
-    oldRedir := DisableRedirection()
+    oldR := DisableRedirection()
     try {
         Run, schtasks.exe /Run /TN "%taskName%" /I,, Hide
         ShowTransientToolTip(friendlyName . " in progress...")
-    } catch err {
-        RevertRedirection(oldRedir)
-        ShowLaunchError("Failed to trigger " . friendlyName, err)
+    } catch e {
+        RevertRedirection(oldR)
+        ShowLaunchError("Failed to trigger " . friendlyName, e)
         return
     }
-    RevertRedirection(oldRedir)
+    RevertRedirection(oldR)
 
     if (resultFile == "")
         return
@@ -460,11 +447,11 @@ return
     if (timeSinceLastPress > 0 && timeSinceLastPress < DOUBLE_PRESS_DELAY)
     {
         one_LastPress := 0
-        RunApp(GetPhotoshopPath(), "", "Photoshop", true)
+        RunApp(GetPhotoshopPath(), "", "Photoshop")
     }
 return
 
-!a::HandleContextHotkey("a", "Antigravity", GetAntigravityPath(), "", "", true)
+!a::HandleContextHotkey("a", "Antigravity", GetAntigravityPath())
 
 #MaxThreadsPerHotkey 1
 !c::
@@ -474,20 +461,19 @@ return
     KeyWait, c, T0.6
 
     pressDuration := A_TickCount - pressStart
-    path := GetDynamicAppPath("chrome.exe")
 
     if (pressDuration >= LONG_PRESS_THRESHOLD)
     {
         ; Long press: incognito fires immediately at 600ms, then block until key released
-        if (!FileExist(path))
+        if (!FileExist(CHROME_PATH))
         {
-            MsgBox, 16, Error, Chrome not found:`n%path%
+            MsgBox, 16, Error, Chrome not found:`n%CHROME_PATH%
             KeyWait, c
             return
         }
         oldR := DisableRedirection()
         try
-            Run, "%path%" --incognito
+            Run, "%CHROME_PATH%" --incognito
         catch e
         {
             RevertRedirection(oldR)
@@ -502,14 +488,14 @@ return
     {
         ; Short press: wait for release then open normal Chrome
         KeyWait, c
-        if (!FileExist(path))
+        if (!FileExist(CHROME_LNK))
         {
-            MsgBox, 16, Error, Chrome not found:`n%path%
+            MsgBox, 16, Error, Chrome shortcut not found:`n%CHROME_LNK%
             return
         }
         oldR := DisableRedirection()
         try
-            Run, "%path%"
+            Run, "%CHROME_LNK%"
         catch e
         {
             RevertRedirection(oldR)
@@ -527,18 +513,14 @@ return
 return
 #MaxThreadsPerHotkey 1
 
-!g::HandleContextHotkey("g", "Git Bash", GetGitBashPath(), "--cd-to-home", "--cd=")
+!g::HandleContextHotkey("g", "Git Bash", GIT_BASH_EXE, "--cd-to-home", "--cd=")
 
 !i::
     ShowTransientToolTip("Instagram")
-    path := FindAppShortcut("Instagram")
-    if (path != "")
-        LaunchAndMaximize(path, "Instagram", WINDOW_WAIT_TIMEOUT)
-    else
-        LaunchAndMaximize(GetDynamicAppPath("chrome.exe"), "Instagram", WINDOW_WAIT_TIMEOUT, "--app=https://www.instagram.com/")
+    LaunchAndMaximize(INSTAGRAM_APP, "Instagram", WINDOW_WAIT_TIMEOUT)
 return
 
-!m::RunApp("ms-windows-store:", "", "Microsoft Store", true)
+!m::RunApp("ms-windows-store:", "", "Microsoft Store")
 
 !n::RunApp("notepad.exe", "", "Notepad")
 
@@ -726,23 +708,23 @@ U_SinglePress:
     RevertRedirection(oldR)
 return
 
-!v::HandleContextHotkey("v", "VS Code", GetDynamicAppPath("Code.exe"), "", "", true)
+!v::HandleContextHotkey("v", "VS Code", VSCODE_PATH)
 
 !w::
     ShowTransientToolTip("WhatsApp")
-    LaunchAndMaximize("whatsapp://", "WhatsApp", WINDOW_WAIT_TIMEOUT)
+    LaunchAndMaximize(WHATSAPP_APP, "WhatsApp", WINDOW_WAIT_TIMEOUT)
 return
 
 !y::
-    LaunchAndMaximize(GetDynamicAppPath("chrome.exe"), "YouTube", WINDOW_WAIT_TIMEOUT, "--app=https://www.youtube.com/")
+    LaunchAndMaximize(YOUTUBE_LNK, "YouTube", WINDOW_WAIT_TIMEOUT)
 return
 
 !z::ExtractSelectedZip()
 
 ^+!c::
     TriggerScheduledTask("WindowsCleanup", "Cleanup"
-        , SYS_SCRIPTS_DIR . "\cleanup\cleanup_trigger.txt"
-        , SYS_SCRIPTS_DIR . "\cleanup\cleanup_result.txt", 60)
+        , USER_HOME . "\sys-scripts\cleanup\cleanup_trigger.txt"
+        , USER_HOME . "\sys-scripts\cleanup\cleanup_result.txt", 60)
 return
 
 ^+!Delete::
@@ -780,11 +762,18 @@ return
 ^+!n::
     TriggerScheduledTask("NetworkReset", "Network Reset"
         , ""
-        , SYS_SCRIPTS_DIR . "\network\netreset_result.txt", 90)
+        , USER_HOME . "\sys-scripts\network\netreset_result.txt", 90)
 return
 
 ^+!u::
+    FormatTime, today,, yyyy-MM-dd
+    FileRead, lastRun, %USER_HOME%\sys-scripts\update\update_lastrun.txt
+    if (Trim(lastRun) = today)
+    {
+        ShowTransientToolTip("Update already completed today")
+        return
+    }
     TriggerScheduledTask("WindowsUpdater", "Update"
-        , SYS_SCRIPTS_DIR . "\update\update_trigger.txt"
-        , SYS_SCRIPTS_DIR . "\update\update_result.txt", 180)
+        , USER_HOME . "\sys-scripts\update\update_trigger.txt"
+        , USER_HOME . "\sys-scripts\update\update_result.txt", 180)
 return
