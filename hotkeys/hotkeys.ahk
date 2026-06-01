@@ -8,7 +8,7 @@
 ; Alt + M →     Microsoft Store
 ; Alt + N →     Notepad
 ; Alt + O →     CMD  |  Double → Admin CMD (in Folder or Home)
-; Alt + P →     PowerShell (Admin)  |  Double → Admin PowerShell in Folder
+; Alt + P →     PowerShell  |  Double → PowerShell in Folder
 ; Alt + Q →     Close Active Window (hold to keep closing)
 ; Alt + S →     Slack
 ; Alt + T →     Telegram
@@ -540,28 +540,22 @@ return
 
         if (dir != "")
         {
-            ShowTransientToolTip("Admin PowerShell in Folder")
+            ShowTransientToolTip("PowerShell in Folder")
             oldR := DisableRedirection()
             try
-                Run, *RunAs powershell.exe -NoExit -Command "Set-Location -LiteralPath '%dir%'"
+                Run, powershell.exe, %dir%
             catch e
-            {
-                if (A_LastError != 1223)
-                    ShowLaunchError("Failed to launch Admin PowerShell", e)
-            }
+                ShowLaunchError("Failed to launch PowerShell", e)
             RevertRedirection(oldR)
         }
         else
         {
-            ShowTransientToolTip("Admin PowerShell")
+            ShowTransientToolTip("PowerShell")
             oldR := DisableRedirection()
             try
-                Run, *RunAs powershell.exe, %USER_HOME%
+                Run, powershell.exe, %USER_HOME%
             catch e
-            {
-                if (A_LastError != 1223)
-                    ShowLaunchError("Failed to launch Admin PowerShell", e)
-            }
+                ShowLaunchError("Failed to launch PowerShell", e)
             RevertRedirection(oldR)
         }
     }
@@ -573,15 +567,12 @@ return
 return
 
 P_SinglePress:
-    ShowTransientToolTip("Admin PowerShell")
+    ShowTransientToolTip("PowerShell")
     oldR := DisableRedirection()
     try
-        Run, *RunAs powershell.exe, %USER_HOME%
+        Run, powershell.exe, %USER_HOME%
     catch e
-    {
-        if (A_LastError != 1223)
-            ShowLaunchError("Failed to launch Admin PowerShell", e)
-    }
+        ShowLaunchError("Failed to launch PowerShell", e)
     RevertRedirection(oldR)
 return
 
@@ -663,9 +654,7 @@ return
     LaunchAndMaximize(GetSlackPath(), "ahk_exe slack.exe", WINDOW_WAIT_TIMEOUT)
 return
 
-!t::
-    LaunchAndMaximize("tg://", "ahk_exe Telegram.exe", WINDOW_WAIT_TIMEOUT)
-return
+!t::RunApp("tg://", "", "Telegram")
 
 !u::
     now := A_TickCount
