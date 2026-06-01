@@ -37,12 +37,10 @@ SetWorkingDir %A_ScriptDir%
 SetTimer, WatchScript, 1000
 
 EnvGet, USER_HOME, USERPROFILE
-global CHROME_LNK       := "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Google Chrome.lnk"
-global CHROME_PATH      := "C:\Program Files\Google\Chrome\Application\chrome.exe"
+global SYS_SCRIPTS_DIR  := A_ScriptDir . "\.."
+global LOGS_DIR         := SYS_SCRIPTS_DIR . "\logs"
+
 global DOUBLE_PRESS_DELAY   := 400
-global GIT_BASH_EXE     := "C:\Program Files\Git\git-bash.exe"
-global INSTAGRAM_APP    := "C:\Program Files\Instagram.lnk"
-global LOGS_DIR         := USER_HOME . "\sys-scripts\logs"
 global LONG_PRESS_THRESHOLD := 600
 global o_LastPress := 0
 global one_LastPress := 0
@@ -50,12 +48,57 @@ global p_LastPress := 0
 global ScriptModTime := "" ; Used for Auto-Reload
 global TOOLTIP_DURATION_MS  := 2000
 global u_LastPress := 0
-global VSCODE_PATH      := USER_HOME . "\AppData\Local\Programs\Microsoft VS Code\Code.exe"
-global WHATSAPP_APP     := "C:\Program Files\WhatsApp.lnk"
 global WINDOW_WAIT_TIMEOUT  := 5
-global YOUTUBE_LNK      := USER_HOME . "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Chrome Apps\YouTube.lnk"
 
 ; ====================[ Helper Functions ]====================
+
+GetDynamicAppPath(exeName)
+{
+    local path
+    RegRead, path, HKLM, SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\%exeName%
+    if (path != "" && FileExist(path))
+        return path
+    RegRead, path, HKCU, SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\%exeName%
+    if (path != "" && FileExist(path))
+        return path
+    return exeName ; fallback to PATH
+}
+
+FindAppShortcut(appName)
+{
+    local pattern, commonPrograms, userPrograms, found
+    EnvGet, commonPrograms, ALLUSERSPROFILE
+    commonPrograms := commonPrograms . "\Microsoft\Windows\Start Menu\Programs"
+    userPrograms := A_Programs
+
+    Loop, Files, %commonPrograms%\*.lnk, R
+    {
+        if InStr(A_LoopFileName, appName)
+            return A_LoopFileFullPath
+    }
+
+    Loop, Files, %userPrograms%\*.lnk, R
+    {
+        if InStr(A_LoopFileName, appName)
+            return A_LoopFileFullPath
+    }
+    return ""
+}
+
+GetGitBashPath()
+{
+    local path
+    RegRead, path, HKLM, SOFTWARE\GitForWindows, InstallPath
+    if (path != "" && FileExist(path . "\git-bash.exe"))
+        return path . "\git-bash.exe"
+    
+    path := GetDynamicAppPath("git-bash.exe")
+    if (path != "git-bash.exe")
+        return path
+
+    return "git-bash.exe"
+}
+
 
 DisableRedirection() {
     local oldRedir := 0
@@ -108,7 +151,7 @@ ExtractSelectedZip()
     if (fileExtension != "zip" && fileExtension != "ZIP")
         return
     targetDir := fileDir . "\" . nameNoExt . "\"
-    winrarPath := "C:\Program Files\WinRAR\WinRAR.exe"
+    winrarPath := GetDynamicAppPath("WinRAR.exe")
     if FileExist(winrarPath) {
         oldR := DisableRedirection()
         Run, "%winrarPath%" x -o+ "%selectedPath%" "%targetDir%"
@@ -126,21 +169,15 @@ ExtractSelectedZip()
 
 GetAntigravityPath()
 {
-    local userHome, paths, index, path
-    EnvGet, userHome, USERPROFILE
-    paths := [ userHome . "\AppData\Local\Programs\Antigravity IDE\Antigravity IDE.exe"
-             , "C:\Program Files\Antigravity IDE\Antigravity IDE.exe"
-             , "C:\Program Files (x86)\Antigravity IDE\Antigravity IDE.exe"
-             , userHome . "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Antigravity\Antigravity.lnk"
-             , userHome . "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Antigravity IDE\Antigravity IDE.lnk" ]
+    local path := GetDynamicAppPath("Antigravity IDE.exe")
+    if (path != "Antigravity IDE.exe")
+        return path
     
-    for index, path in paths
-    {
-        if FileExist(path)
-            return path
-    }
-    
-    return "antigravity-ide.cmd"
+    path := FindAppShortcut("Antigravity")
+    if (path != "")
+        return path
+
+    return "Antigravity IDE.exe"
 }
 
 GetExplorerPath()
@@ -175,43 +212,28 @@ GetExplorerPath()
 
 GetPhotoshopPath()
 {
-    local paths, index, path, userHome
-    EnvGet, userHome, USERPROFILE
-    paths := [ "C:\Program Files\Adobe\Adobe Photoshop 2024\Photoshop.exe"
-             , "C:\Program Files\Adobe\Adobe Photoshop 2023\Photoshop.exe"
-             , "C:\Program Files\Adobe\Adobe Photoshop 2022\Photoshop.exe"
-             , "C:\Program Files\Adobe\Adobe Photoshop 2021\Photoshop.exe"
-             , "C:\Program Files\Adobe\Adobe Photoshop 2020\Photoshop.exe"
-             , "C:\Program Files\Adobe\Adobe Photoshop CC 2019\Photoshop.exe"
-             , "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Adobe Photoshop.lnk"
-             , userHome . "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Adobe Photoshop.lnk" ]
+    local path := GetDynamicAppPath("Photoshop.exe")
+    if (path != "Photoshop.exe")
+        return path
     
-    for index, path in paths
-    {
-        if FileExist(path)
-            return path
-    }
-    
+    path := FindAppShortcut("Adobe Photoshop")
+    if (path != "")
+        return path
+
     return "Photoshop.exe"
 }
 
 GetSlackPath()
 {
-    local paths, index, path, userHome
-    EnvGet, userHome, USERPROFILE
-    paths := [ userHome . "\AppData\Local\slack\slack.exe"
-             , "C:\Program Files\Slack\slack.exe"
-             , "C:\Program Files\Slack.lnk"
-             , "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Slack Technologies Inc\Slack.lnk"
-             , userHome . "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Slack Technologies Inc\Slack.lnk" ]
+    local path := GetDynamicAppPath("slack.exe")
+    if (path != "slack.exe")
+        return path
     
-    for index, path in paths
-    {
-        if FileExist(path)
-            return path
-    }
-    
-    return "slack.exe"
+    path := FindAppShortcut("Slack")
+    if (path != "")
+        return path
+
+    return "slack://"
 }
 
 GetSelectedFilePath()
@@ -461,19 +483,20 @@ return
     KeyWait, c, T0.6
 
     pressDuration := A_TickCount - pressStart
+    path := GetDynamicAppPath("chrome.exe")
 
     if (pressDuration >= LONG_PRESS_THRESHOLD)
     {
         ; Long press: incognito fires immediately at 600ms, then block until key released
-        if (!FileExist(CHROME_PATH))
+        if (!FileExist(path))
         {
-            MsgBox, 16, Error, Chrome not found:`n%CHROME_PATH%
+            MsgBox, 16, Error, Chrome not found:`n%path%
             KeyWait, c
             return
         }
         oldR := DisableRedirection()
         try
-            Run, "%CHROME_PATH%" --incognito
+            Run, "%path%" --incognito
         catch e
         {
             RevertRedirection(oldR)
@@ -488,14 +511,14 @@ return
     {
         ; Short press: wait for release then open normal Chrome
         KeyWait, c
-        if (!FileExist(CHROME_LNK))
+        if (!FileExist(path))
         {
-            MsgBox, 16, Error, Chrome shortcut not found:`n%CHROME_LNK%
+            MsgBox, 16, Error, Chrome not found:`n%path%
             return
         }
         oldR := DisableRedirection()
         try
-            Run, "%CHROME_LNK%"
+            Run, "%path%"
         catch e
         {
             RevertRedirection(oldR)
@@ -513,11 +536,15 @@ return
 return
 #MaxThreadsPerHotkey 1
 
-!g::HandleContextHotkey("g", "Git Bash", GIT_BASH_EXE, "--cd-to-home", "--cd=")
+!g::HandleContextHotkey("g", "Git Bash", GetGitBashPath(), "--cd-to-home", "--cd=")
 
 !i::
     ShowTransientToolTip("Instagram")
-    LaunchAndMaximize(INSTAGRAM_APP, "Instagram", WINDOW_WAIT_TIMEOUT)
+    path := FindAppShortcut("Instagram")
+    if (path != "")
+        LaunchAndMaximize(path, "Instagram", WINDOW_WAIT_TIMEOUT)
+    else
+        RunApp(GetDynamicAppPath("chrome.exe"), "--app=https://www.instagram.com/", "Instagram")
 return
 
 !m::RunApp("ms-windows-store:", "", "Microsoft Store")
@@ -708,23 +735,23 @@ U_SinglePress:
     RevertRedirection(oldR)
 return
 
-!v::HandleContextHotkey("v", "VS Code", VSCODE_PATH)
+!v::HandleContextHotkey("v", "VS Code", GetDynamicAppPath("Code.exe"))
 
 !w::
     ShowTransientToolTip("WhatsApp")
-    LaunchAndMaximize(WHATSAPP_APP, "WhatsApp", WINDOW_WAIT_TIMEOUT)
+    LaunchAndMaximize("whatsapp://", "WhatsApp", WINDOW_WAIT_TIMEOUT)
 return
 
 !y::
-    LaunchAndMaximize(YOUTUBE_LNK, "YouTube", WINDOW_WAIT_TIMEOUT)
+    RunApp(GetDynamicAppPath("chrome.exe"), "--app=https://www.youtube.com/", "YouTube")
 return
 
 !z::ExtractSelectedZip()
 
 ^+!c::
     TriggerScheduledTask("WindowsCleanup", "Cleanup"
-        , USER_HOME . "\sys-scripts\cleanup\cleanup_trigger.txt"
-        , USER_HOME . "\sys-scripts\cleanup\cleanup_result.txt", 60)
+        , SYS_SCRIPTS_DIR . "\cleanup\cleanup_trigger.txt"
+        , SYS_SCRIPTS_DIR . "\cleanup\cleanup_result.txt", 60)
 return
 
 ^+!Delete::
@@ -762,18 +789,18 @@ return
 ^+!n::
     TriggerScheduledTask("NetworkReset", "Network Reset"
         , ""
-        , USER_HOME . "\sys-scripts\network\netreset_result.txt", 90)
+        , SYS_SCRIPTS_DIR . "\network\netreset_result.txt", 90)
 return
 
 ^+!u::
     FormatTime, today,, yyyy-MM-dd
-    FileRead, lastRun, %USER_HOME%\sys-scripts\update\update_lastrun.txt
+    FileRead, lastRun, %SYS_SCRIPTS_DIR%\update\update_lastrun.txt
     if (Trim(lastRun) = today)
     {
         ShowTransientToolTip("Update already completed today")
         return
     }
     TriggerScheduledTask("WindowsUpdater", "Update"
-        , USER_HOME . "\sys-scripts\update\update_trigger.txt"
-        , USER_HOME . "\sys-scripts\update\update_result.txt", 180)
+        , SYS_SCRIPTS_DIR . "\update\update_trigger.txt"
+        , SYS_SCRIPTS_DIR . "\update\update_result.txt", 180)
 return
