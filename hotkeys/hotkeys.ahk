@@ -7,8 +7,8 @@
 ; Alt + I →     Instagram
 ; Alt + M →     Microsoft Store
 ; Alt + N →     Notepad
-; Alt + O →     CMD  |  Double → CMD (Admin)
-; Alt + P →     PowerShell (Admin)
+; Alt + O →     CMD  |  Double → Admin CMD (in Folder or Home)
+; Alt + P →     PowerShell (Admin)  |  Double → Admin PowerShell in Folder
 ; Alt + Q →     Close Active Window (hold to keep closing)
 ; Alt + S →     Slack
 ; Alt + T →     Telegram
@@ -18,11 +18,11 @@
 ; Alt + Y →     YouTube
 ; Alt + Z →     Unzip selected .zip file
 
-; Ctrl+Shift+Alt+C       → Run Windows Cleanup Script
-; Ctrl+Shift+Alt+L       → Open Logs Folder
-; Ctrl+Shift+Alt+N       → Run Network Reset Script
-; Ctrl+Shift+Alt+U       → Run Windows Updater Script
-; Ctrl+Shift+Alt+Delete  → Empty Recycle Bin (with confirm)
+; Ctrl + Shift + Alt + C       → Run Windows Cleanup Script
+; Ctrl + Shift + Alt + L       → Open Logs Folder
+; Ctrl + Shift + Alt + N       → Run Network Reset Script
+; Ctrl + Shift + Alt + U       → Run Windows Updater Script
+; Ctrl + Shift + Alt + Delete  → Empty Recycle Bin (with confirm)
 
 ; ====================[ Script Config & Variables ]====================
 #Requires AutoHotkey v1.1
@@ -46,6 +46,7 @@ global LOGS_DIR         := USER_HOME . "\sys-scripts\logs"
 global LONG_PRESS_THRESHOLD := 600
 global o_LastPress := 0
 global one_LastPress := 0
+global p_LastPress := 0
 global ScriptModTime := "" ; Used for Auto-Reload
 global TOOLTIP_DURATION_MS  := 2000
 global u_LastPress := 0
@@ -524,15 +525,62 @@ return
 !n::RunApp("notepad.exe", "", "Notepad")
 
 !p::
+    now := A_TickCount
+    timeSinceLastPress := now - p_LastPress
+
+    if (timeSinceLastPress > 0 && timeSinceLastPress < DOUBLE_PRESS_DELAY)
+    {
+        p_LastPress := 0
+        SetTimer, P_SinglePress, Off
+
+        WinGetClass, class, A
+        dir := ""
+        if (class = "CabinetWClass" || class = "ExploreWClass")
+            dir := GetExplorerPath()
+
+        if (dir != "")
+        {
+            ShowTransientToolTip("Admin PowerShell in Folder")
+            oldR := DisableRedirection()
+            try
+                Run, *RunAs powershell.exe -NoExit -Command "Set-Location -LiteralPath '%dir%'"
+            catch e
+            {
+                if (A_LastError != 1223)
+                    ShowLaunchError("Failed to launch Admin PowerShell", e)
+            }
+            RevertRedirection(oldR)
+        }
+        else
+        {
+            ShowTransientToolTip("Admin PowerShell")
+            oldR := DisableRedirection()
+            try
+                Run, *RunAs powershell.exe, %USER_HOME%
+            catch e
+            {
+                if (A_LastError != 1223)
+                    ShowLaunchError("Failed to launch Admin PowerShell", e)
+            }
+            RevertRedirection(oldR)
+        }
+    }
+    else
+    {
+        p_LastPress := now
+        SetTimer, P_SinglePress, -%DOUBLE_PRESS_DELAY%
+    }
+return
+
+P_SinglePress:
+    ShowTransientToolTip("Admin PowerShell")
     oldR := DisableRedirection()
     try
-        Run, *RunAs powershell.exe
+        Run, *RunAs powershell.exe, %USER_HOME%
     catch e
     {
-        if (A_LastError != 1223) ; 1223 = user cancelled UAC
-        {
+        if (A_LastError != 1223)
             ShowLaunchError("Failed to launch Admin PowerShell", e)
-        }
     }
     RevertRedirection(oldR)
 return
@@ -560,18 +608,37 @@ return
         o_LastPress := 0
         SetTimer, O_SinglePress, Off
 
-        ShowTransientToolTip("Admin CMD")
-        oldR := DisableRedirection()
-        try
-            Run, *RunAs cmd.exe, %USER_HOME%
-        catch e
+        WinGetClass, class, A
+        dir := ""
+        if (class = "CabinetWClass" || class = "ExploreWClass")
+            dir := GetExplorerPath()
+
+        if (dir != "")
         {
-            if (A_LastError != 1223) ; 1223 = user cancelled UAC
+            ShowTransientToolTip("Admin CMD in Folder")
+            oldR := DisableRedirection()
+            try
+                Run, *RunAs cmd.exe /K cd /d "%dir%"
+            catch e
             {
-                ShowLaunchError("Failed to launch Admin CMD", e)
+                if (A_LastError != 1223)
+                    ShowLaunchError("Failed to launch Admin CMD", e)
             }
+            RevertRedirection(oldR)
         }
-        RevertRedirection(oldR)
+        else
+        {
+            ShowTransientToolTip("Admin CMD")
+            oldR := DisableRedirection()
+            try
+                Run, *RunAs cmd.exe, %USER_HOME%
+            catch e
+            {
+                if (A_LastError != 1223)
+                    ShowLaunchError("Failed to launch Admin CMD", e)
+            }
+            RevertRedirection(oldR)
+        }
     }
     else
     {
