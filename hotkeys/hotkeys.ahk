@@ -5,6 +5,7 @@
 ; Alt + C →     Chrome  |  Long Press → Chrome Incognito
 ; Alt + G →     Git Bash  |  Double → Git Bash in Explorer folder
 ; Alt + I →     Instagram
+; Alt + M →     Microsoft Store
 ; Alt + N →     Notepad
 ; Alt + P →     PowerShell (Admin)
 ; Alt + Q →     Close Active Window (hold to keep closing)
@@ -43,7 +44,6 @@ global INSTAGRAM_APP    := "C:\Program Files\Instagram.lnk"
 global LOGS_DIR         := USER_HOME . "\sys-scripts\logs"
 global LONG_PRESS_THRESHOLD := 600
 global ScriptModTime := "" ; Used for Auto-Reload
-global SLACK_LNK        := "C:\Program Files\Slack.lnk"
 global t_LastPress := 0
 global TOOLTIP_DURATION_MS  := 2000
 global u_LastPress := 0
@@ -175,6 +175,25 @@ GetPhotoshopPath()
     return "Photoshop.exe"
 }
 
+GetSlackPath()
+{
+    local paths, index, path, userHome
+    EnvGet, userHome, USERPROFILE
+    paths := [ userHome . "\AppData\Local\slack\slack.exe"
+             , "C:\Program Files\Slack\slack.exe"
+             , "C:\Program Files\Slack.lnk"
+             , "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Slack Technologies Inc\Slack.lnk"
+             , userHome . "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Slack Technologies Inc\Slack.lnk" ]
+    
+    for index, path in paths
+    {
+        if FileExist(path)
+            return path
+    }
+    
+    return "slack.exe"
+}
+
 GetSelectedFilePath()
 {
     local hwnd, window, sel, item
@@ -247,7 +266,7 @@ IsProtectedWindowClass(windowClass) {
 LaunchAndMaximize(appPath, windowIdentifier := "", timeout := 5)
 {
     local e
-    if (!InStr(appPath, "://") && !FileExist(appPath))
+    if (InStr(appPath, "\") && !FileExist(appPath))
     {
         MsgBox, 16, Error, Application not found:`n%appPath%
         return false
@@ -457,6 +476,8 @@ return
     LaunchAndMaximize(INSTAGRAM_APP, "Instagram", WINDOW_WAIT_TIMEOUT)
 return
 
+!m::RunApp("ms-windows-store:", "", "Microsoft Store")
+
 !n::RunApp("notepad.exe", "", "Notepad")
 
 !p::
@@ -486,7 +507,7 @@ return
 return
 
 !s::
-    LaunchAndMaximize(SLACK_LNK, "ahk_exe slack.exe", WINDOW_WAIT_TIMEOUT)
+    LaunchAndMaximize(GetSlackPath(), "ahk_exe slack.exe", WINDOW_WAIT_TIMEOUT)
 return
 
 !t::
