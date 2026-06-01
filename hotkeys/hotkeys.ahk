@@ -285,7 +285,8 @@ HandleContextHotkey(key, name, appPath, sArgs := "", dPre := "", maximize := fal
     if (tickNow - last < DOUBLE_PRESS_DELAY) {
         lastPresses[key] := 0
         if (timers[key]) {
-            SetTimer, % timers[key], Off
+            timerObj := timers[key]
+            SetTimer, %timerObj%, Off
             timers[key] := ""
         }
 
@@ -298,7 +299,7 @@ HandleContextHotkey(key, name, appPath, sArgs := "", dPre := "", maximize := fal
         lastPresses[key] := tickNow
         timerObj := Func("RunAppAndNotify").Bind(appPath, sArgs, name, maximize)
         timers[key] := timerObj
-        SetTimer, % timerObj, % -DOUBLE_PRESS_DELAY
+        SetTimer, %timerObj%, % -DOUBLE_PRESS_DELAY
     }
 }
 
@@ -347,7 +348,7 @@ RunApp(appPath, args := "", name := "", maximize := false) {
         if InStr(appPath, "://") || InStr(appPath, "ms-windows-store:") {
             Run, %appPath% %args%, , % maximize ? "Max" : ""
         } else {
-            if !FileExist(appPath) {
+            if (InStr(appPath, ":\") && !FileExist(appPath)) {
                 ShowTransientToolTip(name . " not found at:`n" . appPath)
                 RevertRedirection(oldRedir)
                 return
