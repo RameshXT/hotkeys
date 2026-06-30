@@ -12,7 +12,7 @@
 ; Alt + Q →     Close Active Window (hold to keep closing)
 ; Alt + S →     Slack
 ; Alt + T →     Telegram
-; Alt + U →     Ubuntu 22.04 WSL
+; Alt + U →     Ubuntu 24.04 WSL
 ; Alt + V →     VS Code  |  Double → VS Code in Explorer folder
 ; Alt + W →     WhatsApp
 ; Alt + Y →     YouTube
@@ -672,9 +672,9 @@ return
             ShowTransientToolTip("WSL")
             oldR := DisableRedirection()
             try
-                Run, wsl.exe -d Ubuntu-22.04 -- bash -lc "cd '%unixPath%'; exec bash"
+                Run, wsl.exe -d Ubuntu-24.04 -- bash -lc "cd '%unixPath%'; exec bash"
             catch e
-                ShowTransientToolTip("Failed to launch Ubuntu 22.04`nIs WSL installed? " . e)
+                ShowTransientToolTip("Failed to launch Ubuntu 24.04`nIs WSL installed? " . e)
             RevertRedirection(oldR)
         }
     }
@@ -689,10 +689,10 @@ U_SinglePress:
     ShowTransientToolTip("WSL")
     oldR := DisableRedirection()
     try
-        Run, wsl.exe -d Ubuntu-22.04 -- bash -lc "cd ~; exec bash"
+        Run, wsl.exe -d Ubuntu-24.04 -- bash -lc "cd ~; exec bash"
     catch e
     {
-        ShowTransientToolTip("Failed to launch Ubuntu 22.04`nIs WSL installed? " . e)
+        ShowTransientToolTip("Failed to launch Ubuntu 24.04`nIs WSL installed? " . e)
     }
     RevertRedirection(oldR)
 return
