@@ -37,7 +37,6 @@ SetTimer WatchScript, 1000
 
 USER_HOME := EnvGet("USERPROFILE")
 global DOUBLE_PRESS_DELAY   := 400
-global INSTAGRAM_APP        := "C:\Program Files\Instagram.lnk"
 global LOGS_DIR             := USER_HOME . "\sys-scripts\logs"
 global LONG_PRESS_THRESHOLD := 600
 global o_LastPress          := 0
@@ -46,10 +45,7 @@ global p_LastPress          := 0
 global ScriptModTime        := "" ; Used for Auto-Reload
 global TOOLTIP_DURATION_MS  := 2000
 global u_LastPress          := 0
-global VSCODE_PATH          := USER_HOME . "\AppData\Local\Programs\Microsoft VS Code\Code.exe"
-global WHATSAPP_APP         := "C:\Program Files\WhatsApp.lnk"
 global WINDOW_WAIT_TIMEOUT  := 5
-global YOUTUBE_LNK          := USER_HOME . "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Chrome Apps\YouTube.lnk"
 
 ; ====================[ Helper Functions ]====================
 
@@ -92,7 +88,7 @@ ExtractSelectedZip() {
     if (fileExtension != "zip" && fileExtension != "ZIP")
         return
     targetDir := fileDir . "\" . nameNoExt . "\"
-    winrarPath := "C:\Program Files\WinRAR\WinRAR.exe"
+    winrarPath := AppResolver.Get("WinRAR", "WinRAR.exe", ["%ProgramFiles%\WinRAR\WinRAR.exe", "%ProgramFiles(x86)%\WinRAR\WinRAR.exe"])
     if FileExist(winrarPath) {
         oldR := DisableRedirection()
         Run('"' . winrarPath . '" x -o+ "' . selectedPath . '" "' . targetDir . '"')
@@ -106,19 +102,103 @@ ExtractSelectedZip() {
     }
 }
 
-GetAntigravityPath() {
-    userHome := EnvGet("USERPROFILE")
-    paths := [ userHome . "\AppData\Local\Programs\Antigravity IDE\Antigravity IDE.exe"
-             , "C:\Program Files\Antigravity IDE\Antigravity IDE.exe"
-             , "C:\Program Files (x86)\Antigravity IDE\Antigravity IDE.exe"
-             , userHome . "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Antigravity\Antigravity.lnk"
-             , userHome . "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Antigravity IDE\Antigravity IDE.lnk" ]
+class AppResolver {
+    static cache := Map()
 
-    for index, path in paths
-        if FileExist(path)
-            return path
+    /**
+     * Resolves the full path to an application executable or shortcut.
+     * @param appKey The key name to cache the result.
+     * @param exeName Optional executable name to check in Registry App Paths.
+     * @param searchPatterns Array of fallback paths (with environment variables).
+     * @param regPaths Array of custom registry keys and values: ["KeyPath|ValueName", ...]
+     * @returns {string} The resolved path or bare exeName.
+     */
+    static Get(appKey, exeName := "", searchPatterns := [], regPaths := []) {
+        if this.cache.Has(appKey)
+            return this.cache[appKey]
 
-    return "antigravity-ide.cmd"
+        resolvedPath := ""
+
+        ; 1. Try Registry App Paths if exeName is provided
+        if (exeName != "") {
+            for root in ["HKEY_LOCAL_MACHINE", "HKEY_CURRENT_USER"] {
+                try {
+                    val := RegRead(root . "\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\" . exeName, "")
+                    if (val != "" && FileExist(val)) {
+                        resolvedPath := val
+                        break
+                    }
+                }
+            }
+        }
+
+        ; 2. Try Custom Registry Keys
+        if (resolvedPath = "" && regPaths.Length > 0) {
+            for regSpec in regPaths {
+                parts := StrSplit(regSpec, "|")
+                keyPath := parts[1]
+                valueName := parts.Length > 1 ? parts[2] : ""
+                try {
+                    val := RegRead(keyPath, valueName)
+                    if (val != "") {
+                        if (InStr(FileExist(val), "D")) {
+                            if (exeName != "" && FileExist(val . "\" . exeName))
+                                resolvedPath := val . "\" . exeName
+                        } else if (FileExist(val)) {
+                            resolvedPath := val
+                        }
+                    }
+                }
+                if (resolvedPath != "")
+                    break
+            }
+        }
+
+        ; 3. Try Fallback search patterns (expanding env variables)
+        if (resolvedPath = "") {
+            for pattern in searchPatterns {
+                expanded := this.ExpandEnvVars(pattern)
+                if (expanded != "" && FileExist(expanded)) {
+                    resolvedPath := expanded
+                    break
+                }
+            }
+        }
+
+        ; 4. Default fallback to raw exeName
+        if (resolvedPath = "") {
+            resolvedPath := exeName != "" ? exeName : ""
+        }
+
+        this.cache[appKey] := resolvedPath
+        return resolvedPath
+    }
+
+    /**
+     * Expands environment variables like %ProgramFiles% in a string.
+     */
+    static ExpandEnvVars(str) {
+        if (!InStr(str, "%"))
+            return str
+        
+        str := StrReplace(str, "%StartMenuCommon%", A_StartMenuCommon)
+        str := StrReplace(str, "%StartMenu%", A_StartMenu)
+        str := StrReplace(str, "%AppData%", A_AppData)
+        str := StrReplace(str, "%LocalAppData%", EnvGet("LocalAppData"))
+        str := StrReplace(str, "%ProgramFiles%", A_ProgramFiles)
+        
+        pos := 1
+        while (pos <= StrLen(str)) {
+            if (RegExMatch(str, "%([^%]+)%", &match, pos)) {
+                envVal := EnvGet(match[1])
+                str := StrReplace(str, match[0], envVal)
+                pos := match.Pos + StrLen(envVal)
+            } else {
+                break
+            }
+        }
+        return str
+    }
 }
 
 GetExplorerPath() {
@@ -138,101 +218,6 @@ GetExplorerPath() {
         ShowLaunchError("Error getting Explorer path", e)
     }
     return ""
-}
-
-GetChromePath() {
-    try {
-        path := RegRead("HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe", "")
-        if (path != "" && FileExist(path))
-            return path
-    }
-    try {
-        path := RegRead("HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe", "")
-        if (path != "" && FileExist(path))
-            return path
-    }
-    paths := [ EnvGet("ProgramFiles") . "\Google\Chrome\Application\chrome.exe"
-             , EnvGet("ProgramFiles(x86)") . "\Google\Chrome\Application\chrome.exe"
-             , EnvGet("LocalAppData") . "\Google\Chrome\Application\chrome.exe" ]
-    for index, path in paths
-        if (path != "" && FileExist(path))
-            return path
-    return "chrome.exe"
-}
-
-GetGitBashPath() {
-    try {
-        path := RegRead("HKEY_LOCAL_MACHINE\SOFTWARE\GitForWindows", "InstallPath")
-        if (path != "") {
-            fullPath := path . "\git-bash.exe"
-            if FileExist(fullPath)
-                return fullPath
-        }
-    }
-    try {
-        path := RegRead("HKEY_CURRENT_USER\SOFTWARE\GitForWindows", "InstallPath")
-        if (path != "") {
-            fullPath := path . "\git-bash.exe"
-            if FileExist(fullPath)
-                return fullPath
-        }
-    }
-    try {
-        path := RegRead("HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Git_is1", "InstallLocation")
-        if (path != "") {
-            fullPath := path . "\git-bash.exe"
-            if FileExist(fullPath)
-                return fullPath
-        }
-    }
-    try {
-        path := RegRead("HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Git_is1", "InstallLocation")
-        if (path != "") {
-            fullPath := path . "\git-bash.exe"
-            if FileExist(fullPath)
-                return fullPath
-        }
-    }
-    paths := [ EnvGet("ProgramFiles") . "\Git\git-bash.exe"
-             , EnvGet("ProgramFiles(x86)") . "\Git\git-bash.exe"
-             , EnvGet("LocalAppData") . "\Programs\Git\git-bash.exe" ]
-    for index, path in paths
-        if (path != "" && FileExist(path))
-            return path
-    return "git-bash.exe"
-}
-
-GetPhotoshopPath() {
-    userHome := EnvGet("USERPROFILE")
-    paths := [ "C:\Program Files\Adobe\Adobe Photoshop 2024\Photoshop.exe"
-             , "C:\Program Files\Adobe\Adobe Photoshop 2023\Photoshop.exe"
-             , "C:\Program Files\Adobe\Adobe Photoshop 2022\Photoshop.exe"
-             , "C:\Program Files\Adobe\Adobe Photoshop 2021\Photoshop.exe"
-             , "C:\Program Files\Adobe\Adobe Photoshop 2020\Photoshop.exe"
-             , "C:\Program Files\Adobe\Adobe Photoshop CC 2019\Photoshop.exe"
-             , "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Adobe Photoshop.lnk"
-             , userHome . "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Adobe Photoshop.lnk" ]
-
-    for index, path in paths
-        if FileExist(path)
-            return path
-
-    return "Photoshop.exe"
-}
-
-GetSlackPath() {
-    userHome := EnvGet("USERPROFILE")
-    paths := [ userHome . "\AppData\Local\slack\slack.exe"
-             , "C:\Program Files\Slack\slack.exe"
-             , "C:\Program Files\Slack.lnk"
-             , "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Slack Technologies Inc\Slack.lnk"
-             , userHome . "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Slack Technologies Inc\Slack.lnk" ]
-
-    for index, path in paths
-        if FileExist(path)
-            return path
-
-    return "slack.exe"
 }
 
 GetSelectedFilePath() {
@@ -456,9 +441,9 @@ U_SinglePress() {
     ShowTransientToolTip("WSL")
     oldR := DisableRedirection()
     try
-        Run('wsl.exe -d Ubuntu-24.04 -- bash -lc "cd ~; exec bash"')
+        Run('wsl.exe -- bash -lc "cd ~; exec bash"')
     catch as e
-        ShowTransientToolTip("Failed to launch Ubuntu 24.04`nIs WSL installed? " . e.Message)
+        ShowTransientToolTip("Failed to launch WSL`nIs WSL installed? " . e.Message)
     RevertRedirection(oldR)
 }
 
@@ -473,11 +458,31 @@ U_SinglePress() {
     one_LastPress := now
     if (timeSinceLastPress > 0 && timeSinceLastPress < DOUBLE_PRESS_DELAY) {
         one_LastPress := 0
-        RunApp(GetPhotoshopPath(), "", "Photoshop")
+        photoshopPath := AppResolver.Get("Photoshop", "Photoshop.exe", [
+            "%ProgramFiles%\Adobe\Adobe Photoshop 2024\Photoshop.exe",
+            "%ProgramFiles%\Adobe\Adobe Photoshop 2023\Photoshop.exe",
+            "%ProgramFiles%\Adobe\Adobe Photoshop 2022\Photoshop.exe",
+            "%ProgramFiles%\Adobe\Adobe Photoshop 2021\Photoshop.exe",
+            "%ProgramFiles%\Adobe\Adobe Photoshop 2020\Photoshop.exe",
+            "%ProgramFiles%\Adobe\Adobe Photoshop CC 2019\Photoshop.exe",
+            "%ProgramFilesCommon%\Adobe Photoshop.lnk",
+            "%StartMenuCommon%\Programs\Adobe Photoshop.lnk",
+            "%StartMenu%\Programs\Adobe Photoshop.lnk"
+        ])
+        RunApp(photoshopPath, "", "Photoshop")
     }
 }
 
-!a::HandleContextHotkey("a", "Antigravity", GetAntigravityPath())
+!a:: {
+    antigravityPath := AppResolver.Get("Antigravity", "antigravity-ide.cmd", [
+        "%LocalAppData%\Programs\Antigravity IDE\Antigravity IDE.exe",
+        "%ProgramFiles%\Antigravity IDE\Antigravity IDE.exe",
+        "%ProgramFiles(x86)%\Antigravity IDE\Antigravity IDE.exe",
+        "%StartMenu%\Programs\Antigravity\Antigravity.lnk",
+        "%StartMenu%\Programs\Antigravity IDE\Antigravity IDE.lnk"
+    ])
+    HandleContextHotkey("a", "Antigravity", antigravityPath)
+}
 
 #MaxThreadsPerHotkey 1
 !c:: {
@@ -488,7 +493,7 @@ U_SinglePress() {
 
     pressDuration := A_TickCount - pressStart
 
-    chromePath := GetChromePath()
+    chromePath := AppResolver.Get("Chrome", "chrome.exe")
     if (chromePath = "chrome.exe" && !FileExist(chromePath)) {
         MsgBox("Chrome not found.", "Error", 16)
         KeyWait "c", "T2"
@@ -529,11 +534,24 @@ U_SinglePress() {
 }
 #MaxThreadsPerHotkey 1
 
-!g::HandleContextHotkey("g", "Git Bash", GetGitBashPath(), "--cd-to-home", "--cd=")
+!g:: {
+    gitBashPath := AppResolver.Get("GitBash", "git-bash.exe", [
+        "%ProgramFiles%\Git\git-bash.exe",
+        "%ProgramFiles(x86)%\Git\git-bash.exe"
+    ], [
+        "HKEY_LOCAL_MACHINE\SOFTWARE\GitForWindows|InstallPath"
+    ])
+    HandleContextHotkey("g", "Git Bash", gitBashPath, "--cd-to-home", "--cd=")
+}
 
 !i:: {
+    instagramPath := AppResolver.Get("Instagram", "", [
+        "%ProgramFiles%\Instagram.lnk",
+        "%StartMenuCommon%\Programs\Instagram.lnk",
+        "%StartMenu%\Programs\Instagram.lnk"
+    ])
     ShowTransientToolTip("Instagram")
-    LaunchAndMaximize(INSTAGRAM_APP, "Instagram", WINDOW_WAIT_TIMEOUT)
+    LaunchAndMaximize(instagramPath, "Instagram", WINDOW_WAIT_TIMEOUT)
 }
 
 !m::RunApp("ms-windows-store:", "", "Microsoft Store")
@@ -631,7 +649,12 @@ U_SinglePress() {
 }
 
 !s:: {
-    LaunchAndMaximize(GetSlackPath(), "ahk_exe slack.exe", WINDOW_WAIT_TIMEOUT)
+    slackPath := AppResolver.Get("Slack", "slack.exe", [
+        "%LocalAppData%\slack\slack.exe",
+        "%ProgramFiles%\Slack\slack.exe",
+        "%StartMenuCommon%\Programs\Slack.lnk"
+    ])
+    LaunchAndMaximize(slackPath, "ahk_exe slack.exe", WINDOW_WAIT_TIMEOUT)
 }
 
 !t::RunApp("tg://", "", "Telegram")
@@ -651,9 +674,9 @@ U_SinglePress() {
             ShowTransientToolTip("WSL")
             oldR := DisableRedirection()
             try
-                Run("wsl.exe -d Ubuntu-24.04 -- bash -lc `"cd '" . unixPath . "'; exec bash`"")
+                Run("wsl.exe -- bash -lc `"cd '" . unixPath . "'; exec bash`"")
             catch as e
-                ShowTransientToolTip("Failed to launch Ubuntu 24.04`nIs WSL installed? " . e.Message)
+                ShowTransientToolTip("Failed to launch WSL`nIs WSL installed? " . e.Message)
             RevertRedirection(oldR)
         }
     } else {
@@ -662,15 +685,30 @@ U_SinglePress() {
     }
 }
 
-!v::HandleContextHotkey("v", "VS Code", VSCODE_PATH)
+!v:: {
+    vscodePath := AppResolver.Get("VSCode", "Code.exe", [
+        "%LocalAppData%\Programs\Microsoft VS Code\Code.exe",
+        "%ProgramFiles%\Microsoft VS Code\Code.exe"
+    ])
+    HandleContextHotkey("v", "VS Code", vscodePath)
+}
 
 !w:: {
+    whatsappPath := AppResolver.Get("WhatsApp", "", [
+        "%ProgramFiles%\WhatsApp.lnk",
+        "%StartMenuCommon%\Programs\WhatsApp.lnk",
+        "%StartMenu%\Programs\WhatsApp.lnk"
+    ])
     ShowTransientToolTip("WhatsApp")
-    LaunchAndMaximize(WHATSAPP_APP, "WhatsApp", WINDOW_WAIT_TIMEOUT)
+    LaunchAndMaximize(whatsappPath, "WhatsApp", WINDOW_WAIT_TIMEOUT)
 }
 
 !y:: {
-    LaunchAndMaximize(YOUTUBE_LNK, "YouTube", WINDOW_WAIT_TIMEOUT)
+    youtubePath := AppResolver.Get("YouTube", "", [
+        "%AppData%\Microsoft\Windows\Start Menu\Programs\Chrome Apps\YouTube.lnk",
+        "%StartMenuCommon%\Programs\Chrome Apps\YouTube.lnk"
+    ])
+    LaunchAndMaximize(youtubePath, "YouTube", WINDOW_WAIT_TIMEOUT)
 }
 
 !z::ExtractSelectedZip()
