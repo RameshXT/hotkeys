@@ -425,13 +425,49 @@ public class ConsoleWindow {
             param($exe)
             $ErrorActionPreference = "Continue"
             try {
-                $raw = & $exe upgrade --all --silent --accept-source-agreements `
-                    --accept-package-agreements --disable-interactivity 2>&1
-                $out = ($raw | Out-String)
-                $failedCount = ([regex]::Matches($out, '(?i)\bfailed\b')).Count
-                $lines = $raw | Where-Object { $_ -match '->' }
-                $updatedCount = if ($lines) { @($lines).Count } else { 0 }
-                return @{ Updated = $updatedCount; Failed = $failedCount; ExitCode = $LASTEXITCODE }
+                $upgrades = & $exe list --upgrade-available --disable-interactivity 2>&1
+                $packagesToUpgrade = @()
+                
+                $headerLine = $upgrades | Where-Object { $_ -match '\bId\b.*\bVersion\b' } | Select-Object -First 1
+                if ($headerLine) {
+                    $idOffset = $headerLine.IndexOf("Id")
+                    $versionOffset = $headerLine.IndexOf("Version")
+                    
+                    foreach ($line in $upgrades) {
+                        if ($line -match '^\s*$' -or 
+                            $line -match '^-+$' -or 
+                            $line -match '\bId\b.*\bVersion\b' -or
+                            $line -match 'upgrades? available' -or
+                            $line -match 'package\(s\) have upgrades blocked') {
+                            continue
+                        }
+                        if ($line.Length -gt $idOffset) {
+                            $name = $line.Substring(0, $idOffset).Trim()
+                            $idEnd = if ($line.Length -gt $versionOffset) { $versionOffset - $idOffset } else { -1 }
+                            $id = if ($idEnd -gt 0) { $line.Substring($idOffset, $idEnd).Trim() } else { $line.Substring($idOffset).Trim() }
+                            
+                            $id = ($id -split '\s+')[0]
+                            
+                            if ($name -and $id -and $name -notlike "*Photoshop*" -and $id -notlike "*Photoshop*") {
+                                $packagesToUpgrade += $id
+                            }
+                        }
+                    }
+                }
+
+                $updatedCount = 0
+                $failedCount = 0
+                foreach ($id in $packagesToUpgrade) {
+                    $raw = & $exe upgrade --id $id --silent --accept-source-agreements `
+                        --accept-package-agreements --disable-interactivity --include-unknown --uninstall-previous --force 2>&1
+                    $out = ($raw | Out-String)
+                    if ($out -match '(?i)\bfailed\b') {
+                        $failedCount++
+                    } else {
+                        $updatedCount++
+                    }
+                }
+                return @{ Updated = $updatedCount; Failed = $failedCount; ExitCode = 0 }
             }
             catch {
                 return @{ Updated = 0; Failed = 1; Error = $_.Exception.Message }
@@ -482,12 +518,12 @@ public class ConsoleWindow {
             try {
                 Import-Module PSWindowsUpdate -Force -ErrorAction Stop
 
-                $available = Get-WindowsUpdate -IgnoreReboot -ErrorAction Stop
+                $available = Get-WindowsUpdate -MicrosoftUpdate -IgnoreReboot -ErrorAction Stop
                 if (-not $available -or @($available).Count -eq 0) {
                     return @{ State = "uptodate"; Count = 0; KBList = ""; TitleList = "" }
                 }
 
-                $installed = Install-WindowsUpdate -IgnoreReboot -AcceptAll -ErrorAction Stop
+                $installed = Install-WindowsUpdate -MicrosoftUpdate -IgnoreReboot -AcceptAll -ErrorAction Stop
                 $unique = @($installed | Sort-Object KB -Unique)
                 $kbList = ($unique | ForEach-Object { $_.KB } | Where-Object { $_ } | Select-Object -Unique) -join ", "
                 $titleList = ($unique | ForEach-Object { $_.Title } | Where-Object { $_ } | Select-Object -Unique) -join ", "
@@ -566,33 +602,65 @@ public class ConsoleWindow {
 
     $storeResult = Invoke-WithLoader -ScriptBlock {
         $ErrorActionPreference = "SilentlyContinue"
+        $triggeredMethods = [System.Collections.Generic.List[string]]::new()
+        
+        # 1. Stop services to release locks on cache folders
+        Stop-Service -Name "InstallService", "wuauserv", "bits" -Force -ErrorAction SilentlyContinue
+        
+        # 2. Clear Microsoft Store Local Cache
+        $storeCachePath = "$env:LOCALAPPDATA\Packages\Microsoft.WindowsStore_8wekyb3d8bbwe\LocalCache"
+        if (Test-Path -LiteralPath $storeCachePath) {
+            Remove-Item -Path "$storeCachePath\*" -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        
+        # 3. Clear Delivery Optimization Cache
+        $doCachePath = "$env:SystemRoot\SoftwareDistribution\DeliveryOptimization"
+        if (Test-Path -LiteralPath $doCachePath) {
+            Remove-Item -Path "$doCachePath\*" -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        
+        # 4. Restart services
+        Start-Service -Name "bits", "wuauserv", "InstallService" -ErrorAction SilentlyContinue
+        
+        # 5. Re-register Microsoft Store to rebuild service/task connections
+        Get-AppXPackage -AllUsers -Name Microsoft.WindowsStore | ForEach-Object {
+            Add-AppxPackage -DisableDevelopmentMode -Register "$($_.InstallLocation)\AppXManifest.xml"
+        }
+        
+        # 6. Trigger MDM Modern App Management scan
         try {
             $ns = "root\cimv2\mdm\dmmap"
             $cls = "MDM_EnterpriseModernAppManagement_AppManagement01"
             $instance = Get-CimInstance -Namespace $ns -ClassName $cls -ErrorAction Stop
             $null = Invoke-CimMethod -InputObject $instance -MethodName "UpdateScanMethod" -ErrorAction Stop
-            return "mdm"
+            $triggeredMethods.Add("MDM")
         }
-        catch {
-            try {
-                $proc = Start-Process "wsreset.exe" -ArgumentList "-i" -WindowStyle Hidden -PassThru -ErrorAction Stop
-                if ($proc) { return "wsreset" }
-                return "failed"
+        catch {}
+        
+        # 7. Trigger wsreset to launch Store client update loop
+        try {
+            $proc = Start-Process "wsreset.exe" -ArgumentList "-i" -WindowStyle Hidden -PassThru -ErrorAction Stop
+            if ($proc) {
+                $triggeredMethods.Add("WSRESET")
             }
-            catch { return "failed:$($_.Exception.Message)" }
         }
+        catch {}
+        
+        if ($triggeredMethods.Count -gt 0) {
+            return ($triggeredMethods -join "+")
+        }
+        return "failed"
     } -ExpectedSeconds 60 -TimeoutSeconds 300
-
+ 
     if ($null -eq $storeResult) {
         Write-Row "Scan" "TIMED OUT" "Red"
         Add-Result "FAIL" "Windows Store" "job timed out"
     }
     else {
         switch -Wildcard ($storeResult) {
-            "mdm" { Write-Row "Scan" "TRIGGERED  (MDM)"     "Green"; Add-Result "OK"   "Windows Store" "scan triggered via MDM" }
-            "wsreset" { Write-Row "Scan" "TRIGGERED  (WSRESET)" "Green"; Add-Result "OK"   "Windows Store" "scan triggered via WSReset" }
+            "failed" { Write-Row "Scan" "FAILED" "Red"; Add-Result "FAIL" "Windows Store" "failed to trigger updates" }
             "failed:*" { $err = $storeResult -replace '^failed:', ''; Write-Row "Scan" "FAILED" "Red"; Add-Result "FAIL" "Windows Store" $err }
-            default { Write-Row "Scan" "FAILED" "Red"; Add-Result "FAIL" "Windows Store" "unknown error" }
+            default { Write-Row "Scan" "TRIGGERED ($storeResult)" "Green"; Add-Result "OK" "Windows Store" "scan triggered via $storeResult" }
         }
     }
 
