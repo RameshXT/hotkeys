@@ -37,7 +37,6 @@ SetTimer WatchScript, 1000
 
 USER_HOME := EnvGet("USERPROFILE")
 global DOUBLE_PRESS_DELAY   := 400
-global GIT_BASH_EXE         := "C:\Program Files\Git\git-bash.exe"
 global INSTAGRAM_APP        := "C:\Program Files\Instagram.lnk"
 global LOGS_DIR             := USER_HOME . "\sys-scripts\logs"
 global LONG_PRESS_THRESHOLD := 600
@@ -159,6 +158,48 @@ GetChromePath() {
         if (path != "" && FileExist(path))
             return path
     return "chrome.exe"
+}
+
+GetGitBashPath() {
+    try {
+        path := RegRead("HKEY_LOCAL_MACHINE\SOFTWARE\GitForWindows", "InstallPath")
+        if (path != "") {
+            fullPath := path . "\git-bash.exe"
+            if FileExist(fullPath)
+                return fullPath
+        }
+    }
+    try {
+        path := RegRead("HKEY_CURRENT_USER\SOFTWARE\GitForWindows", "InstallPath")
+        if (path != "") {
+            fullPath := path . "\git-bash.exe"
+            if FileExist(fullPath)
+                return fullPath
+        }
+    }
+    try {
+        path := RegRead("HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Git_is1", "InstallLocation")
+        if (path != "") {
+            fullPath := path . "\git-bash.exe"
+            if FileExist(fullPath)
+                return fullPath
+        }
+    }
+    try {
+        path := RegRead("HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Git_is1", "InstallLocation")
+        if (path != "") {
+            fullPath := path . "\git-bash.exe"
+            if FileExist(fullPath)
+                return fullPath
+        }
+    }
+    paths := [ EnvGet("ProgramFiles") . "\Git\git-bash.exe"
+             , EnvGet("ProgramFiles(x86)") . "\Git\git-bash.exe"
+             , EnvGet("LocalAppData") . "\Programs\Git\git-bash.exe" ]
+    for index, path in paths
+        if (path != "" && FileExist(path))
+            return path
+    return "git-bash.exe"
 }
 
 GetPhotoshopPath() {
@@ -488,7 +529,7 @@ U_SinglePress() {
 }
 #MaxThreadsPerHotkey 1
 
-!g::HandleContextHotkey("g", "Git Bash", GIT_BASH_EXE, "--cd-to-home", "--cd=")
+!g::HandleContextHotkey("g", "Git Bash", GetGitBashPath(), "--cd-to-home", "--cd=")
 
 !i:: {
     ShowTransientToolTip("Instagram")
