@@ -513,6 +513,17 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
             return
         }
 
+        defaultId := ""
+        try {
+            defaultDevice := 0
+            ComCall(4, deviceEnumerator, "int", 0, "int", 0, "ptr*", &defaultDevice := 0)
+            defaultIdPtr := 0
+            ComCall(5, defaultDevice, "ptr*", &defaultIdPtr)
+            defaultId := StrGet(defaultIdPtr, "UTF-16")
+            DllCall("Ole32\CoTaskMemFree", "ptr", defaultIdPtr)
+            ObjRelease(defaultDevice)
+        }
+
         if (targetVolume != "") {
             try {
                 val := SoundGetVolume(, targetId)
@@ -523,9 +534,11 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
         }
 
         IPolicyConfig := ComObject("{870AF99C-171D-4F9E-AF0D-E63DF40C2BC9}", "{F8679F50-850A-41CF-9C72-430F290290C8}")
-        ComCall(13, IPolicyConfig, "Str", targetId, "UInt", 0)
-        ComCall(13, IPolicyConfig, "Str", targetId, "UInt", 1)
-        ComCall(13, IPolicyConfig, "Str", targetId, "UInt", 2)
+        if (targetId != defaultId) {
+            ComCall(13, IPolicyConfig, "Str", targetId, "UInt", 0)
+            ComCall(13, IPolicyConfig, "Str", targetId, "UInt", 1)
+            ComCall(13, IPolicyConfig, "Str", targetId, "UInt", 2)
+        }
 
         dispName := (friendlyNameOverride != "") ? friendlyNameOverride : targetName
         ShowTransientToolTip("Active: " . dispName)
@@ -586,9 +599,22 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
             ObjRelease(micsCollection)
 
             if (micId != "") {
-                ComCall(13, IPolicyConfig, "Str", micId, "UInt", 0)
-                ComCall(13, IPolicyConfig, "Str", micId, "UInt", 1)
-                ComCall(13, IPolicyConfig, "Str", micId, "UInt", 2)
+                defaultMicId := ""
+                try {
+                    defaultMicDevice := 0
+                    ComCall(4, deviceEnumerator, "int", 1, "int", 0, "ptr*", &defaultMicDevice := 0)
+                    defaultMicIdPtr := 0
+                    ComCall(5, defaultMicDevice, "ptr*", &defaultMicIdPtr)
+                    defaultMicId := StrGet(defaultMicIdPtr, "UTF-16")
+                    DllCall("Ole32\CoTaskMemFree", "ptr", defaultMicIdPtr)
+                    ObjRelease(defaultMicDevice)
+                }
+
+                if (micId != defaultMicId) {
+                    ComCall(13, IPolicyConfig, "Str", micId, "UInt", 0)
+                    ComCall(13, IPolicyConfig, "Str", micId, "UInt", 1)
+                    ComCall(13, IPolicyConfig, "Str", micId, "UInt", 2)
+                }
             }
         }
     } catch as e {
