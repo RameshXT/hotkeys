@@ -383,6 +383,23 @@ RunAppAndNotify(path, args, name) {
 ShowLaunchError(prefix, err) {
     msg := (err is Error) ? err.Message : String(err)
     ShowTransientToolTip(prefix . ": " . msg)
+
+    try {
+        if !DirExist(LOGS_DIR)
+            DirCreate(LOGS_DIR)
+
+        timestamp := FormatTime(, "yyyy-MM-dd HH:mm:ss")
+        logLine := "[" . timestamp . "] " . prefix . ": " . msg . "`n"
+        if (err is Error) {
+            logLine .= "  File: " . err.File . "`n"
+            logLine .= "  Line: " . err.Line . "`n"
+            logLine .= "  What: " . err.What . "`n"
+            logLine .= "  Extra: " . err.Extra . "`n"
+        }
+        logLine .= "----------------------------------------`n"
+
+        FileAppend(logLine, LOGS_DIR . "\hotkey_errors.log", "UTF-8")
+    }
 }
 
 ShowTransientToolTip(message, durationMs := "") {
