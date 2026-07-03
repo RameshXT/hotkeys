@@ -18,6 +18,10 @@
 ; Alt + Y  → YouTube
 ; Alt + Z  → Unzip ZIP
 
+; Ctrl + Shift + Q         → Switch to Sony MDRX-50
+; Ctrl + Shift + X         → Switch to Black Shark V2
+; Ctrl + Shift + Y         → Switch to Resound
+; Ctrl + Shift + Z         → Switch to HEAT
 ; Ctrl + Shift + Alt + C   → Cleanup
 ; Ctrl + Shift + Alt + L   → Logs
 ; Ctrl + Shift + Alt + N   → Network Reset
@@ -41,11 +45,26 @@ global LONG_PRESS_THRESHOLD := GetEnvInt("AHK_LONG_PRESS_THRESHOLD", 600)
 global ScriptModTime        := ""
 global TOOLTIP_DURATION_MS  := GetEnvInt("AHK_TOOLTIP_DURATION_MS", 2000)
 global WINDOW_WAIT_TIMEOUT  := GetEnvInt("AHK_WINDOW_WAIT_TIMEOUT", 5)
+global AUDIO_DEVICE_1 := GetEnvString("AHK_AUDIO_DEVICE_1", "Surround")
+global AUDIO_DEVICE_2 := GetEnvString("AHK_AUDIO_DEVICE_2", "Resound")
+global AUDIO_DEVICE_3 := GetEnvString("AHK_AUDIO_DEVICE_3", "Speakers (Realtek")
+global AUDIO_MIC_1 := GetEnvString("AHK_AUDIO_MIC_1", "Microphone (Realtek(R) Audio)")
+global AUDIO_MIC_2 := GetEnvString("AHK_AUDIO_MIC_2", "Razer")
+global AUDIO_MIC_3 := GetEnvString("AHK_AUDIO_MIC_3", "Array")
+global LAST_SURROUND_VOLUME := 75
+try {
+    LAST_SURROUND_VOLUME := SoundGetVolume()
+}
 
 ; ====================[ Helper Functions ]====================
 GetEnvInt(varName, defaultValue) {
     val := EnvGet(varName)
     return (val != "" && IsInteger(val)) ? Integer(val) : defaultValue
+}
+
+GetEnvString(varName, defaultValue) {
+    val := EnvGet(varName)
+    return (val != "") ? val : defaultValue
 }
 
 class Wow64RedirectionGuard {
@@ -433,6 +452,150 @@ ShowTransientToolTip(message, durationMs := "") {
     SetTimer RemoveToolTip, -durationMs
 }
 
+SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "", micNameSubstr := "") {
+    global LAST_SURROUND_VOLUME
+    try {
+        deviceEnumerator := ComObject("{BCDE0395-E52F-467C-8E3D-C4579291692E}", "{A95664D2-9614-4F35-A746-DE8DB63617E6}")
+
+        ; 1. Switch Playback Device
+        devicesCollection := 0
+        ComCall(3, deviceEnumerator, "int", 0, "uint", 1, "ptr*", &devicesCollection := 0)
+
+        count := 0
+        ComCall(3, devicesCollection, "uint*", &count)
+
+        targetId := ""
+        targetName := ""
+
+        Loop count {
+            device := 0
+            ComCall(4, devicesCollection, "uint", A_Index - 1, "ptr*", &device := 0)
+
+            idPtr := 0
+            ComCall(5, device, "ptr*", &idPtr)
+            id := StrGet(idPtr, "UTF-16")
+            DllCall("Ole32\CoTaskMemFree", "ptr", idPtr)
+
+            propertyStore := 0
+            ComCall(4, device, "uint", 0, "ptr*", &propertyStore := 0)
+
+            keyGUID := Buffer(16)
+            DllCall("Ole32\CLSIDFromString", "str", "{A45C254E-DF1C-4EFD-8020-67D146A850E0}", "ptr", keyGUID)
+            propKey := Buffer(20)
+            DllCall("RtlMoveMemory", "ptr", propKey, "ptr", keyGUID, "ptr", 16)
+            NumPut("uint", 14, propKey, 16)
+
+            propVariant := Buffer(16, 0)
+            ComCall(5, propertyStore, "ptr", propKey, "ptr", propVariant)
+
+            friendlyName := ""
+            if (NumGet(propVariant, 0, "ushort") = 31) {
+                namePtr := NumGet(propVariant, 8, "ptr")
+                friendlyName := StrGet(namePtr, "UTF-16")
+            }
+
+            if (InStr(friendlyName, deviceNameSubstr)) {
+                targetId := id
+                targetName := friendlyName
+            }
+
+            ObjRelease(propertyStore)
+            ObjRelease(device)
+
+            if (targetId != "")
+                break
+        }
+
+        ObjRelease(devicesCollection)
+
+        if (targetId = "") {
+            ShowTransientToolTip("Audio device not found: " . deviceNameSubstr)
+            return
+        }
+
+        if (targetVolume != "") {
+            try {
+                val := SoundGetVolume(, targetId)
+                if (val != targetVolume) {
+                    LAST_SURROUND_VOLUME := val
+                }
+            }
+        }
+
+        IPolicyConfig := ComObject("{870AF99C-171D-4F9E-AF0D-E63DF40C2BC9}", "{F8679F50-850A-41CF-9C72-430F290290C8}")
+        ComCall(13, IPolicyConfig, "Str", targetId, "UInt", 0)
+        ComCall(13, IPolicyConfig, "Str", targetId, "UInt", 1)
+        ComCall(13, IPolicyConfig, "Str", targetId, "UInt", 2)
+
+        dispName := (friendlyNameOverride != "") ? friendlyNameOverride : targetName
+        ShowTransientToolTip("Active: " . dispName)
+
+        if (deviceNameSubstr = AUDIO_DEVICE_1 && targetVolume = "") {
+            Sleep 300
+            SoundSetVolume(LAST_SURROUND_VOLUME)
+        } else if (targetVolume != "") {
+            Sleep 300
+            SoundSetVolume(targetVolume)
+        }
+
+        ; 2. Switch Recording Device (Microphone)
+        if (micNameSubstr != "") {
+            micsCollection := 0
+            ComCall(3, deviceEnumerator, "int", 1, "uint", 1, "ptr*", &micsCollection := 0)
+            micCount := 0
+            ComCall(3, micsCollection, "uint*", &micCount)
+
+            micId := ""
+            Loop micCount {
+                device := 0
+                ComCall(4, micsCollection, "uint", A_Index - 1, "ptr*", &device := 0)
+
+                idPtr := 0
+                ComCall(5, device, "ptr*", &idPtr)
+                id := StrGet(idPtr, "UTF-16")
+                DllCall("Ole32\CoTaskMemFree", "ptr", idPtr)
+
+                propertyStore := 0
+                ComCall(4, device, "uint", 0, "ptr*", &propertyStore := 0)
+
+                keyGUID := Buffer(16)
+                DllCall("Ole32\CLSIDFromString", "str", "{A45C254E-DF1C-4EFD-8020-67D146A850E0}", "ptr", keyGUID)
+                propKey := Buffer(20)
+                DllCall("RtlMoveMemory", "ptr", propKey, "ptr", keyGUID, "ptr", 16)
+                NumPut("uint", 14, propKey, 16)
+
+                propVariant := Buffer(16, 0)
+                ComCall(5, propertyStore, "ptr", propKey, "ptr", propVariant)
+
+                friendlyName := ""
+                if (NumGet(propVariant, 0, "ushort") = 31) {
+                    namePtr := NumGet(propVariant, 8, "ptr")
+                    friendlyName := StrGet(namePtr, "UTF-16")
+                }
+
+                if (InStr(friendlyName, micNameSubstr)) {
+                    micId := id
+                }
+
+                ObjRelease(propertyStore)
+                ObjRelease(device)
+
+                if (micId != "")
+                    break
+            }
+            ObjRelease(micsCollection)
+
+            if (micId != "") {
+                ComCall(13, IPolicyConfig, "Str", micId, "UInt", 0)
+                ComCall(13, IPolicyConfig, "Str", micId, "UInt", 1)
+                ComCall(13, IPolicyConfig, "Str", micId, "UInt", 2)
+            }
+        }
+    } catch as e {
+        ShowLaunchError("Audio Switch Error", e)
+    }
+}
+
 TriggerScheduledTask(taskName, friendlyName, triggerFile := "", resultFile := "", timeoutSec := 60) {
     if (taskName = "" || friendlyName = "") {
         ShowTransientToolTip("Scheduled task configuration is invalid")
@@ -789,3 +952,8 @@ WatchScript() {
         , USER_HOME . "\sys-scripts\update\update_trigger.txt"
         , USER_HOME . "\sys-scripts\update\update_result.txt", 180)
 }
+
+^+q:: SetAudioOutput(AUDIO_DEVICE_1, 25, "Sony MDRX-50", AUDIO_MIC_1)
+^+x:: SetAudioOutput(AUDIO_DEVICE_1, , "Black Shark V2", AUDIO_MIC_2)
+^+y:: SetAudioOutput(AUDIO_DEVICE_2, , "Resound", AUDIO_MIC_1)
+^+z:: SetAudioOutput(AUDIO_DEVICE_3, , "Heat", AUDIO_MIC_1)
