@@ -39,12 +39,8 @@ USER_HOME := EnvGet("USERPROFILE")
 global DOUBLE_PRESS_DELAY   := GetEnvInt("AHK_DOUBLE_PRESS_DELAY", 400)
 global LOGS_DIR             := USER_HOME . "\sys-scripts\logs"
 global LONG_PRESS_THRESHOLD := GetEnvInt("AHK_LONG_PRESS_THRESHOLD", 600)
-global o_LastPress          := 0
-global one_LastPress        := 0
-global p_LastPress          := 0
 global ScriptModTime        := "" ; Used for Auto-Reload
 global TOOLTIP_DURATION_MS  := GetEnvInt("AHK_TOOLTIP_DURATION_MS", 2000)
-global u_LastPress          := 0
 global WINDOW_WAIT_TIMEOUT  := GetEnvInt("AHK_WINDOW_WAIT_TIMEOUT", 5)
 
 ; ====================[ Helper Functions ]====================
@@ -203,6 +199,45 @@ class AppResolver {
             }
         }
         return str
+    }
+}
+
+class DoublePressManager {
+    static lastPresses := Map()
+    static timers := Map()
+
+    /**
+     * Handles double press logic for hotkeys.
+     * @param key Unique key identifier.
+     * @param singlePressCallback Callback function for single press (executed after delay).
+     * @param doublePressCallback Callback function for double press (executed immediately).
+     */
+    static Handle(key, singlePressCallback := "", doublePressCallback := "") {
+        now := A_TickCount
+        last := this.lastPresses.Has(key) ? this.lastPresses[key] : 0
+
+        if (now - last < DOUBLE_PRESS_DELAY) {
+            this.lastPresses[key] := 0
+            if this.timers.Has(key) {
+                SetTimer this.timers[key], 0
+                this.timers.Delete(key)
+            }
+            if (doublePressCallback != "")
+                doublePressCallback()
+        } else {
+            this.lastPresses[key] := now
+            if (singlePressCallback != "") {
+                timerFn := this.ExecuteAndClear.Bind(this, key, singlePressCallback)
+                this.timers[key] := timerFn
+                SetTimer timerFn, -DOUBLE_PRESS_DELAY
+            }
+        }
+    }
+
+    static ExecuteAndClear(key, callback) {
+        if this.timers.Has(key)
+            this.timers.Delete(key)
+        callback()
     }
 }
 
@@ -425,47 +460,14 @@ WatchScript() {
     }
 }
 
-P_SinglePress() {
-    ShowTransientToolTip("PowerShell")
-    oldR := DisableRedirection()
-    try
-        Run("powershell.exe", USER_HOME)
-    catch as e
-        ShowLaunchError("Failed to launch PowerShell", e)
-    RevertRedirection(oldR)
-}
-
-O_SinglePress() {
-    ShowTransientToolTip("CMD")
-    oldR := DisableRedirection()
-    try
-        Run("cmd.exe", USER_HOME)
-    catch as e
-        ShowLaunchError("Failed to launch CMD", e)
-    RevertRedirection(oldR)
-}
-
-U_SinglePress() {
-    ShowTransientToolTip("WSL")
-    oldR := DisableRedirection()
-    try
-        Run('wsl.exe -- bash -lc "cd ~; exec bash"')
-    catch as e
-        ShowTransientToolTip("Failed to launch WSL`nIs WSL installed? " . e.Message)
-    RevertRedirection(oldR)
-}
+; Removed old single-press callback functions as they are now handled by DoublePressManager.
 
 ; ====================[ Hotkeys ]====================
 
 !0::RunApp("calc.exe", "", "Calculator")
 
 !1:: {
-    global one_LastPress
-    now := A_TickCount
-    timeSinceLastPress := now - one_LastPress
-    one_LastPress := now
-    if (timeSinceLastPress > 0 && timeSinceLastPress < DOUBLE_PRESS_DELAY) {
-        one_LastPress := 0
+    doublePress() {
         photoshopPath := AppResolver.Get("Photoshop", "Photoshop.exe", [
             "%ProgramFiles%\Adobe\Adobe Photoshop 2024\Photoshop.exe",
             "%ProgramFiles%\Adobe\Adobe Photoshop 2023\Photoshop.exe",
@@ -479,6 +481,7 @@ U_SinglePress() {
         ])
         RunApp(photoshopPath, "", "Photoshop")
     }
+    DoublePressManager.Handle("Photoshop", "", doublePress)
 }
 
 !a:: {
@@ -567,19 +570,21 @@ U_SinglePress() {
 !n::RunApp("notepad.exe", "", "Notepad")
 
 !p:: {
-    global p_LastPress
-    now := A_TickCount
-    timeSinceLastPress := now - p_LastPress
-
-    if (timeSinceLastPress > 0 && timeSinceLastPress < DOUBLE_PRESS_DELAY) {
-        p_LastPress := 0
-        SetTimer P_SinglePress, 0
-
+    singlePress() {
+        ShowTransientToolTip("PowerShell")
+        oldR := DisableRedirection()
+        try
+            Run("powershell.exe", USER_HOME)
+        catch as e
+            ShowLaunchError("Failed to launch PowerShell", e)
+        RevertRedirection(oldR)
+    }
+    doublePress() {
         winClass := WinGetClass("A")
         dir := ""
         if (winClass = "CabinetWClass" || winClass = "ExploreWClass")
             dir := GetExplorerPath()
-
+        
         if (dir != "") {
             ShowTransientToolTip("PowerShell in Folder")
             oldR := DisableRedirection()
@@ -589,18 +594,10 @@ U_SinglePress() {
                 ShowLaunchError("Failed to launch PowerShell", e)
             RevertRedirection(oldR)
         } else {
-            ShowTransientToolTip("PowerShell")
-            oldR := DisableRedirection()
-            try
-                Run("powershell.exe", USER_HOME)
-            catch as e
-                ShowLaunchError("Failed to launch PowerShell", e)
-            RevertRedirection(oldR)
+            singlePress()
         }
-    } else {
-        p_LastPress := now
-        SetTimer P_SinglePress, -DOUBLE_PRESS_DELAY
     }
+    DoublePressManager.Handle("PowerShell", singlePress, doublePress)
 }
 
 !q:: {
@@ -616,14 +613,16 @@ U_SinglePress() {
 }
 
 !o:: {
-    global o_LastPress
-    now := A_TickCount
-    timeSinceLastPress := now - o_LastPress
-
-    if (timeSinceLastPress > 0 && timeSinceLastPress < DOUBLE_PRESS_DELAY) {
-        o_LastPress := 0
-        SetTimer O_SinglePress, 0
-
+    singlePress() {
+        ShowTransientToolTip("CMD")
+        oldR := DisableRedirection()
+        try
+            Run("cmd.exe", USER_HOME)
+        catch as e
+            ShowLaunchError("Failed to launch CMD", e)
+        RevertRedirection(oldR)
+    }
+    doublePress() {
         winClass := WinGetClass("A")
         dir := ""
         if (winClass = "CabinetWClass" || winClass = "ExploreWClass")
@@ -650,10 +649,8 @@ U_SinglePress() {
             }
             RevertRedirection(oldR)
         }
-    } else {
-        o_LastPress := now
-        SetTimer O_SinglePress, -DOUBLE_PRESS_DELAY
     }
+    DoublePressManager.Handle("CMD", singlePress, doublePress)
 }
 
 !s:: {
@@ -668,14 +665,16 @@ U_SinglePress() {
 !t::RunApp("tg://", "", "Telegram")
 
 !u:: {
-    global u_LastPress
-    now := A_TickCount
-    timeSinceLastPress := now - u_LastPress
-
-    if (timeSinceLastPress > 0 && timeSinceLastPress < DOUBLE_PRESS_DELAY) {
-        u_LastPress := 0
-        SetTimer U_SinglePress, 0
-
+    singlePress() {
+        ShowTransientToolTip("WSL")
+        oldR := DisableRedirection()
+        try
+            Run('wsl.exe -- bash -lc "cd ~; exec bash"')
+        catch as e
+            ShowTransientToolTip("Failed to launch WSL`nIs WSL installed? " . e.Message)
+        RevertRedirection(oldR)
+    }
+    doublePress() {
         dir := GetValidExplorerPath()
         if (dir != "") {
             unixPath := ConvertToWSLPath(dir)
@@ -687,10 +686,8 @@ U_SinglePress() {
                 ShowTransientToolTip("Failed to launch WSL`nIs WSL installed? " . e.Message)
             RevertRedirection(oldR)
         }
-    } else {
-        u_LastPress := now
-        SetTimer U_SinglePress, -DOUBLE_PRESS_DELAY
     }
+    DoublePressManager.Handle("WSL", singlePress, doublePress)
 }
 
 !v:: {
