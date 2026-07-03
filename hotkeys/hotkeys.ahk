@@ -1,28 +1,28 @@
 ; ==================[ Hotkey Reference ]==================
-; Alt + 0 →     Calculator
-; Alt + 1 →     Photoshop (Double Tap)
-; Alt + A →     Antigravity  |  Double → Antigravity in Explorer folder
-; Alt + C →     Chrome  |  Long Press → Chrome Incognito
-; Alt + G →     Git Bash  |  Double → Git Bash in Explorer folder
-; Alt + I →     Instagram
-; Alt + M →     Microsoft Store
-; Alt + N →     Notepad
-; Alt + O →     CMD  |  Double → Admin CMD (in Folder or Home)
-; Alt + P →     PowerShell  |  Double → PowerShell in Folder
-; Alt + Q →     Close Active Window (hold to keep closing)
-; Alt + S →     Slack
-; Alt + T →     Telegram
-; Alt + U →     Ubuntu 24.04 WSL | Double (in Folder wsl)
-; Alt + V →     VS Code  |  Double → VS Code in Explorer folder
-; Alt + W →     WhatsApp
-; Alt + Y →     YouTube
-; Alt + Z →     Unzip selected .zip file
+; Alt + 0  → Calculator
+; Alt + 1  → Photoshop (Double)
+; Alt + A  → Antigravity            | Double: Current Folder
+; Alt + C  → Chrome                 | Hold: Incognito
+; Alt + G  → Git Bash               | Double: Current Folder
+; Alt + I  → Instagram
+; Alt + M  → Microsoft Store
+; Alt + N  → Notepad
+; Alt + O  → CMD                    | Double: Admin
+; Alt + P  → PowerShell             | Double: Current Folder
+; Alt + Q  → Close Window           | Hold: Repeat
+; Alt + S  → Slack
+; Alt + T  → Telegram
+; Alt + U  → Ubuntu WSL             | Double: Current Folder
+; Alt + V  → VS Code                | Double: Current Folder
+; Alt + W  → WhatsApp
+; Alt + Y  → YouTube
+; Alt + Z  → Unzip ZIP
 
-; Ctrl + Shift + Alt + C       → Run Windows Cleanup Script
-; Ctrl + Shift + Alt + L       → Open Logs Folder
-; Ctrl + Shift + Alt + N       → Run Network Reset Script
-; Ctrl + Shift + Alt + U       → Run Windows Updater Script
-; Ctrl + Shift + Alt + Delete  → Empty Recycle Bin (with confirm)
+; Ctrl + Shift + Alt + C   → Cleanup
+; Ctrl + Shift + Alt + L   → Logs
+; Ctrl + Shift + Alt + N   → Network Reset
+; Ctrl + Shift + Alt + U   → Windows Update
+; Ctrl + Shift + Alt + Del → Empty Recycle Bin
 
 ; ====================[ Script Config & Variables ]====================
 #Requires AutoHotkey v2.0.26
