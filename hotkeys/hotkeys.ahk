@@ -36,8 +36,6 @@ SetWorkingDir A_ScriptDir
 SetTimer WatchScript, 1000
 
 USER_HOME := EnvGet("USERPROFILE")
-global CHROME_LNK           := "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\Google Chrome.lnk"
-global CHROME_PATH          := "C:\Program Files\Google\Chrome\Application\chrome.exe"
 global DOUBLE_PRESS_DELAY   := 400
 global GIT_BASH_EXE         := "C:\Program Files\Git\git-bash.exe"
 global INSTAGRAM_APP        := "C:\Program Files\Instagram.lnk"
@@ -141,6 +139,26 @@ GetExplorerPath() {
         ShowLaunchError("Error getting Explorer path", e)
     }
     return ""
+}
+
+GetChromePath() {
+    try {
+        path := RegRead("HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe", "")
+        if (path != "" && FileExist(path))
+            return path
+    }
+    try {
+        path := RegRead("HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe", "")
+        if (path != "" && FileExist(path))
+            return path
+    }
+    paths := [ EnvGet("ProgramFiles") . "\Google\Chrome\Application\chrome.exe"
+             , EnvGet("ProgramFiles(x86)") . "\Google\Chrome\Application\chrome.exe"
+             , EnvGet("LocalAppData") . "\Google\Chrome\Application\chrome.exe" ]
+    for index, path in paths
+        if (path != "" && FileExist(path))
+            return path
+    return "chrome.exe"
 }
 
 GetPhotoshopPath() {
@@ -429,16 +447,18 @@ U_SinglePress() {
 
     pressDuration := A_TickCount - pressStart
 
+    chromePath := GetChromePath()
+    if (chromePath = "chrome.exe" && !FileExist(chromePath)) {
+        MsgBox("Chrome not found.", "Error", 16)
+        KeyWait "c", "T2"
+        return
+    }
+
     if (pressDuration >= LONG_PRESS_THRESHOLD) {
         ; Long press: incognito fires immediately at 600ms, then wait for release (max 2s)
-        if (!FileExist(CHROME_PATH)) {
-            MsgBox("Chrome not found:`n" . CHROME_PATH, "Error", 16)
-            KeyWait "c", "T2"
-            return
-        }
         oldR := DisableRedirection()
         try
-            Run('"' . CHROME_PATH . '" --incognito')
+            Run('"' . chromePath . '" --incognito')
         catch as e {
             RevertRedirection(oldR)
             ShowLaunchError("Failed to launch Chrome", e)
@@ -450,13 +470,9 @@ U_SinglePress() {
     } else {
         ; Short press: wait for release (max 2s) then open normal Chrome
         KeyWait "c", "T2"
-        if (!FileExist(CHROME_LNK)) {
-            MsgBox("Chrome shortcut not found:`n" . CHROME_LNK, "Error", 16)
-            return
-        }
         oldR := DisableRedirection()
         try
-            Run('"' . CHROME_LNK . '"')
+            Run('"' . chromePath . '"')
         catch as e {    
             RevertRedirection(oldR)
             ShowLaunchError("Failed to launch Chrome", e)
