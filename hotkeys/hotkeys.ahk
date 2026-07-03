@@ -36,18 +36,23 @@ SetWorkingDir A_ScriptDir
 SetTimer WatchScript, 1000
 
 USER_HOME := EnvGet("USERPROFILE")
-global DOUBLE_PRESS_DELAY   := 400
+global DOUBLE_PRESS_DELAY   := GetEnvInt("AHK_DOUBLE_PRESS_DELAY", 400)
 global LOGS_DIR             := USER_HOME . "\sys-scripts\logs"
-global LONG_PRESS_THRESHOLD := 600
+global LONG_PRESS_THRESHOLD := GetEnvInt("AHK_LONG_PRESS_THRESHOLD", 600)
 global o_LastPress          := 0
 global one_LastPress        := 0
 global p_LastPress          := 0
 global ScriptModTime        := "" ; Used for Auto-Reload
-global TOOLTIP_DURATION_MS  := 2000
+global TOOLTIP_DURATION_MS  := GetEnvInt("AHK_TOOLTIP_DURATION_MS", 2000)
 global u_LastPress          := 0
-global WINDOW_WAIT_TIMEOUT  := 5
+global WINDOW_WAIT_TIMEOUT  := GetEnvInt("AHK_WINDOW_WAIT_TIMEOUT", 5)
 
 ; ====================[ Helper Functions ]====================
+
+GetEnvInt(varName, defaultValue) {
+    val := EnvGet(varName)
+    return (val != "" && IsInteger(val)) ? Integer(val) : defaultValue
+}
 
 DisableRedirection() {
     oldRedir := 0
@@ -276,7 +281,10 @@ IsProtectedWindowClass(windowClass) {
     return (windowClass = "Shell_TrayWnd" || windowClass = "Progman" || windowClass = "WorkerW")
 }
 
-LaunchAndMaximize(appPath, windowIdentifier := "", timeout := 5) {
+LaunchAndMaximize(appPath, windowIdentifier := "", timeout := "") {
+    if (timeout = "")
+        timeout := WINDOW_WAIT_TIMEOUT
+
     if (InStr(appPath, "\") && !FileExist(appPath)) {
         MsgBox("Application not found:`n" . appPath, "Error", 16)
         return false
@@ -300,7 +308,7 @@ LaunchAndMaximize(appPath, windowIdentifier := "", timeout := 5) {
             WinMaximize
         else {
             ToolTip("Window not detected: " . windowIdentifier)
-            SetTimer RemoveToolTip, -2000
+            SetTimer RemoveToolTip, -TOOLTIP_DURATION_MS
         }
     }
 
@@ -489,7 +497,7 @@ U_SinglePress() {
     pressStart := A_TickCount
 
     ; Wait up to LONG_PRESS_THRESHOLD ms for key release
-    KeyWait "c", "T0.6"
+    KeyWait "c", "T" . (LONG_PRESS_THRESHOLD / 1000)
 
     pressDuration := A_TickCount - pressStart
 
