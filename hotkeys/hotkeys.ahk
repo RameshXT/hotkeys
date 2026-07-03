@@ -32,14 +32,13 @@ Persistent()
 SendMode "Input"
 SetWorkingDir A_ScriptDir
 
-; Auto-Reload on Script Change
 SetTimer WatchScript, 1000
 
 USER_HOME := EnvGet("USERPROFILE")
 global DOUBLE_PRESS_DELAY   := GetEnvInt("AHK_DOUBLE_PRESS_DELAY", 400)
 global LOGS_DIR             := USER_HOME . "\sys-scripts\logs"
 global LONG_PRESS_THRESHOLD := GetEnvInt("AHK_LONG_PRESS_THRESHOLD", 600)
-global ScriptModTime        := "" ; Used for Auto-Reload
+global ScriptModTime        := ""
 global TOOLTIP_DURATION_MS  := GetEnvInt("AHK_TOOLTIP_DURATION_MS", 2000)
 global WINDOW_WAIT_TIMEOUT  := GetEnvInt("AHK_WINDOW_WAIT_TIMEOUT", 5)
 
@@ -111,21 +110,12 @@ ExtractSelectedZip() {
 class AppResolver {
     static cache := Map()
 
-    /**
-     * Resolves the full path to an application executable or shortcut.
-     * @param appKey The key name to cache the result.
-     * @param exeName Optional executable name to check in Registry App Paths.
-     * @param searchPatterns Array of fallback paths (with environment variables).
-     * @param regPaths Array of custom registry keys and values: ["KeyPath|ValueName", ...]
-     * @returns {string} The resolved path or bare exeName.
-     */
     static Get(appKey, exeName := "", searchPatterns := [], regPaths := []) {
         if this.cache.Has(appKey)
             return this.cache[appKey]
 
         resolvedPath := ""
 
-        ; 1. Try Registry App Paths if exeName is provided
         if (exeName != "") {
             for root in ["HKEY_LOCAL_MACHINE", "HKEY_CURRENT_USER"] {
                 try {
@@ -138,7 +128,6 @@ class AppResolver {
             }
         }
 
-        ; 2. Try Custom Registry Keys
         if (resolvedPath = "" && regPaths.Length > 0) {
             for regSpec in regPaths {
                 parts := StrSplit(regSpec, "|")
@@ -160,7 +149,6 @@ class AppResolver {
             }
         }
 
-        ; 3. Try Fallback search patterns (expanding env variables)
         if (resolvedPath = "") {
             for pattern in searchPatterns {
                 expanded := this.ExpandEnvVars(pattern)
@@ -171,7 +159,6 @@ class AppResolver {
             }
         }
 
-        ; 4. Default fallback to raw exeName
         if (resolvedPath = "") {
             resolvedPath := exeName != "" ? exeName : ""
         }
@@ -180,9 +167,6 @@ class AppResolver {
         return resolvedPath
     }
 
-    /**
-     * Expands environment variables like %ProgramFiles% in a string.
-     */
     static ExpandEnvVars(str) {
         if (!InStr(str, "%"))
             return str
@@ -211,12 +195,6 @@ class DoublePressManager {
     static lastPresses := Map()
     static timers := Map()
 
-    /**
-     * Handles double press logic for hotkeys.
-     * @param key Unique key identifier.
-     * @param singlePressCallback Callback function for single press (executed after delay).
-     * @param doublePressCallback Callback function for double press (executed immediately).
-     */
     static Handle(key, singlePressCallback := "", doublePressCallback := "") {
         now := A_TickCount
         last := this.lastPresses.Has(key) ? this.lastPresses[key] : 0
@@ -347,7 +325,6 @@ SmartRun(targetPath, args := "", workingDir := "") {
             Run('"' . targetPath . '"', workingDir)
         return true
     } catch as e {
-        ; A_LastError 740 = ERROR_ELEVATION_REQUIRED, 5 = ERROR_ACCESS_DENIED
         if (A_LastError = 740 || A_LastError = 5 || InStr(e.Message, "elevation")) {
             try {
                 if (args != "")
@@ -523,8 +500,6 @@ WatchScript() {
     }
 }
 
-; Removed old single-press callback functions as they are now handled by DoublePressManager.
-
 ; ====================[ Hotkeys ]====================
 
 !0::RunApp("calc.exe", "", "Calculator")
@@ -562,7 +537,6 @@ WatchScript() {
 !c:: {
     pressStart := A_TickCount
 
-    ; Wait up to LONG_PRESS_THRESHOLD ms for key release
     KeyWait "c", "T" . (LONG_PRESS_THRESHOLD / 1000)
 
     pressDuration := A_TickCount - pressStart
@@ -575,7 +549,6 @@ WatchScript() {
     }
 
     if (pressDuration >= LONG_PRESS_THRESHOLD) {
-        ; Long press: incognito fires immediately at 600ms, then wait for release (max 2s)
         guard := Wow64RedirectionGuard()
         try
             Run('"' . chromePath . '" --incognito')
@@ -586,7 +559,6 @@ WatchScript() {
         }
         KeyWait "c", "T2"
     } else {
-        ; Short press: wait for release (max 2s) then open normal Chrome
         KeyWait "c", "T2"
         guard := Wow64RedirectionGuard()
         try
