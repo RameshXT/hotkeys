@@ -50,16 +50,23 @@ GetEnvInt(varName, defaultValue) {
     return (val != "" && IsInteger(val)) ? Integer(val) : defaultValue
 }
 
-DisableRedirection() {
+class Wow64RedirectionGuard {
     oldRedir := 0
-    if (A_Is64bitOS && A_PtrSize = 4)
-        DllCall("Wow64DisableWow64FsRedirection", "Ptr*", &oldRedir)
-    return oldRedir
-}
 
-RevertRedirection(oldRedir) {
-    if (A_Is64bitOS && A_PtrSize = 4)
-        DllCall("Wow64RevertWow64FsRedirection", "Ptr", oldRedir)
+    __New() {
+        if (A_Is64bitOS && A_PtrSize = 4) {
+            oldVal := 0
+            DllCall("Wow64DisableWow64FsRedirection", "Ptr*", &oldVal)
+            this.oldRedir := oldVal
+        }
+    }
+
+    __Delete() {
+        if (this.oldRedir != 0) {
+            DllCall("Wow64RevertWow64FsRedirection", "Ptr", this.oldRedir)
+            this.oldRedir := 0
+        }
+    }
 }
 
 ConvertToWSLPath(winPath) {
@@ -91,15 +98,13 @@ ExtractSelectedZip() {
     targetDir := fileDir . "\" . nameNoExt . "\"
     winrarPath := AppResolver.Get("WinRAR", "WinRAR.exe", ["%ProgramFiles%\WinRAR\WinRAR.exe", "%ProgramFiles(x86)%\WinRAR\WinRAR.exe"])
     if FileExist(winrarPath) {
-        oldR := DisableRedirection()
+        guard := Wow64RedirectionGuard()
         Run('"' . winrarPath . '" x -o+ "' . selectedPath . '" "' . targetDir . '"')
-        RevertRedirection(oldR)
     } else {
         safeSelectedPath := StrReplace(selectedPath, "'", "''")
         safeTargetDir := StrReplace(targetDir, "'", "''")
-        oldR := DisableRedirection()
+        guard := Wow64RedirectionGuard()
         Run("powershell.exe -NoProfile -Command `"Expand-Archive -Path '" . safeSelectedPath . "' -DestinationPath '" . safeTargetDir . "' -Force`"", , "Hide")
-        RevertRedirection(oldR)
     }
 }
 
@@ -325,18 +330,16 @@ LaunchAndMaximize(appPath, windowIdentifier := "", timeout := "") {
         return false
     }
 
-    oldR := DisableRedirection()
+    guard := Wow64RedirectionGuard()
     try {
         if InStr(appPath, "://")
             Run(appPath)
         else
             Run('"' . appPath . '"')
     } catch as e {
-        RevertRedirection(oldR)
         MsgBox("Failed to launch:`n" . appPath . "`n`nError: " . e.Message, "Launch Error", 16)
         return false
     }
-    RevertRedirection(oldR)
 
     if (windowIdentifier != "") {
         if WinWait(windowIdentifier, , timeout)
@@ -353,13 +356,12 @@ LaunchAndMaximize(appPath, windowIdentifier := "", timeout := "") {
 RunApp(path, args := "", name := "") {
     if (name != "")
         ShowTransientToolTip(name)
-    oldR := DisableRedirection()
+    guard := Wow64RedirectionGuard()
     try {
         if InStr(path, "://") {
             Run(path)
         } else {
             if (InStr(path, "\") && !FileExist(path)) {
-                RevertRedirection(oldR)
                 MsgBox("Target not found:`n" . path, "Error", 16)
                 return
             }
@@ -372,7 +374,6 @@ RunApp(path, args := "", name := "") {
     } catch as e {
         ShowLaunchError("Launch Error", e)
     }
-    RevertRedirection(oldR)
 }
 
 RunAppAndNotify(path, args, name) {
@@ -427,16 +428,14 @@ TriggerScheduledTask(taskName, friendlyName, triggerFile := "", resultFile := ""
         }
     }
 
-    oldR := DisableRedirection()
+    guard := Wow64RedirectionGuard()
     try {
         Run('schtasks.exe /Run /TN "' . taskName . '" /I', , "Hide")
         ShowTransientToolTip(friendlyName . " in progress...")
     } catch as e {
-        RevertRedirection(oldR)
         ShowLaunchError("Failed to trigger " . friendlyName, e)
         return
     }
-    RevertRedirection(oldR)
 
     if (resultFile == "")
         return
@@ -530,29 +529,25 @@ WatchScript() {
 
     if (pressDuration >= LONG_PRESS_THRESHOLD) {
         ; Long press: incognito fires immediately at 600ms, then wait for release (max 2s)
-        oldR := DisableRedirection()
+        guard := Wow64RedirectionGuard()
         try
             Run('"' . chromePath . '" --incognito')
         catch as e {
-            RevertRedirection(oldR)
             ShowLaunchError("Failed to launch Chrome", e)
             KeyWait "c", "T2"
             return
         }
-        RevertRedirection(oldR)
         KeyWait "c", "T2"
     } else {
         ; Short press: wait for release (max 2s) then open normal Chrome
         KeyWait "c", "T2"
-        oldR := DisableRedirection()
+        guard := Wow64RedirectionGuard()
         try
             Run('"' . chromePath . '"')
         catch as e {    
-            RevertRedirection(oldR)
             ShowLaunchError("Failed to launch Chrome", e)
             return
         }
-        RevertRedirection(oldR)
     }
 
     if WinWait("ahk_exe chrome.exe", , WINDOW_WAIT_TIMEOUT)
@@ -589,12 +584,11 @@ WatchScript() {
 !p:: {
     singlePress() {
         ShowTransientToolTip("PowerShell")
-        oldR := DisableRedirection()
+        guard := Wow64RedirectionGuard()
         try
             Run("powershell.exe", USER_HOME)
         catch as e
             ShowLaunchError("Failed to launch PowerShell", e)
-        RevertRedirection(oldR)
     }
     doublePress() {
         winClass := WinGetClass("A")
@@ -604,12 +598,11 @@ WatchScript() {
         
         if (dir != "") {
             ShowTransientToolTip("PowerShell in Folder")
-            oldR := DisableRedirection()
+            guard := Wow64RedirectionGuard()
             try
                 Run("powershell.exe", dir)
             catch as e
                 ShowLaunchError("Failed to launch PowerShell", e)
-            RevertRedirection(oldR)
         } else {
             singlePress()
         }
@@ -632,12 +625,11 @@ WatchScript() {
 !o:: {
     singlePress() {
         ShowTransientToolTip("CMD")
-        oldR := DisableRedirection()
+        guard := Wow64RedirectionGuard()
         try
             Run("cmd.exe", USER_HOME)
         catch as e
             ShowLaunchError("Failed to launch CMD", e)
-        RevertRedirection(oldR)
     }
     doublePress() {
         winClass := WinGetClass("A")
@@ -647,24 +639,22 @@ WatchScript() {
 
         if (dir != "") {
             ShowTransientToolTip("Admin CMD in Folder")
-            oldR := DisableRedirection()
+            guard := Wow64RedirectionGuard()
             try
                 Run('*RunAs cmd.exe /K cd /d "' . dir . '"')
             catch as e {
                 if (A_LastError != 1223)
                     ShowLaunchError("Failed to launch Admin CMD", e)
             }
-            RevertRedirection(oldR)
         } else {
             ShowTransientToolTip("Admin CMD")
-            oldR := DisableRedirection()
+            guard := Wow64RedirectionGuard()
             try
                 Run("*RunAs cmd.exe", USER_HOME)
             catch as e {
                 if (A_LastError != 1223)
                     ShowLaunchError("Failed to launch Admin CMD", e)
             }
-            RevertRedirection(oldR)
         }
     }
     DoublePressManager.Handle("CMD", singlePress, doublePress)
@@ -684,24 +674,22 @@ WatchScript() {
 !u:: {
     singlePress() {
         ShowTransientToolTip("WSL")
-        oldR := DisableRedirection()
+        guard := Wow64RedirectionGuard()
         try
             Run('wsl.exe -- bash -lc "cd ~; exec bash"')
         catch as e
             ShowTransientToolTip("Failed to launch WSL`nIs WSL installed? " . e.Message)
-        RevertRedirection(oldR)
     }
     doublePress() {
         dir := GetValidExplorerPath()
         if (dir != "") {
             unixPath := ConvertToWSLPath(dir)
             ShowTransientToolTip("WSL")
-            oldR := DisableRedirection()
+            guard := Wow64RedirectionGuard()
             try
                 Run("wsl.exe -- bash -lc `"cd '" . unixPath . "'; exec bash`"")
             catch as e
                 ShowTransientToolTip("Failed to launch WSL`nIs WSL installed? " . e.Message)
-            RevertRedirection(oldR)
         }
     }
     DoublePressManager.Handle("WSL", singlePress, doublePress)
@@ -758,12 +746,11 @@ WatchScript() {
         ShowTransientToolTip("Logs folder not found: " . LOGS_DIR)
         return
     }
-    oldR := DisableRedirection()
+    guard := Wow64RedirectionGuard()
     try
         Run('explorer.exe "' . LOGS_DIR . '"')
     catch as e
         ShowLaunchError("Failed to open logs folder", e)
-    RevertRedirection(oldR)
 }
 
 ^+!n:: {
