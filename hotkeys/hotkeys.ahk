@@ -247,14 +247,31 @@ class DoublePressManager {
 }
 
 GetExplorerPath() {
+    hwnd := WinActive("A")
+    if (!hwnd || !(WinGetClass(hwnd) ~= "CabinetWClass|ExploreWClass"))
+        return ""
+
+    activeTab := 0
+    try activeTab := ControlGetHwnd("ShellTabWindowClass1", hwnd)
+
     try {
         for window in ComObject("Shell.Application").Windows {
             try {
-                if (window.hwnd = WinActive("A")) {
-                    folderPath := window.Document.Folder.Self.Path
-                    if (folderPath != "")
-                        return folderPath
+                if (window.hwnd != hwnd)
+                    continue
+
+                if (activeTab) {
+                    static IID_IShellBrowser := "{000214E2-0000-0000-C000-000000000046}"
+                    shellBrowser := ComObjQuery(window, IID_IShellBrowser, IID_IShellBrowser)
+                    thisTab := 0
+                    ComCall(3, shellBrowser, "ptr*", &thisTab)
+                    if (thisTab != activeTab)
+                        continue
                 }
+
+                folderPath := window.Document.Folder.Self.Path
+                if (folderPath != "")
+                    return folderPath
             } catch {
                 continue
             }
@@ -321,6 +338,33 @@ IsProtectedWindowClass(windowClass) {
     return (windowClass = "Shell_TrayWnd" || windowClass = "Progman" || windowClass = "WorkerW")
 }
 
+SmartRun(targetPath, args := "", workingDir := "") {
+    guard := Wow64RedirectionGuard()
+    try {
+        if (args != "")
+            Run('"' . targetPath . '" ' . args, workingDir)
+        else
+            Run('"' . targetPath . '"', workingDir)
+        return true
+    } catch as e {
+        ; A_LastError 740 = ERROR_ELEVATION_REQUIRED, 5 = ERROR_ACCESS_DENIED
+        if (A_LastError = 740 || A_LastError = 5 || InStr(e.Message, "elevation")) {
+            try {
+                if (args != "")
+                    Run('*RunAs "' . targetPath . '" ' . args, workingDir)
+                else
+                    Run('*RunAs "' . targetPath . '"', workingDir)
+                return true
+            } catch as uacErr {
+                if (A_LastError = 1223)
+                    return false
+                throw uacErr
+            }
+        }
+        throw e
+    }
+}
+
 LaunchAndMaximize(appPath, windowIdentifier := "", timeout := "") {
     if (timeout = "")
         timeout := WINDOW_WAIT_TIMEOUT
@@ -330,12 +374,13 @@ LaunchAndMaximize(appPath, windowIdentifier := "", timeout := "") {
         return false
     }
 
-    guard := Wow64RedirectionGuard()
     try {
-        if InStr(appPath, "://")
+        if InStr(appPath, "://") {
             Run(appPath)
-        else
-            Run('"' . appPath . '"')
+        } else {
+            if (!SmartRun(appPath))
+                return false
+        }
     } catch as e {
         MsgBox("Failed to launch:`n" . appPath . "`n`nError: " . e.Message, "Launch Error", 16)
         return false
@@ -356,7 +401,6 @@ LaunchAndMaximize(appPath, windowIdentifier := "", timeout := "") {
 RunApp(path, args := "", name := "") {
     if (name != "")
         ShowTransientToolTip(name)
-    guard := Wow64RedirectionGuard()
     try {
         if InStr(path, "://") {
             Run(path)
@@ -365,11 +409,7 @@ RunApp(path, args := "", name := "") {
                 MsgBox("Target not found:`n" . path, "Error", 16)
                 return
             }
-
-            if (args != "")
-                Run('"' . path . '" ' . args)
-            else
-                Run('"' . path . '"')
+            SmartRun(path, args)
         }
     } catch as e {
         ShowLaunchError("Launch Error", e)
@@ -389,6 +429,13 @@ ShowLaunchError(prefix, err) {
         if !DirExist(LOGS_DIR)
             DirCreate(LOGS_DIR)
 
+        logFile := LOGS_DIR . "\hotkey_errors.log"
+        if FileExist(logFile) {
+            if (FileGetSize(logFile) >= 2097152) {
+                FileDelete(logFile)
+            }
+        }
+
         timestamp := FormatTime(, "yyyy-MM-dd HH:mm:ss")
         logLine := "[" . timestamp . "] " . prefix . ": " . msg . "`n"
         if (err is Error) {
@@ -399,7 +446,7 @@ ShowLaunchError(prefix, err) {
         }
         logLine .= "----------------------------------------`n"
 
-        FileAppend(logLine, LOGS_DIR . "\hotkey_errors.log", "UTF-8")
+        FileAppend(logLine, logFile, "UTF-8")
     }
 }
 
