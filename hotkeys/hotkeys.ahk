@@ -43,7 +43,6 @@ global TOOLTIP_DURATION_MS  := GetEnvInt("AHK_TOOLTIP_DURATION_MS", 2000)
 global WINDOW_WAIT_TIMEOUT  := GetEnvInt("AHK_WINDOW_WAIT_TIMEOUT", 5)
 
 ; ====================[ Helper Functions ]====================
-
 GetEnvInt(varName, defaultValue) {
     val := EnvGet(varName)
     return (val != "" && IsInteger(val)) ? Integer(val) : defaultValue
@@ -481,7 +480,6 @@ TriggerScheduledTask(taskName, friendlyName, triggerFile := "", resultFile := ""
 }
 
 ; ====================[ Subroutines & Timers ]====================
-
 RemoveToolTip() {
     ToolTip()
 }
@@ -501,7 +499,6 @@ WatchScript() {
 }
 
 ; ====================[ Hotkeys ]====================
-
 !0::RunApp("calc.exe", "", "Calculator")
 
 !1:: {
