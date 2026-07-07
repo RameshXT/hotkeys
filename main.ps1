@@ -212,7 +212,7 @@ function Register-PSTask {
     param(
         [string]$TaskName,
         [string]$ScriptPath,
-        [ValidateSet("Weekly", "Daily", "AtLogon")]
+        [ValidateSet("Weekly", "Daily", "AtLogon", "Manual")]
         [string]$TriggerType,
         [string]$At = "02:00",
         [ValidateSet("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")]
@@ -226,19 +226,24 @@ function Register-PSTask {
 
         $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File `"$ScriptPath`""
 
+        $trigger = $null
         if ($TriggerType -eq "Weekly") {
             $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek $Day -At $At
         }
         elseif ($TriggerType -eq "Daily") {
             $trigger = New-ScheduledTaskTrigger -Daily -At $At
         }
-        else {
+        elseif ($TriggerType -eq "AtLogon") {
             $trigger = New-ScheduledTaskTrigger -AtLogOn
         }
 
         $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Hours 1) -StartWhenAvailable -MultipleInstances IgnoreNew
 
-        Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -RunLevel Highest -Force -ErrorAction Stop | Out-Null
+        if ($null -ne $trigger) {
+            Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -RunLevel Highest -Force -ErrorAction Stop | Out-Null
+        } else {
+            Register-ScheduledTask -TaskName $TaskName -Action $action -Settings $settings -RunLevel Highest -Force -ErrorAction Stop | Out-Null
+        }
         Write-OK "Task registered : $TaskName"
         return "OK"
     }
@@ -248,9 +253,9 @@ function Register-PSTask {
     }
 }
 
-$t1 = Register-PSTask -TaskName "UserCleanup"  -ScriptPath (Join-Path $Destination "cleanup\cleanup.ps1")         -TriggerType "Weekly"  -At "02:00" -Day "Sunday"
-$t2 = Register-PSTask -TaskName "UserNetReset" -ScriptPath (Join-Path $Destination "network\network-reset.ps1")   -TriggerType "AtLogon"
-$t3 = Register-PSTask -TaskName "UserUpdate"   -ScriptPath (Join-Path $Destination "update\update.ps1")           -TriggerType "Weekly"  -At "03:00" -Day "Monday"
+$t1 = Register-PSTask -TaskName "WindowsCleanup"  -ScriptPath (Join-Path $Destination "cleanup\cleanup.ps1")         -TriggerType "Weekly"  -At "02:00" -Day "Sunday"
+$t2 = Register-PSTask -TaskName "NetworkReset"    -ScriptPath (Join-Path $Destination "network\network-reset.ps1")   -TriggerType "Manual"
+$t3 = Register-PSTask -TaskName "WindowsUpdater"  -ScriptPath (Join-Path $Destination "update\update.ps1")           -TriggerType "AtLogon"
 
 if ($t1 -eq "FAIL" -or $t2 -eq "FAIL" -or $t3 -eq "FAIL") { $ErrorCount++ }
 if ($t1 -eq "WARN" -or $t2 -eq "WARN" -or $t3 -eq "WARN") { $WarnCount++ }
