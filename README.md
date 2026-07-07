@@ -75,34 +75,43 @@ Advanced AutoHotkey system providing context-aware application launching, system
 ### Key Logic & Features
 
 - **Contextual Intelligence**:
-  - **Double-Tap to Folder**: `Alt + V` (VS Code), `A` (Antigravity), `G` (Git Bash), and `U` (Ubuntu WSL) open the application directly in your **active File Explorer directory** when double-pressed.
-  - **Double-Tap to Admin**: `Alt + T` toggles between a standard User CMD and an **Administrator CMD**.
+  - **Double-Tap to Folder**: `Alt + V` (VS Code), `Alt + A` (Antigravity), `Alt + G` (Git Bash), `Alt + P` (PowerShell), and `Alt + U` (Ubuntu WSL) open the application directly in your **active File Explorer directory** when double-pressed.
+  - **Double-Tap to Admin**: `Alt + O` launches standard CMD on a single press, and an **Administrator CMD** (in folder if active) when double-pressed.
   - **Long-Press Interface**: `Alt + C` launches standard Chrome on a short tap, but triggers **Incognito Mode** if held for >600ms.
-- **Safety & Protection**: `Alt + Q` (Close Window) supports continuous closing when held, but is logic-locked to **prevent accidental closure** of critical system components (Taskbar, Desktop).
+- **Safety & Protection**: `Alt + Q` (Close Window) supports continuous closing when held, but is logic-locked to **prevent accidental closure** of critical system components, showing "Nothing to close" if there is no active/non-system window.
+- **Audio Output Switching**: Quickly switch audio playback and recording devices using `Ctrl + Shift + [Key]` combinations.
 - **Automation Pipeline**: Integrates with Windows Scheduled Tasks for Cleanup, Updates, and Network Resets, providing real-time status feedback.
 - **Self-Maintaining**: Automatically reloads and applies changes the moment you save `hotkeys.ahk`.
 
-| Hotkey                | Action              | Double / Long Press             |
-| --------------------- | ------------------- | ------------------------------- |
-| Alt + V               | VS Code             | Open in current Explorer folder |
-| Alt + A               | Antigravity         | Open in current Explorer folder |
-| Alt + G               | Git Bash            | Open in current Explorer folder |
-| Alt + U               | Ubuntu 22.04 WSL    | Open in current Explorer folder |
-| Alt + T               | CMD                 | Toggle **Admin CMD**            |
-| Alt + C               | Google Chrome       | Long press → **Incognito Mode** |
-| Alt + P               | PowerShell (Admin)  | NA                              |
-| Alt + Y               | YouTube             | Auto-Maximize                   |
-| Alt + W               | WhatsApp            | Auto-Maximize                   |
-| Alt + I               | Instagram           | Auto-Maximize                   |
-| Alt + S               | Slack               | Auto-Maximize                   |
-| Alt + N               | Notepad             | NA                              |
-| Alt + 0               | Calculator          | NA                              |
-| Alt + Q               | Close active window | Continuous Close (Protected)    |
-| Ctrl+Shift+Alt+C      | Run Windows Cleanup | Result via TrayTip              |
-| Ctrl+Shift+Alt+U      | Run Windows Updater | Result via TrayTip              |
-| Ctrl+Shift+Alt+N      | Run Network Reset   | Result via ToolTip              |
-| Ctrl+Shift+Alt+L      | Open Logs Folder    | NA                              |
-| Ctrl+Shift+Alt+Delete | Empty Recycle Bin   | Confirmation required           |
+| Hotkey                | Action                | Double / Long Press             |
+| --------------------- | --------------------- | ------------------------------- |
+| Alt + 0               | Calculator            | NA                              |
+| Alt + 1               | Photoshop             | Launch Photoshop (Double Press) |
+| Alt + A               | Antigravity           | Open in current Explorer folder |
+| Alt + C               | Google Chrome         | Long press → **Incognito Mode** |
+| Alt + G               | Git Bash              | Open in current Explorer folder |
+| Alt + I               | Instagram             | Auto-Maximize                   |
+| Alt + M               | Microsoft Store       | NA                              |
+| Alt + N               | Notepad               | NA                              |
+| Alt + O               | CMD                   | Double press → **Admin CMD**    |
+| Alt + P               | PowerShell            | Open in current Explorer folder |
+| Alt + Q               | Close active window   | Continuous Close (Protected)    |
+| Alt + S               | Slack                 | Auto-Maximize                   |
+| Alt + T               | Telegram              | NA                              |
+| Alt + U               | Ubuntu WSL            | Open in current Explorer folder |
+| Alt + V               | VS Code               | Open in current Explorer folder |
+| Alt + W               | WhatsApp              | Auto-Maximize                   |
+| Alt + Y               | YouTube               | Auto-Maximize                   |
+| Alt + Z               | Unzip Selected ZIP    | NA                              |
+| Ctrl + Shift + Q      | Switch to Sony MDRX50 | NA                              |
+| Ctrl + Shift + X      | Switch to Black Shark | NA                              |
+| Ctrl + Shift + Y      | Switch to Resound     | NA                              |
+| Ctrl + Shift + Z      | Switch to Heat        | NA                              |
+| Ctrl+Shift+Alt+C      | Run Windows Cleanup   | Result via TrayTip              |
+| Ctrl+Shift+Alt+U      | Run Windows Updater   | Result via TrayTip              |
+| Ctrl+Shift+Alt+N      | Run Network Reset     | Result via ToolTip              |
+| Ctrl+Shift+Alt+L      | Open Logs Folder      | NA                              |
+| Ctrl+Shift+Alt+Delete | Empty Recycle Bin     | Confirmation required           |
 
 ---
 
