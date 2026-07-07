@@ -51,9 +51,17 @@ global AUDIO_DEVICE_3 := GetEnvString("AHK_AUDIO_DEVICE_3", "Speakers (Realtek")
 global AUDIO_MIC_1 := GetEnvString("AHK_AUDIO_MIC_1", "Microphone (Realtek(R) Audio)")
 global AUDIO_MIC_2 := GetEnvString("AHK_AUDIO_MIC_2", "Razer")
 global AUDIO_MIC_3 := GetEnvString("AHK_AUDIO_MIC_3", "Array")
-global LAST_SURROUND_VOLUME := 75
+global DEVICE_VOLUME_HISTORY := Map()
+global LAST_DEVICE := ""
 try {
-    LAST_SURROUND_VOLUME := SoundGetVolume()
+    initVol := SoundGetVolume()
+    if (initVol = 25) {
+        LAST_DEVICE := "Sony MDRX-50"
+        DEVICE_VOLUME_HISTORY["Sony MDRX-50"] := 25
+    } else {
+        LAST_DEVICE := "Black Shark V2"
+        DEVICE_VOLUME_HISTORY["Black Shark V2"] := initVol
+    }
 }
 
 ; ====================[ Helper Functions ]====================
@@ -524,12 +532,10 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
             ObjRelease(defaultDevice)
         }
 
-        if (targetVolume != "") {
+        global LAST_DEVICE, DEVICE_VOLUME_HISTORY
+        if (LAST_DEVICE != "") {
             try {
-                val := SoundGetVolume(, targetId)
-                if (val != targetVolume) {
-                    LAST_SURROUND_VOLUME := val
-                }
+                DEVICE_VOLUME_HISTORY[LAST_DEVICE] := SoundGetVolume()
             }
         }
 
@@ -543,13 +549,14 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
         dispName := (friendlyNameOverride != "") ? friendlyNameOverride : targetName
         ShowTransientToolTip("Active: " . dispName)
 
-        if (deviceNameSubstr = AUDIO_DEVICE_1 && targetVolume = "") {
-            Sleep 300
-            SoundSetVolume(LAST_SURROUND_VOLUME)
-        } else if (targetVolume != "") {
+        if (targetVolume != "") {
             Sleep 300
             SoundSetVolume(targetVolume)
+        } else if (DEVICE_VOLUME_HISTORY.Has(friendlyNameOverride)) {
+            Sleep 300
+            SoundSetVolume(DEVICE_VOLUME_HISTORY[friendlyNameOverride])
         }
+        LAST_DEVICE := friendlyNameOverride
 
         ; 2. Switch Recording Device (Microphone)
         if (micNameSubstr != "") {
