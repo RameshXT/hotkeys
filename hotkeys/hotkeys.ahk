@@ -7,8 +7,8 @@
 ; Alt + I  → Instagram
 ; Alt + M  → Microsoft Store
 ; Alt + N  → Notepad
-; Alt + O  → CMD                    | Double: Admin
-; Alt + P  → PowerShell             | Double: Current Folder
+; Alt + O  → CMD                    | Double: Admin (if no folder focused)
+; Alt + P  → PowerShell             | Double: Admin (if no folder focused)
 ; Alt + Q  → Close Window           | Hold: Repeat
 ; Alt + S  → Slack
 ; Alt + T  → Telegram
