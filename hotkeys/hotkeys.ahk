@@ -401,7 +401,7 @@ LaunchAndMaximize(appPath, windowIdentifier := "", timeout := "") {
     return true
 }
 
-RunApp(path, args := "", name := "") {
+RunApp(path, args := "", name := "", workingDir := "") {
     if (name != "")
         ShowTransientToolTip(name)
     try {
@@ -412,7 +412,7 @@ RunApp(path, args := "", name := "") {
                 MsgBox("Target not found:`n" . path, "Error", 16)
                 return
             }
-            SmartRun(path, args)
+            SmartRun(path, args, workingDir)
         }
     } catch as e {
         ShowLaunchError("Launch Error", e)
@@ -682,7 +682,11 @@ RemoveToolTip() {
 
 WatchScript() {
     global ScriptModTime
-    curModTime := FileGetTime(A_ScriptFullPath)
+    try {
+        curModTime := FileGetTime(A_ScriptFullPath)
+    } catch {
+        return
+    }
     if (ScriptModTime = "") {
         ScriptModTime := curModTime
         return
@@ -710,7 +714,8 @@ WatchScript() {
             "%StartMenuCommon%\Programs\Adobe Photoshop.lnk",
             "%StartMenu%\Programs\Adobe Photoshop.lnk"
         ])
-        RunApp(photoshopPath, "", "Photoshop")
+        SplitPath photoshopPath, , &photoshopDir
+        RunApp(photoshopPath, "", "Photoshop", photoshopDir)
     }
     DoublePressManager.Handle("Photoshop", "", doublePress)
 }
@@ -824,12 +829,18 @@ WatchScript() {
 
 !q:: {
     while GetKeyState("q", "P") && GetKeyState("Alt", "P") {
-        activeClass := WinGetClass("A")
-        if IsProtectedWindowClass(activeClass) {
-            ShowTransientToolTip("Cannot close system window")
+        if !WinExist("A")
+            break
+        try {
+            activeClass := WinGetClass("A")
+            if IsProtectedWindowClass(activeClass) {
+                ShowTransientToolTip("Nothing to close")
+                break
+            }
+            WinClose "A"
+        } catch {
             break
         }
-        WinClose "A"
         Sleep 100
     }
 }
