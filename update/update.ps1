@@ -128,8 +128,7 @@ function Invoke-WithLoader {
     Write-Host "`r$clearLine`r" -NoNewline
 
     try {
-        $jobErrors = $null
-        $result = Receive-Job -Job $job -Wait -ErrorVariable jobErrors -ErrorAction SilentlyContinue
+        $result = Receive-Job -Job $job -Wait -ErrorAction SilentlyContinue
         return $result
     }
     catch {
