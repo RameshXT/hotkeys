@@ -808,7 +808,8 @@ WatchScript() {
             ShowLaunchError("Failed to launch PowerShell", e)
     }
     doublePress() {
-        winClass := WinGetClass("A")
+        winClass := ""
+        try winClass := WinGetClass("A")
         dir := ""
         if (winClass = "CabinetWClass" || winClass = "ExploreWClass")
             dir := GetExplorerPath()
@@ -821,7 +822,14 @@ WatchScript() {
             catch as e
                 ShowLaunchError("Failed to launch PowerShell", e)
         } else {
-            singlePress()
+            ShowTransientToolTip("Admin PowerShell")
+            guard := Wow64RedirectionGuard()
+            try
+                Run("*RunAs powershell.exe", USER_HOME)
+            catch as e {
+                if (A_LastError != 1223)
+                    ShowLaunchError("Failed to launch Admin PowerShell", e)
+            }
         }
     }
     DoublePressManager.Handle("PowerShell", singlePress, doublePress)
@@ -847,28 +855,42 @@ WatchScript() {
 
 !o:: {
     singlePress() {
-        ShowTransientToolTip("CMD")
-        guard := Wow64RedirectionGuard()
-        try
-            Run("cmd.exe", USER_HOME)
-        catch as e
-            ShowLaunchError("Failed to launch CMD", e)
-    }
-    doublePress() {
-        winClass := WinGetClass("A")
+        winClass := ""
+        try winClass := WinGetClass("A")
         dir := ""
         if (winClass = "CabinetWClass" || winClass = "ExploreWClass")
             dir := GetExplorerPath()
 
         if (dir != "") {
-            ShowTransientToolTip("Admin CMD in Folder")
+            ShowTransientToolTip("CMD in Folder")
             guard := Wow64RedirectionGuard()
             try
-                Run('*RunAs cmd.exe /K cd /d "' . dir . '"')
-            catch as e {
-                if (A_LastError != 1223)
-                    ShowLaunchError("Failed to launch Admin CMD", e)
-            }
+                Run("cmd.exe", dir)
+            catch as e
+                ShowLaunchError("Failed to launch CMD", e)
+        } else {
+            ShowTransientToolTip("CMD")
+            guard := Wow64RedirectionGuard()
+            try
+                Run("cmd.exe", USER_HOME)
+            catch as e
+                ShowLaunchError("Failed to launch CMD", e)
+        }
+    }
+    doublePress() {
+        winClass := ""
+        try winClass := WinGetClass("A")
+        dir := ""
+        if (winClass = "CabinetWClass" || winClass = "ExploreWClass")
+            dir := GetExplorerPath()
+
+        if (dir != "") {
+            ShowTransientToolTip("CMD in Folder")
+            guard := Wow64RedirectionGuard()
+            try
+                Run("cmd.exe", dir)
+            catch as e
+                ShowLaunchError("Failed to launch CMD", e)
         } else {
             ShowTransientToolTip("Admin CMD")
             guard := Wow64RedirectionGuard()

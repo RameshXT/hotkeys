@@ -76,7 +76,7 @@ Advanced AutoHotkey system providing context-aware application launching, system
 
 - **Contextual Intelligence**:
   - **Double-Tap to Folder**: `Alt + V` (VS Code), `Alt + A` (Antigravity), `Alt + G` (Git Bash), `Alt + P` (PowerShell), and `Alt + U` (Ubuntu WSL) open the application directly in your **active File Explorer directory** when double-pressed.
-  - **Double-Tap to Admin**: `Alt + O` launches standard CMD on a single press, and an **Administrator CMD** (in folder if active) when double-pressed.
+  - **Double-Tap to Admin**: `Alt + O` (CMD) and `Alt + P` (PowerShell) open standard shell (in folder if active) on single press, and their respective **Administrator** versions (when no folder is active) on double press.
   - **Long-Press Interface**: `Alt + C` launches standard Chrome on a short tap, but triggers **Incognito Mode** if held for >600ms.
 - **Safety & Protection**: `Alt + Q` (Close Window) supports continuous closing when held, but is logic-locked to **prevent accidental closure** of critical system components, showing "Nothing to close" if there is no active/non-system window.
 - **Audio Output Switching**: Quickly switch audio playback and recording devices using `Ctrl + Shift + [Key]` combinations.
@@ -93,8 +93,8 @@ Advanced AutoHotkey system providing context-aware application launching, system
 | Alt + I               | Instagram             | Auto-Maximize                   |
 | Alt + M               | Microsoft Store       | NA                              |
 | Alt + N               | Notepad               | NA                              |
-| Alt + O               | CMD                   | Double press → **Admin CMD**    |
-| Alt + P               | PowerShell            | Open in current Explorer folder |
+| Alt + O               | CMD                   | Double press → **Admin CMD** (when no folder focused) |
+| Alt + P               | PowerShell            | Double press → **Admin PowerShell** (when no folder focused) |
 | Alt + Q               | Close active window   | Continuous Close (Protected)    |
 | Alt + S               | Slack                 | Auto-Maximize                   |
 | Alt + T               | Telegram              | NA                              |
