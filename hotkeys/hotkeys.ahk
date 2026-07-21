@@ -786,6 +786,8 @@ WatchScript() {
 
 !i:: {
     instagramPath := AppResolver.Get("Instagram", "", [
+        "%AppData%\Microsoft\Windows\Start Menu\Programs\Chrome Apps\Instagram.lnk",
+        "%StartMenuCommon%\Programs\Chrome Apps\Instagram.lnk",
         "%ProgramFiles%\Instagram.lnk",
         "%StartMenuCommon%\Programs\Instagram.lnk",
         "%StartMenu%\Programs\Instagram.lnk"
@@ -914,7 +916,18 @@ WatchScript() {
     LaunchAndMaximize(slackPath, "ahk_exe slack.exe", WINDOW_WAIT_TIMEOUT)
 }
 
-!t::RunApp("tg://", "", "Telegram")
+!t:: {
+    telegramPath := AppResolver.Get("Telegram", "", [
+        "%AppData%\Microsoft\Windows\Start Menu\Programs\Chrome Apps\Telegram Web.lnk",
+        "%StartMenuCommon%\Programs\Chrome Apps\Telegram Web.lnk"
+    ])
+    if (telegramPath != "" && FileExist(telegramPath)) {
+        ShowTransientToolTip("Telegram")
+        LaunchAndMaximize(telegramPath, "Telegram", WINDOW_WAIT_TIMEOUT)
+    } else {
+        RunApp("tg://", "", "Telegram")
+    }
+}
 
 !u:: {
     singlePress() {
@@ -950,6 +963,8 @@ WatchScript() {
 
 !w:: {
     whatsappPath := AppResolver.Get("WhatsApp", "", [
+        "%AppData%\Microsoft\Windows\Start Menu\Programs\Chrome Apps\WhatsApp Web.lnk",
+        "%StartMenuCommon%\Programs\Chrome Apps\WhatsApp Web.lnk",
         "%ProgramFiles%\WhatsApp.lnk",
         "%StartMenuCommon%\Programs\WhatsApp.lnk",
         "%StartMenu%\Programs\WhatsApp.lnk"
