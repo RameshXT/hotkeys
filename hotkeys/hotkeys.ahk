@@ -1,6 +1,7 @@
 ; ==================[ Hotkey Reference ]==================
 ; Alt + 0  → Calculator
 ; Alt + 1  → Photoshop (Double)
+; Alt + 7  → 7.1 Surround Sound
 ; Alt + A  → Antigravity            | Double: Current Folder
 ; Alt + C  → Chrome                 | Hold: Incognito
 ; Alt + G  → Git Bash               | Double: Current Folder
@@ -718,6 +719,15 @@ WatchScript() {
         RunApp(photoshopPath, "", "Photoshop", photoshopDir)
     }
     DoublePressManager.Handle("Photoshop", "", doublePress)
+}
+
+!7:: {
+    razer71Path := AppResolver.Get("Razer71", "rzappengine.exe", [
+        "%ProgramFiles%\Razer\RzAppEngine\rzappengine.exe",
+        "%StartMenuCommon%\Programs\Razer\7.1 Surround Sound.lnk"
+    ])
+    SplitPath razer71Path, , &razer71Dir
+    RunApp(razer71Path, "--url-params=apps=7.1-surround-sound --disable-background-timer-throttling", "7.1 Surround Sound", razer71Dir)
 }
 
 !a:: {

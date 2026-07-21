@@ -87,6 +87,7 @@ Advanced AutoHotkey system providing context-aware application launching, system
 | --------------------- | --------------------- | ------------------------------- |
 | Alt + 0               | Calculator            | NA                              |
 | Alt + 1               | Photoshop             | Launch Photoshop (Double Press) |
+| Alt + 7               | 7.1 Surround Sound    | NA                              |
 | Alt + A               | Antigravity           | Open in current Explorer folder |
 | Alt + C               | Google Chrome         | Long press → **Incognito Mode** |
 | Alt + G               | Git Bash              | Open in current Explorer folder |
