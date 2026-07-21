@@ -40,12 +40,12 @@ SetWorkingDir A_ScriptDir
 SetTimer WatchScript, 1000
 
 USER_HOME := EnvGet("USERPROFILE")
-global DOUBLE_PRESS_DELAY   := GetEnvInt("AHK_DOUBLE_PRESS_DELAY", 400)
-global LOGS_DIR             := USER_HOME . "\sys-scripts\logs"
+global DOUBLE_PRESS_DELAY := GetEnvInt("AHK_DOUBLE_PRESS_DELAY", 400)
+global LOGS_DIR := USER_HOME . "\sys-scripts\logs"
 global LONG_PRESS_THRESHOLD := GetEnvInt("AHK_LONG_PRESS_THRESHOLD", 600)
-global ScriptModTime        := ""
-global TOOLTIP_DURATION_MS  := GetEnvInt("AHK_TOOLTIP_DURATION_MS", 2000)
-global WINDOW_WAIT_TIMEOUT  := GetEnvInt("AHK_WINDOW_WAIT_TIMEOUT", 5)
+global ScriptModTime := ""
+global TOOLTIP_DURATION_MS := GetEnvInt("AHK_TOOLTIP_DURATION_MS", 2000)
+global WINDOW_WAIT_TIMEOUT := GetEnvInt("AHK_WINDOW_WAIT_TIMEOUT", 5)
 global AUDIO_DEVICE_1 := GetEnvString("AHK_AUDIO_DEVICE_1", "Surround")
 global AUDIO_DEVICE_2 := GetEnvString("AHK_AUDIO_DEVICE_2", "Resound")
 global AUDIO_DEVICE_3 := GetEnvString("AHK_AUDIO_DEVICE_3", "Speakers (Realtek")
@@ -190,20 +190,22 @@ class AppResolver {
             resolvedPath := exeName != "" ? exeName : ""
         }
 
-        this.cache[appKey] := resolvedPath
+        if (resolvedPath != "" && (FileExist(resolvedPath) || InStr(resolvedPath, "://"))) {
+            this.cache[appKey] := resolvedPath
+        }
         return resolvedPath
     }
 
     static ExpandEnvVars(str) {
         if (!InStr(str, "%"))
             return str
-        
+
         str := StrReplace(str, "%StartMenuCommon%", A_StartMenuCommon)
         str := StrReplace(str, "%StartMenu%", A_StartMenu)
         str := StrReplace(str, "%AppData%", A_AppData)
         str := StrReplace(str, "%LocalAppData%", EnvGet("LocalAppData"))
         str := StrReplace(str, "%ProgramFiles%", A_ProgramFiles)
-        
+
         pos := 1
         while (pos <= StrLen(str)) {
             if (RegExMatch(str, "%([^%]+)%", &match, pos)) {
@@ -700,7 +702,7 @@ WatchScript() {
 }
 
 ; ====================[ Hotkeys ]====================
-!0::RunApp("calc.exe", "", "Calculator")
+!0:: RunApp("calc.exe", "", "Calculator")
 
 !1:: {
     doublePress() {
@@ -731,8 +733,9 @@ WatchScript() {
 }
 
 !a:: {
-    antigravityPath := AppResolver.Get("Antigravity", "antigravity-ide.cmd", [
+    antigravityPath := AppResolver.Get("Antigravity", "Antigravity IDE.exe", [
         "%LocalAppData%\Programs\Antigravity IDE\Antigravity IDE.exe",
+        "%LocalAppData%\Programs\Antigravity IDE\bin\antigravity-ide.cmd",
         "%ProgramFiles%\Antigravity IDE\Antigravity IDE.exe",
         "%ProgramFiles(x86)%\Antigravity IDE\Antigravity IDE.exe",
         "%StartMenu%\Programs\Antigravity\Antigravity.lnk",
@@ -771,7 +774,7 @@ WatchScript() {
         guard := Wow64RedirectionGuard()
         try
             Run('"' . chromePath . '"')
-        catch as e {    
+        catch as e {
             ShowLaunchError("Failed to launch Chrome", e)
             return
         }
@@ -806,9 +809,9 @@ WatchScript() {
     LaunchAndMaximize(instagramPath, "Instagram", WINDOW_WAIT_TIMEOUT)
 }
 
-!m::RunApp("ms-windows-store:", "", "Microsoft Store")
+!m:: RunApp("ms-windows-store:", "", "Microsoft Store")
 
-!n::RunApp("notepad.exe", "", "Notepad")
+!n:: RunApp("notepad.exe", "", "Notepad")
 
 !p:: {
     singlePress() {
@@ -825,7 +828,7 @@ WatchScript() {
         dir := ""
         if (winClass = "CabinetWClass" || winClass = "ExploreWClass")
             dir := GetExplorerPath()
-        
+
         if (dir != "") {
             ShowTransientToolTip("PowerShell in Folder")
             guard := Wow64RedirectionGuard()
@@ -991,7 +994,7 @@ WatchScript() {
     LaunchAndMaximize(youtubePath, "YouTube", WINDOW_WAIT_TIMEOUT)
 }
 
-!z::ExtractSelectedZip()
+!z:: ExtractSelectedZip()
 
 ^+!c:: {
     TriggerScheduledTask("WindowsCleanup", "Cleanup"
