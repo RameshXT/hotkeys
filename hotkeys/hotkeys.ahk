@@ -4,6 +4,7 @@
 ; Alt + 7  → 7.1 Surround Sound
 ; Alt + A  → Antigravity            | Double: Current Folder
 ; Alt + C  → Chrome                 | Hold: Incognito
+; Alt + E  → Outlook
 ; Alt + G  → Git Bash               | Double: Current Folder
 ; Alt + I  → Instagram
 ; Alt + M  → Microsoft Store
@@ -786,6 +787,14 @@ WatchScript() {
         ShowTransientToolTip("Chrome window not detected")
 }
 #MaxThreadsPerHotkey 1
+
+!e:: {
+    outlookPath := AppResolver.Get("Outlook", "", [
+        "%AppData%\Microsoft\Windows\Start Menu\Programs\Chrome Apps\Outlook (PWA).lnk",
+        "%StartMenuCommon%\Programs\Chrome Apps\Outlook (PWA).lnk"
+    ])
+    LaunchAndMaximize(outlookPath, "Outlook", WINDOW_WAIT_TIMEOUT)
+}
 
 !g:: {
     gitBashPath := AppResolver.Get("GitBash", "git-bash.exe", [
