@@ -34,14 +34,19 @@ foreach ($path in $ahkPaths) {
 }
 
 if ($null -eq $ahkBin) {
-    Write-Host "AutoHotkey v2 not found locally. Downloading portable AHK v2..." -ForegroundColor Yellow
+    Write-Host "AutoHotkey v2 not found locally. Fetching latest portable AHK v2 from GitHub API..." -ForegroundColor Yellow
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     $ahkZip = Join-Path $BuildDir "ahk-v2.zip"
     $ahkDir = Join-Path $BuildDir "ahk-v2"
-    $webClient = New-Object System.Net.WebClient
-    $webClient.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
     try {
-        $webClient.DownloadFile("https://www.autohotkey.com/download/ahk-v2.zip", $ahkZip)
+        $apiResponse = Invoke-RestMethod -Uri "https://api.github.com/repos/AutoHotkey/AutoHotkey/releases/latest"
+        $zipAsset = $apiResponse.assets | Where-Object { $_.name -like "AutoHotkey_*.zip" } | Select-Object -First 1
+        $downloadUrl = $zipAsset.browser_download_url
+        Write-Host "Downloading AutoHotkey v2 from: $downloadUrl" -ForegroundColor Green
+        
+        $webClient = New-Object System.Net.WebClient
+        $webClient.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        $webClient.DownloadFile($downloadUrl, $ahkZip)
         Expand-Archive -Path $ahkZip -DestinationPath $ahkDir -Force
         
         $ahkBin = Join-Path $ahkDir "AutoHotkey64.exe"
@@ -49,7 +54,7 @@ if ($null -eq $ahkBin) {
             $ahkBin = Join-Path $ahkDir "AutoHotkey32.exe"
         }
     } catch {
-        Write-Error "Failed to download and extract portable AHK v2: $_"
+        Write-Error "Failed to download and extract portable AHK v2 from GitHub: $_"
         exit 1
     }
 }
