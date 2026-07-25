@@ -34,10 +34,25 @@ foreach ($path in $ahkPaths) {
 }
 
 if ($null -eq $ahkBin) {
-    Write-Error "AutoHotkey v2 executable was not found. Please install AutoHotkey v2."
-    exit 1
+    Write-Host "AutoHotkey v2 not found locally. Downloading portable AHK v2..." -ForegroundColor Yellow
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $ahkZip = Join-Path $BuildDir "ahk-v2.zip"
+    $ahkDir = Join-Path $BuildDir "ahk-v2"
+    $webClient = New-Object System.Net.WebClient
+    try {
+        $webClient.DownloadFile("https://www.autohotkey.com/download/ahk-v2.zip", $ahkZip)
+        Expand-Archive -Path $ahkZip -DestinationPath $ahkDir -Force
+        
+        $ahkBin = Join-Path $ahkDir "AutoHotkey64.exe"
+        if (-not (Test-Path $ahkBin)) {
+            $ahkBin = Join-Path $ahkDir "AutoHotkey32.exe"
+        }
+    } catch {
+        Write-Error "Failed to download and extract portable AHK v2: $_"
+        exit 1
+    }
 }
-Write-Host "Found AutoHotkey v2 base bin at: $ahkBin" -ForegroundColor Green
+Write-Host "Using AutoHotkey v2 base bin at: $ahkBin" -ForegroundColor Green
 
 # 2. Download Ahk2Exe Compiler
 Write-Host "Fetching latest compiler version from GitHub API..." -ForegroundColor Cyan
