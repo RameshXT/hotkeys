@@ -414,6 +414,73 @@ LaunchAndMaximize(appPath, windowIdentifier := "", timeout := "") {
 
     return true
 }
+LaunchAndPosition(cmd, workingDir := "") {
+    prevDetect := A_DetectHiddenWindows
+    DetectHiddenWindows True
+    
+    existingWindows := WinGetList("ahk_class ConsoleWindowClass")
+    existingWT := WinGetList("ahk_class CASCADIA_HOSTING_WINDOW_CLASS")
+    
+    pid := 0
+    guard := Wow64RedirectionGuard()
+    try {
+        Run(cmd, workingDir, , &pid)
+    } catch as e {
+        DetectHiddenWindows prevDetect
+        throw e
+    }
+    
+    targetHwnd := 0
+    Loop 30 {
+        if (pid != 0 && WinExist("ahk_pid " . pid)) {
+            targetHwnd := WinExist("ahk_pid " . pid)
+            break
+        }
+        
+        currentWindows := WinGetList("ahk_class ConsoleWindowClass")
+        for hwnd in currentWindows {
+            found := false
+            for oldHwnd in existingWindows {
+                if (hwnd == oldHwnd) {
+                    found := true
+                    break
+                }
+            }
+            if (!found) {
+                targetHwnd := hwnd
+                break
+            }
+        }
+        if (targetHwnd != 0)
+            break
+            
+        currentWT := WinGetList("ahk_class CASCADIA_HOSTING_WINDOW_CLASS")
+        for hwnd in currentWT {
+            found := false
+            for oldHwnd in existingWT {
+                if (hwnd == oldHwnd) {
+                    found := true
+                    break
+                }
+            }
+            if (!found) {
+                targetHwnd := hwnd
+                break
+            }
+        }
+        if (targetHwnd != 0)
+            break
+            
+        Sleep 50
+    }
+    
+    if (targetHwnd != 0) {
+        WinMove(-3, 5, , , "ahk_id " . targetHwnd)
+    }
+    
+    DetectHiddenWindows prevDetect
+    return targetHwnd != 0
+}
 
 RunApp(path, args := "", name := "", workingDir := "") {
     if (name != "")
@@ -835,9 +902,8 @@ WatchScript() {
 !p:: {
     singlePress() {
         ShowTransientToolTip("PowerShell")
-        guard := Wow64RedirectionGuard()
         try
-            Run("powershell.exe", USER_HOME)
+            LaunchAndPosition("powershell.exe", USER_HOME)
         catch as e
             ShowLaunchError("Failed to launch PowerShell", e)
     }
@@ -850,16 +916,14 @@ WatchScript() {
 
         if (dir != "") {
             ShowTransientToolTip("PowerShell in Folder")
-            guard := Wow64RedirectionGuard()
             try
-                Run("powershell.exe", dir)
+                LaunchAndPosition("powershell.exe", dir)
             catch as e
                 ShowLaunchError("Failed to launch PowerShell", e)
         } else {
             ShowTransientToolTip("Admin PowerShell")
-            guard := Wow64RedirectionGuard()
             try
-                Run("*RunAs powershell.exe", USER_HOME)
+                LaunchAndPosition("*RunAs powershell.exe", USER_HOME)
             catch as e {
                 if (A_LastError != 1223)
                     ShowLaunchError("Failed to launch Admin PowerShell", e)
@@ -897,16 +961,14 @@ WatchScript() {
 
         if (dir != "") {
             ShowTransientToolTip("CMD in Folder")
-            guard := Wow64RedirectionGuard()
             try
-                Run("cmd.exe", dir)
+                LaunchAndPosition("cmd.exe", dir)
             catch as e
                 ShowLaunchError("Failed to launch CMD", e)
         } else {
             ShowTransientToolTip("CMD")
-            guard := Wow64RedirectionGuard()
             try
-                Run("cmd.exe", USER_HOME)
+                LaunchAndPosition("cmd.exe", USER_HOME)
             catch as e
                 ShowLaunchError("Failed to launch CMD", e)
         }
@@ -920,16 +982,14 @@ WatchScript() {
 
         if (dir != "") {
             ShowTransientToolTip("CMD in Folder")
-            guard := Wow64RedirectionGuard()
             try
-                Run("cmd.exe", dir)
+                LaunchAndPosition("cmd.exe", dir)
             catch as e
                 ShowLaunchError("Failed to launch CMD", e)
         } else {
             ShowTransientToolTip("Admin CMD")
-            guard := Wow64RedirectionGuard()
             try
-                Run("*RunAs cmd.exe", USER_HOME)
+                LaunchAndPosition("*RunAs cmd.exe", USER_HOME)
             catch as e {
                 if (A_LastError != 1223)
                     ShowLaunchError("Failed to launch Admin CMD", e)
@@ -964,9 +1024,8 @@ WatchScript() {
 !u:: {
     singlePress() {
         ShowTransientToolTip("WSL")
-        guard := Wow64RedirectionGuard()
         try
-            Run('wsl.exe -- bash -lc "cd ~; exec bash"')
+            LaunchAndPosition('wsl.exe -- bash -lc "cd ~; exec bash"')
         catch as e
             ShowTransientToolTip("Failed to launch WSL`nIs WSL installed? " . e.Message)
     }
@@ -975,9 +1034,8 @@ WatchScript() {
         if (dir != "") {
             unixPath := ConvertToWSLPath(dir)
             ShowTransientToolTip("WSL")
-            guard := Wow64RedirectionGuard()
             try
-                Run("wsl.exe -- bash -lc `"cd '" . unixPath . "'; exec bash`"")
+                LaunchAndPosition("wsl.exe -- bash -lc `"cd '" . unixPath . "'; exec bash`"")
             catch as e
                 ShowTransientToolTip("Failed to launch WSL`nIs WSL installed? " . e.Message)
         }
