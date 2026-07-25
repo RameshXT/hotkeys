@@ -102,13 +102,32 @@ if ($process.ExitCode -ne 0) {
 }
 Write-Host "Successfully compiled to $OutputFile" -ForegroundColor Green
 
-# 4. Copy CLI wrappers and bundle into ZIP release
+# 4. Compile C# xt.exe launcher wrapper
+Write-Host "Compiling xt.cs launcher..." -ForegroundColor Cyan
+$cscPath = "$env:SystemRoot\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+if (-not (Test-Path $cscPath)) {
+    $cscPath = "$env:SystemRoot\Microsoft.NET\Framework\v4.0.30319\csc.exe"
+}
+if (-not (Test-Path $cscPath)) {
+    Write-Error "C# compiler csc.exe was not found."
+    exit 1
+}
+
+$xtExe = Join-Path $DistDir "xt.exe"
+$process = Start-Process -FilePath $cscPath -ArgumentList "/nologo", "/out:$xtExe", (Join-Path $RepoRoot "xt.cs") -Wait -NoNewWindow -PassThru
+if ($process.ExitCode -ne 0) {
+    Write-Error "C# launcher compilation failed."
+    exit 1
+}
+Write-Host "Successfully compiled xt.exe" -ForegroundColor Green
+
+# 5. Copy CLI wrappers and bundle into ZIP release
 Write-Host "Packaging build artifacts into ZIP..." -ForegroundColor Cyan
 $PackageFolder = Join-Path $BuildDir "package"
 New-Item -ItemType Directory -Path $PackageFolder | Out-Null
 
 Copy-Item -Path $OutputFile -Destination (Join-Path $PackageFolder "hotkeys.exe")
-Copy-Item -Path (Join-Path $RepoRoot "xt.bat") -Destination (Join-Path $PackageFolder "xt.bat")
+Copy-Item -Path $xtExe -Destination (Join-Path $PackageFolder "xt.exe")
 Copy-Item -Path (Join-Path $RepoRoot "xt.ps1") -Destination (Join-Path $PackageFolder "xt.ps1")
 Copy-Item -Path (Join-Path $RepoRoot "README.md") -Destination (Join-Path $PackageFolder "README.md")
 Copy-Item -Path (Join-Path $RepoRoot "LICENSE") -Destination (Join-Path $PackageFolder "LICENSE")

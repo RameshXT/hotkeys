@@ -14,7 +14,7 @@ Installers:
     NestedInstallerFiles:
       - RelativeFilePath: hotkeys.exe
         PortableCommandAlias: hotkeys
-      - RelativeFilePath: xt.bat
+      - RelativeFilePath: xt.exe
         PortableCommandAlias: xt
 ManifestType: installer
 ManifestVersion: 1.4.0
