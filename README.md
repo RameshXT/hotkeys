@@ -6,73 +6,53 @@ Advanced AutoHotkey system providing context-aware application launching, system
 
 ## Hotkey Reference
 
-### 1. Double-Press & Long-Press Shortcuts
-Special keys that change their behavior when double-pressed or held down:
+### Application & Utility Hotkeys
 
-| Hotkey | Target App | Single Press | Double Press | Long Press (Hold >600ms) |
-| :--- | :--- | :--- | :--- | :--- |
-| **Alt + C** | Google Chrome | Launch / Focus Chrome | - | Open in **Incognito Mode** |
-| **Alt + 1** | Photoshop | - | Launch Photoshop | - |
-| **Alt + A** | Antigravity IDE | Launch / Focus IDE | Open in current Explorer folder | - |
-| **Alt + G** | Git Bash | Launch / Focus Git Bash | Open in current Explorer folder | - |
-| **Alt + O** | Command Prompt (CMD) | Launch CMD | Launch as **Administrator** | - |
-| **Alt + P** | PowerShell | Launch PowerShell | Launch as **Administrator** | - |
-| **Alt + U** | Ubuntu WSL | Launch WSL | Open in current Explorer folder | - |
-| **Alt + V** | VS Code | Launch / Focus VS Code | Open in current Explorer folder | - |
+| Hotkey | Action | Trigger Mode | Description |
+| :--- | :--- | :--- | :--- |
+| **Alt + 0** | Calculator | Single Press | Opens Windows Calculator |
+| **Alt + 1** | Photoshop | Double Press | Opens Adobe Photoshop |
+| **Alt + 7** | 7.1 Surround Sound | Single Press | Opens Razer 7.1 Surround Sound |
+| **Alt + A** | Antigravity | Single Press | Opens Antigravity IDE |
+| | | Double Press | Opens Antigravity in the active Explorer folder |
+| **Alt + C** | Google Chrome | Single Press | Opens Google Chrome |
+| | | Long Press | Opens Google Chrome in **Incognito Mode** |
+| **Alt + E** | Outlook | Single Press | Opens Outlook (Auto-Maximized) |
+| **Alt + G** | Git Bash | Single Press | Opens Git Bash |
+| | | Double Press | Opens Git Bash in the active Explorer folder |
+| **Alt + I** | Instagram | Single Press | Opens Instagram (Auto-Maximized) |
+| **Alt + M** | Microsoft Store | Single Press | Opens Microsoft Store |
+| **Alt + N** | Notepad | Single Press | Opens Notepad |
+| **Alt + O** | CMD | Single Press | Opens Command Prompt |
+| | | Double Press | Opens **Administrator CMD** |
+| **Alt + P** | PowerShell | Single Press | Opens PowerShell |
+| | | Double Press | Opens **Administrator PowerShell** |
+| **Alt + Q** | Close Active Window | Single Press | Closes the active window safely |
+| | | Hold (Long Press)| Continuously closes windows (protected) |
+| **Alt + S** | Slack | Single Press | Opens Slack (Auto-Maximized) |
+| **Alt + T** | Telegram | Single Press | Opens Telegram |
+| **Alt + U** | Ubuntu WSL | Single Press | Opens WSL terminal |
+| | | Double Press | Opens WSL in the active Explorer folder |
+| **Alt + V** | VS Code | Single Press | Opens VS Code |
+| | | Double Press | Opens VS Code in the active Explorer folder |
+| **Alt + Shift + V** | WSL Path Paste | Single Press | Converts Windows clipboard path and pastes in WSL format |
+| **Alt + W** | WhatsApp | Single Press | Opens WhatsApp (Auto-Maximized) |
+| **Alt + Y** | YouTube | Single Press | Opens YouTube (Auto-Maximized) |
+| **Alt + Z** | Unzip ZIP | Single Press | Extracts selected ZIP inside File Explorer |
 
----
+### System & Media Hotkeys
 
-### 2. Standard App Launchers
-Single-press shortcuts to quickly launch or switch to apps:
-
-| Hotkey | Target App | Launch Behavior |
+| Hotkey | Action | Description |
 | :--- | :--- | :--- |
-| **Alt + 0** | Calculator | Standard launch |
-| **Alt + 7** | 7.1 Surround Sound | Standard launch |
-| **Alt + E** | Outlook | Auto-Maximize PWA / Web fallback |
-| **Alt + I** | Instagram | Auto-Maximize PWA / Web fallback |
-| **Alt + M** | Microsoft Store | Standard launch |
-| **Alt + N** | Notepad | Standard launch |
-| **Alt + S** | Slack | Auto-Maximize App / UWP fallback |
-| **Alt + T** | Telegram | Auto-Maximize App / UWP fallback |
-| **Alt + W** | WhatsApp | Auto-Maximize App / UWP fallback |
-| **Alt + Y** | YouTube | Auto-Maximize PWA / Web fallback |
-
----
-
-### 3. Productivity & Window Management
-Special utilities to speed up window operations and file path conversion:
-
-| Hotkey | Action | Behavior |
-| :--- | :--- | :--- |
-| **Alt + Q** | Close Active Window | Continuous closing (hold to repeat) with system protection |
-| **Alt + Z** | Unzip Selected File | Extracts the currently selected ZIP file in Explorer |
-| **Alt + Shift + V** | WSL Path Paste | Converted Windows path on clipboard to Unix format and paste |
-
----
-
-### 4. System Audio Output Switches
-Instantly redirect sound output and microphone sources:
-
-| Hotkey | Playback Target | Microphone Target |
-| :--- | :--- | :--- |
-| **Ctrl + Shift + Q** | Sony MDRX-50 (sets vol to 25%) | Built-in Mic |
-| **Ctrl + Shift + X** | Black Shark V2 | Razer Mic |
-| **Ctrl + Shift + Y** | Resound | Built-in Mic |
-| **Ctrl + Shift + Z** | HEAT | Built-in Mic |
-
----
-
-### 5. Automated Maintenance Tasks
-Triggers background Windows scheduled tasks with real-time TrayTip status results:
-
-| Hotkey | Action | Behavior |
-| :--- | :--- | :--- |
-| **Ctrl + Shift + Alt + C** | Run System Cleanup | Executes background storage cleanup |
-| **Ctrl + Shift + Alt + U** | Run Windows Updater | Executes background updates |
-| **Ctrl + Shift + Alt + N** | Run Network Reset | Resets adapters and flushes DNS |
-| **Ctrl + Shift + Alt + L** | Open Logs Folder | Opens directory containing error logs |
-| **Ctrl + Shift + Alt + Del** | Empty Recycle Bin | Clears recycle bin (requires confirmation) |
+| **Ctrl + Shift + Q** | Switch Audio | Set playback to **Sony MDRX-50** (mic: Sony) and volume to 25% |
+| **Ctrl + Shift + X** | Switch Audio | Set playback to **Black Shark V2** (mic: Black Shark) |
+| **Ctrl + Shift + Y** | Switch Audio | Set playback to **Resound** (mic: Sony) |
+| **Ctrl + Shift + Z** | Switch Audio | Set playback to **HEAT** (mic: Sony) |
+| **Ctrl + Shift + Alt + C** | Windows Cleanup | Runs background Windows Cleanup (tray notification on finish) |
+| **Ctrl + Shift + Alt + U** | Windows Updater | Runs background Windows Update check (tray notification on finish) |
+| **Ctrl + Shift + Alt + N** | Network Reset | Resets network adapters, flushes DNS, and renews IP |
+| **Ctrl + Shift + Alt + L** | Logs Folder | Opens the logs directory in File Explorer |
+| **Ctrl + Shift + Alt + Del** | Empty Recycle Bin | Empties the Recycle Bin (requires confirmation prompt) |
 
 ---
 
@@ -89,7 +69,11 @@ Triggers background Windows scheduled tasks with real-time TrayTip status result
 
 ## Key Features
 
-- **Contextual Intelligence**: Shell and editor shortcuts automatically detect if you are in File Explorer and adjust their working directory.
-- **Safety & Protection**: Prevents accidental closures of desktop shell components (like the Taskbar).
-- **Friendly Balloon Notifications**: Translates standard Windows CLI errors into simplified tray notifications.
+- **Contextual Intelligence**:
+  - **Double-Tap to Folder**: `Alt + V` (VS Code), `Alt + A` (Antigravity), `Alt + G` (Git Bash), `Alt + P` (PowerShell), and `Alt + U` (Ubuntu WSL) open the application directly in your **active File Explorer directory** when double-pressed.
+  - **Double-Tap to Admin**: `Alt + O` (CMD) and `Alt + P` (PowerShell) open standard shell (in folder if active) on single press, and their respective **Administrator** versions (when no folder is active) on double press.
+  - **Long-Press Interface**: `Alt + C` launches standard Chrome on a short tap, but triggers **Incognito Mode** if held for >600ms.
+- **Safety & Protection**: `Alt + Q` (Close Window) supports continuous closing when held, but is logic-locked to **prevent accidental closure** of critical system components, showing "Nothing to close" if there is no active/non-system window.
+- **Audio Output Switching**: Quickly switch audio playback and recording devices using `Ctrl + Shift + [Key]` combinations.
+- **Friendly Balloon Notifications**: Automatically intercepts launch or system errors and shows clean Windows tray notifications instead of blocking error popups.
 - **Self-Maintaining**: Automatically reloads and applies changes the moment you save `hotkeys.ahk`.
