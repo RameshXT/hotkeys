@@ -97,6 +97,19 @@ class Wow64RedirectionGuard {
     }
 }
 
+SearchSystemPath(exeName) {
+    if (exeName = "")
+        return false
+    if FileExist(A_WorkingDir . "\" . exeName)
+        return true
+    pathEnv := EnvGet("PATH")
+    for dir in StrSplit(pathEnv, ";") {
+        if (dir != "" && FileExist(dir . "\" . exeName))
+            return true
+    }
+    return false
+}
+
 ConvertToWSLPath(winPath) {
     if (winPath = "")
         return ""
@@ -373,12 +386,18 @@ SmartRun(targetPath, args := "", workingDir := "") {
     }
 }
 
-LaunchAndMaximize(appPath, windowIdentifier := "", timeout := "") {
+LaunchAndMaximize(appPath, windowIdentifier := "", timeout := "", friendlyName := "") {
     if (timeout = "")
         timeout := WINDOW_WAIT_TIMEOUT
 
+    displayName := (friendlyName != "") ? friendlyName : (windowIdentifier != "" ? windowIdentifier : appPath)
+
     if (InStr(appPath, "\") && !FileExist(appPath)) {
-        MsgBox("Application not found:`n" . appPath, "Error", 16)
+        TrayTip(appPath, "Application not found", 2)
+        return false
+    }
+    if (!InStr(appPath, "\") && !FileExist(appPath) && !SearchSystemPath(appPath)) {
+        TrayTip(displayName, "Application not found", 2)
         return false
     }
 
@@ -390,7 +409,7 @@ LaunchAndMaximize(appPath, windowIdentifier := "", timeout := "") {
                 return false
         }
     } catch as e {
-        MsgBox("Failed to launch:`n" . appPath . "`n`nError: " . e.Message, "Launch Error", 16)
+        TrayTip("Failed to launch: " . e.Message, displayName, 2)
         return false
     }
 
@@ -491,7 +510,11 @@ RunApp(path, args := "", name := "", workingDir := "") {
             Run(path)
         } else {
             if (InStr(path, "\") && !FileExist(path)) {
-                MsgBox("Target not found:`n" . path, "Error", 16)
+                TrayTip(name != "" ? name : path, "Application not found", 2)
+                return
+            }
+            if (!InStr(path, "\") && !FileExist(path) && !SearchSystemPath(path)) {
+                TrayTip(name != "" ? name : path, "Application not found", 2)
                 return
             }
             SmartRun(path, args, workingDir)
@@ -503,12 +526,24 @@ RunApp(path, args := "", name := "", workingDir := "") {
 
 RunAppAndNotify(path, args, name) {
     ShowTransientToolTip(name)
-    RunApp(path, args)
+    RunApp(path, args, name)
 }
 
 ShowLaunchError(prefix, err) {
     msg := (err is Error) ? err.Message : String(err)
-    ShowTransientToolTip(prefix . ": " . msg)
+
+    friendlyMsg := msg
+    if InStr(msg, "Failed attempt to launch program") {
+        friendlyMsg := "App not installed or shortcut is broken."
+    } else if InStr(msg, "elevation") || InStr(msg, "Requires elevation") || InStr(msg, "740") {
+        friendlyMsg := "Requires Administrator rights to open."
+    } else if InStr(msg, "access is denied") || InStr(msg, "5") {
+        friendlyMsg := "Access denied. Missing permission."
+    } else if InStr(msg, "cannot find the file specified") || InStr(msg, "2") {
+        friendlyMsg := "Application file not found."
+    }
+
+    TrayTip(friendlyMsg, prefix, 2)
 
     try {
         if !DirExist(LOGS_DIR)
@@ -1012,7 +1047,7 @@ WatchScript() {
         "%ProgramFiles%\Slack\slack.exe",
         "%StartMenuCommon%\Programs\Slack.lnk"
     ])
-    LaunchAndMaximize(slackPath, "ahk_exe slack.exe", WINDOW_WAIT_TIMEOUT)
+    LaunchAndMaximize(slackPath, "ahk_exe slack.exe", WINDOW_WAIT_TIMEOUT, "Slack")
 }
 
 !t:: {
