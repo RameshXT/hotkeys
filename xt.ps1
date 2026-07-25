@@ -89,14 +89,27 @@ function Invoke-Install ($Target, $Yes) {
         Write-OK "Created directory: $InstallDir"
     }
 
-    # Copy files
+    # Enable TLS 1.2 for secure web requests
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+    # Copy files or download from GitHub
     try {
-        Copy-Item -Path (Join-Path $SourceDir "hotkeys.ahk") -Destination (Join-Path $InstallDir "hotkeys.ahk") -Force
-        Copy-Item -Path (Join-Path $SourceDir "xt.bat") -Destination (Join-Path $InstallDir "xt.bat") -Force
-        Copy-Item -Path (Join-Path $SourceDir "xt.ps1") -Destination (Join-Path $InstallDir "xt.ps1") -Force
-        Write-OK "Copied script and CLI files to $InstallDir"
+        $localAHK = Join-Path $SourceDir "hotkeys.ahk"
+        if (Test-Path $localAHK) {
+            Copy-Item -Path $localAHK -Destination (Join-Path $InstallDir "hotkeys.ahk") -Force
+            Copy-Item -Path (Join-Path $SourceDir "xt.bat") -Destination (Join-Path $InstallDir "xt.bat") -Force
+            Copy-Item -Path (Join-Path $SourceDir "xt.ps1") -Destination (Join-Path $InstallDir "xt.ps1") -Force
+            Write-OK "Copied script and CLI files to $InstallDir"
+        } else {
+            Write-Info "No local files found. Downloading from GitHub..."
+            $repoUrl = "https://raw.githubusercontent.com/RameshXT/hotkeys/main"
+            Invoke-WebRequest -Uri "$repoUrl/hotkeys.ahk" -OutFile (Join-Path $InstallDir "hotkeys.ahk") -UseBasicParsing | Out-Null
+            Invoke-WebRequest -Uri "$repoUrl/xt.bat" -OutFile (Join-Path $InstallDir "xt.bat") -UseBasicParsing | Out-Null
+            Invoke-WebRequest -Uri "$repoUrl/xt.ps1" -OutFile (Join-Path $InstallDir "xt.ps1") -UseBasicParsing | Out-Null
+            Write-OK "Downloaded files to $InstallDir"
+        }
     } catch {
-        Write-Err "Failed to copy files: $_"
+        Write-Err "Failed to acquire files: $_"
         exit 1
     }
 
@@ -299,6 +312,12 @@ function Invoke-Uninstall ($Target) {
 
 # CLI Argument Router
 if ($args.Count -eq 0) {
+    # If run from web (no local repo), default to install
+    if (-not (Test-Path (Join-Path $SourceDir "hotkeys.ahk"))) {
+        Invoke-Install "hotkeys" $false
+        exit 0
+    }
+
     Write-Host "`n  'xt' Hotkey CLI Tool" -ForegroundColor White
     Write-Host "  Usage: xt [install | update | status | uninstall] [hotkeys] [-y]" -ForegroundColor DarkGray
     Write-Host "  Commands:" -ForegroundColor DarkGray

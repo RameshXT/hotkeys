@@ -50,15 +50,26 @@ Advanced AutoHotkey system providing context-aware application launching, system
 
 ## Setup
 
-To install and register the hotkeys globally on your machine, simply run the included custom `xt` CLI tool:
+To install and register the hotkeys globally on **any Windows machine** without downloading or cloning this repository, simply run this 1-click web installer command:
 
-1. Open PowerShell or Command Prompt at the repository root folder.
+1. Open PowerShell.
+2. Paste and run the following command:
+   ```powershell
+   irm https://raw.githubusercontent.com/RameshXT/hotkeys/main/xt.ps1 | iex
+   ```
+   *(This automatically downloads the required files under `%LocalAppData%\xt`, registers the `xt` command in your User `PATH`, creates the elevated Startup shortcut, and launches the hotkeys.)*
+3. Restart your terminal to begin using the `xt` command globally!
+
+### Local Developer Setup
+
+If you have already cloned this repository locally, you can install directly from your local folder:
+
+1. Open PowerShell at the repository root.
 2. Run the installer:
    ```cmd
-   xt install
+   .\xt.bat install
    ```
-   *(This automatically copies the runtime files to `%LocalAppData%\xt`, registers the `xt` command in your User `PATH`, creates the Startup shortcut, configures it to run as Administrator, and launches the script.)*
-3. Restart your terminal to begin using the `xt` command globally!
+3. Restart your terminal.
 
 ### CLI Commands Reference
 
