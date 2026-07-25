@@ -55,7 +55,7 @@ Advanced AutoHotkey system providing context-aware application launching, system
 You can install the hotkeys globally on **any Windows machine** directly using the official Windows Package Manager:
 
 ```cmd
-winget install RameshXT.Hotkeys
+winget install xt.hotkeys
 ```
 
 *(Note: Once submitted and approved by Microsoft's winget-pkgs pipeline, this command will be active globally!)*

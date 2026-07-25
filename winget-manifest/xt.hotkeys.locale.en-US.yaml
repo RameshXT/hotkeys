@@ -1,12 +1,12 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.locale.1.4.0.schema.json
-PackageIdentifier: RameshXT.Hotkeys
+PackageIdentifier: xt.hotkeys
 PackageVersion: 1.0.0
 PackageLocale: en-US
-Publisher: RameshXT
+Publisher: xt
 PublisherUrl: https://github.com/RameshXT/hotkeys
 PublisherSupportUrl: https://github.com/RameshXT/hotkeys/issues
 Author: RameshXT
-PackageName: Hotkeys
+PackageName: hotkeys
 PackageUrl: https://github.com/RameshXT/hotkeys
 License: MIT
 LicenseUrl: https://github.com/RameshXT/hotkeys/blob/main/LICENSE
