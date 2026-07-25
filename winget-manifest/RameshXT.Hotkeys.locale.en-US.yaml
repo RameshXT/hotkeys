@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.locale.1.4.0.schema.json
+PackageIdentifier: RameshXT.Hotkeys
+PackageVersion: 1.0.0
+PackageLocale: en-US
+Publisher: RameshXT
+PublisherUrl: https://github.com/RameshXT/hotkeys
+PublisherSupportUrl: https://github.com/RameshXT/hotkeys/issues
+Author: RameshXT
+PackageName: Hotkeys
+PackageUrl: https://github.com/RameshXT/hotkeys
+License: MIT
+LicenseUrl: https://github.com/RameshXT/hotkeys/blob/main/LICENSE
+Copyright: Copyright (c) 2025 - 2026 RameshXT
+ShortDescription: Advanced context-aware AutoHotkey system and CLI manager.
+Description: Advanced AutoHotkey system providing context-aware application launching, system maintenance automation, and safe window management.
+Tags:
+  - autohotkey
+  - hotkeys
+  - shortcut
+  - cli
+ManifestType: defaultLocale
+ManifestVersion: 1.4.0

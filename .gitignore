@@ -10,4 +10,7 @@ desktop.ini
 .vscode/
 .idea/
 *.pid
+build/
+dist/
+
 
