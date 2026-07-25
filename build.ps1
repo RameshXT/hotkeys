@@ -39,6 +39,7 @@ if ($null -eq $ahkBin) {
     $ahkZip = Join-Path $BuildDir "ahk-v2.zip"
     $ahkDir = Join-Path $BuildDir "ahk-v2"
     $webClient = New-Object System.Net.WebClient
+    $webClient.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
     try {
         $webClient.DownloadFile("https://www.autohotkey.com/download/ahk-v2.zip", $ahkZip)
         Expand-Archive -Path $ahkZip -DestinationPath $ahkDir -Force
@@ -63,6 +64,7 @@ try {
     $downloadUrl = $zipAsset.browser_download_url
     Write-Host "Downloading AutoHotkey Compiler from: $downloadUrl" -ForegroundColor Green
     $webClient = New-Object System.Net.WebClient
+    $webClient.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
     $webClient.DownloadFile($downloadUrl, $Ahk2ExeZip)
 } catch {
     Write-Error "Failed to download compiler: $_"
