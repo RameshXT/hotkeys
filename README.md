@@ -8,37 +8,29 @@ Advanced AutoHotkey system providing context-aware application launching, system
 
 ### Application & Utility Hotkeys
 
-| Hotkey | Action | Trigger Mode | Description |
+| Hotkey | Single Press | Double Press | Long Press / Hold |
 | :--- | :--- | :--- | :--- |
-| **Alt + 0** | Calculator | Single Press | Opens Windows Calculator |
-| **Alt + 1** | Photoshop | Double Press | Opens Adobe Photoshop |
-| **Alt + 7** | 7.1 Surround Sound | Single Press | Opens Razer 7.1 Surround Sound |
-| **Alt + A** | Antigravity | Single Press | Opens Antigravity IDE |
-| | | Double Press | Opens Antigravity in the active Explorer folder |
-| **Alt + C** | Google Chrome | Single Press | Opens Google Chrome |
-| | | Long Press | Opens Google Chrome in **Incognito Mode** |
-| **Alt + E** | Outlook | Single Press | Opens Outlook (Auto-Maximized) |
-| **Alt + G** | Git Bash | Single Press | Opens Git Bash |
-| | | Double Press | Opens Git Bash in the active Explorer folder |
-| **Alt + I** | Instagram | Single Press | Opens Instagram (Auto-Maximized) |
-| **Alt + M** | Microsoft Store | Single Press | Opens Microsoft Store |
-| **Alt + N** | Notepad | Single Press | Opens Notepad |
-| **Alt + O** | CMD | Single Press | Opens Command Prompt |
-| | | Double Press | Opens **Administrator CMD** |
-| **Alt + P** | PowerShell | Single Press | Opens PowerShell |
-| | | Double Press | Opens **Administrator PowerShell** |
-| **Alt + Q** | Close Active Window | Single Press | Closes the active window safely |
-| | | Hold (Long Press)| Continuously closes windows (protected) |
-| **Alt + S** | Slack | Single Press | Opens Slack (Auto-Maximized) |
-| **Alt + T** | Telegram | Single Press | Opens Telegram |
-| **Alt + U** | Ubuntu WSL | Single Press | Opens WSL terminal |
-| | | Double Press | Opens WSL in the active Explorer folder |
-| **Alt + V** | VS Code | Single Press | Opens VS Code |
-| | | Double Press | Opens VS Code in the active Explorer folder |
-| **Alt + Shift + V** | WSL Path Paste | Single Press | Converts Windows clipboard path and pastes in WSL format |
-| **Alt + W** | WhatsApp | Single Press | Opens WhatsApp (Auto-Maximized) |
-| **Alt + Y** | YouTube | Single Press | Opens YouTube (Auto-Maximized) |
-| **Alt + Z** | Unzip ZIP | Single Press | Extracts selected ZIP inside File Explorer |
+| **Alt + 0** | Calculator | - | - |
+| **Alt + 1** | - | Photoshop | - |
+| **Alt + 7** | 7.1 Surround Sound | - | - |
+| **Alt + A** | Antigravity IDE | Open in active Explorer folder | - |
+| **Alt + C** | Google Chrome | - | **Incognito Mode** (Hold >600ms) |
+| **Alt + E** | Outlook (Auto-Maximize) | - | - |
+| **Alt + G** | Git Bash | Open in active Explorer folder | - |
+| **Alt + I** | Instagram (Auto-Maximize) | - | - |
+| **Alt + M** | Microsoft Store | - | - |
+| **Alt + N** | Notepad | - | - |
+| **Alt + O** | Command Prompt (CMD) | **Administrator CMD** | - |
+| **Alt + P** | PowerShell | **Administrator PowerShell** | - |
+| **Alt + Q** | Close Active Window | - | Continuous safe window close |
+| **Alt + S** | Slack (Auto-Maximize) | - | - |
+| **Alt + T** | Telegram | - | - |
+| **Alt + U** | Ubuntu WSL | Open in active Explorer folder | - |
+| **Alt + V** | VS Code | Open in active Explorer folder | - |
+| **Alt + Shift + V** | Paste clipboard path as WSL | - | - |
+| **Alt + W** | WhatsApp (Auto-Maximize) | - | - |
+| **Alt + Y** | YouTube (Auto-Maximize) | - | - |
+| **Alt + Z** | Unzip Selected ZIP | - | - |
 
 ### System & Media Hotkeys
 
