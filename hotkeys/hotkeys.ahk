@@ -394,12 +394,22 @@ LaunchAndMaximize(appPath, windowIdentifier := "", timeout := "") {
     }
 
     if (windowIdentifier != "") {
-        if WinWait(windowIdentifier, , timeout)
+        oldMatchMode := A_TitleMatchMode
+        SetTitleMatchMode 2
+        if WinWait(windowIdentifier, , timeout) {
+            WinActivate
             WinMaximize
-        else {
+            Loop 10 {
+                if (WinGetMinMax() = 1)
+                    break
+                WinMaximize
+                Sleep 50
+            }
+        } else {
             ToolTip("Window not detected: " . windowIdentifier)
             SetTimer RemoveToolTip, -TOOLTIP_DURATION_MS
         }
+        SetTitleMatchMode oldMatchMode
     }
 
     return true
