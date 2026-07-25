@@ -39,6 +39,11 @@ Persistent()
 SendMode "Input"
 SetWorkingDir A_ScriptDir
 
+try {
+    FileOpen(A_ScriptDir . "\hotkeys.pid", "w").Write(DllCall("GetCurrentProcessId"))
+} catch {
+}
+
 SetTimer WatchScript, 1000
 
 USER_HOME := EnvGet("USERPROFILE")

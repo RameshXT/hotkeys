@@ -50,12 +50,23 @@ Advanced AutoHotkey system providing context-aware application launching, system
 
 ## Setup
 
-1. Place a shortcut to `hotkeys.ahk` in your Windows Startup folder:
+To install and register the hotkeys globally on your machine, simply run the included custom `xt` CLI tool:
+
+1. Open PowerShell or Command Prompt at the repository root folder.
+2. Run the installer:
+   ```cmd
+   xt install
    ```
-   %APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\
-   ```
-2. Right-click the shortcut → **Properties** → **Advanced** → check **Run as administrator**.
-3. Run `hotkeys.ahk` once to initialize. The script is self-elevating and will request Administrator privileges to successfully control background applications.
+   *(This automatically copies the runtime files to `%LocalAppData%\xt`, registers the `xt` command in your User `PATH`, creates the Startup shortcut, configures it to run as Administrator, and launches the script.)*
+3. Restart your terminal to begin using the `xt` command globally!
+
+### CLI Commands Reference
+
+Once installed, you can manage the hotkeys globally from any command line:
+
+* **`xt status`**: Checks if the script is active and running.
+* **`xt update`**: Installs your latest local repository changes to the runtime folder and restarts the hotkeys.
+* **`xt uninstall`**: Removes the Startup shortcut, deletes all runtime files, and removes `xt` from your User `PATH`.
 
 ---
 
