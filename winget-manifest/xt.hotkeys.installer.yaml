@@ -9,7 +9,7 @@ Installers:
   - Architecture: x64
     InstallerType: zip
     InstallerUrl: https://github.com/RameshXT/hotkeys/releases/download/v1.0.0/hotkeys.zip
-    InstallerSha256: D4A18D0C7B10F35FE4C5B3AD6C28496A155AB9F553E9531E143C2245E0F7F2B2
+    InstallerSha256: 4E27492A5EEF8BB7559E63647CE319BD88376B597097BC44FFBED66CCD612297
     NestedInstallerType: portable
     NestedInstallerFiles:
       - RelativeFilePath: hotkeys.exe
