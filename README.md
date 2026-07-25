@@ -4,30 +4,6 @@ Advanced AutoHotkey system providing context-aware application launching, system
 
 ---
 
-## Setup
-
-1. Place a shortcut to `hotkeys.ahk` in your Windows Startup folder:
-   ```
-   %APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\
-   ```
-2. Right-click the shortcut → **Properties** → **Advanced** → check **Run as administrator**.
-3. Run `hotkeys.ahk` once to initialize. The script is self-elevating and will request Administrator privileges to successfully control background applications.
-
----
-
-## Key Features
-
-- **Contextual Intelligence**:
-  - **Double-Tap to Folder**: `Alt + V` (VS Code), `Alt + A` (Antigravity), `Alt + G` (Git Bash), `Alt + P` (PowerShell), and `Alt + U` (Ubuntu WSL) open the application directly in your **active File Explorer directory** when double-pressed.
-  - **Double-Tap to Admin**: `Alt + O` (CMD) and `Alt + P` (PowerShell) open standard shell (in folder if active) on single press, and their respective **Administrator** versions (when no folder is active) on double press.
-  - **Long-Press Interface**: `Alt + C` launches standard Chrome on a short tap, but triggers **Incognito Mode** if held for >600ms.
-- **Safety & Protection**: `Alt + Q` (Close Window) supports continuous closing when held, but is logic-locked to **prevent accidental closure** of critical system components, showing "Nothing to close" if there is no active/non-system window.
-- **Audio Output Switching**: Quickly switch audio playback and recording devices using `Ctrl + Shift + [Key]` combinations.
-- **Friendly Balloon Notifications**: Automatically intercepts launch or system errors and shows clean Windows tray notifications instead of blocking error popups.
-- **Self-Maintaining**: Automatically reloads and applies changes the moment you save `hotkeys.ahk`.
-
----
-
 ## Hotkey Reference
 
 | Hotkey                | Action                | Double / Long Press             |
@@ -62,3 +38,27 @@ Advanced AutoHotkey system providing context-aware application launching, system
 | Ctrl+Shift+Alt+N      | Run Network Reset     | Result via ToolTip              |
 | Ctrl+Shift+Alt+L      | Open Logs Folder      | NA                              |
 | Ctrl+Shift+Alt+Delete | Empty Recycle Bin     | Confirmation required           |
+
+---
+
+## Setup
+
+1. Place a shortcut to `hotkeys.ahk` in your Windows Startup folder:
+   ```
+   %APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\
+   ```
+2. Right-click the shortcut → **Properties** → **Advanced** → check **Run as administrator**.
+3. Run `hotkeys.ahk` once to initialize. The script is self-elevating and will request Administrator privileges to successfully control background applications.
+
+---
+
+## Key Features
+
+- **Contextual Intelligence**:
+  - **Double-Tap to Folder**: `Alt + V` (VS Code), `Alt + A` (Antigravity), `Alt + G` (Git Bash), `Alt + P` (PowerShell), and `Alt + U` (Ubuntu WSL) open the application directly in your **active File Explorer directory** when double-pressed.
+  - **Double-Tap to Admin**: `Alt + O` (CMD) and `Alt + P` (PowerShell) open standard shell (in folder if active) on single press, and their respective **Administrator** versions (when no folder is active) on double press.
+  - **Long-Press Interface**: `Alt + C` launches standard Chrome on a short tap, but triggers **Incognito Mode** if held for >600ms.
+- **Safety & Protection**: `Alt + Q` (Close Window) supports continuous closing when held, but is logic-locked to **prevent accidental closure** of critical system components, showing "Nothing to close" if there is no active/non-system window.
+- **Audio Output Switching**: Quickly switch audio playback and recording devices using `Ctrl + Shift + [Key]` combinations.
+- **Friendly Balloon Notifications**: Automatically intercepts launch or system errors and shows clean Windows tray notifications instead of blocking error popups.
+- **Self-Maintaining**: Automatically reloads and applies changes the moment you save `hotkeys.ahk`.
