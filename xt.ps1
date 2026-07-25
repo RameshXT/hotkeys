@@ -28,7 +28,7 @@ if ($PSScriptRoot -and (Test-Path $PSScriptRoot)) {
 } else {
     try {
         $def = $MyInvocation.MyCommand.Definition
-        if ($def -and (Test-Path $def -ErrorAction SilentlyContinue)) {
+        if ($def -and ($def -like "?:\*" -or $def -like "\\*") -and (Test-Path $def -ErrorAction SilentlyContinue)) {
             $SourceDir = Split-Path $def -Parent
         } else {
             $SourceDir = $env:TEMP
