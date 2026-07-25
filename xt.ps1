@@ -4,9 +4,7 @@ $ErrorActionPreference = "Stop"
 # Self-elevate for commands that require Admin privileges
 $cmd = if ($args.Count -gt 0) { $args[0].ToLower() } else { "" }
 if ($cmd -in @("install", "update", "uninstall")) {
-    $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $principal = New-Object Security.Principal.WindowsPrincipal($currentUser)
-    $isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
     if (-not $isAdmin) {
         $scriptPath = if ($PSCommandPath) { $PSCommandPath } else { $MyInvocation.MyCommand.Path }
