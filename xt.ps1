@@ -26,7 +26,16 @@ $ShortcutPath = Join-Path $StartupFolder "hotkeys.lnk"
 if ($PSScriptRoot -and (Test-Path $PSScriptRoot)) {
     $SourceDir = $PSScriptRoot
 } else {
-    $SourceDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+    try {
+        $def = $MyInvocation.MyCommand.Definition
+        if ($def -and (Test-Path $def -ErrorAction SilentlyContinue)) {
+            $SourceDir = Split-Path $def -Parent
+        } else {
+            $SourceDir = $env:TEMP
+        }
+    } catch {
+        $SourceDir = $env:TEMP
+    }
 }
 
 # Helper output functions
