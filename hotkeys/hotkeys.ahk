@@ -873,8 +873,16 @@ WatchScript() {
     pressDuration := A_TickCount - pressStart
 
     chromePath := AppResolver.Get("Chrome", "chrome.exe")
-    if (chromePath = "chrome.exe" && !FileExist(chromePath)) {
-        MsgBox("Chrome not found.", "Error", 16)
+    if (chromePath = "chrome.exe" && !FileExist(chromePath) && !SearchSystemPath(chromePath)) {
+        ShowTransientToolTip("Opening Default Browser")
+        try {
+            if (pressDuration >= LONG_PRESS_THRESHOLD)
+                Run("cmd.exe /c start microsoft-edge:-private")
+            else
+                Run("cmd.exe /c start https://www.google.com")
+        } catch as e {
+            ShowLaunchError("Failed to launch Browser", e)
+        }
         KeyWait "c", "T2"
         return
     }
@@ -912,7 +920,15 @@ WatchScript() {
         "%AppData%\Microsoft\Windows\Start Menu\Programs\Chrome Apps\Outlook (PWA).lnk",
         "%StartMenuCommon%\Programs\Chrome Apps\Outlook (PWA).lnk"
     ])
-    LaunchAndMaximize(outlookPath, "Outlook", WINDOW_WAIT_TIMEOUT)
+    if (outlookPath != "" && FileExist(outlookPath)) {
+        LaunchAndMaximize(outlookPath, "Outlook", WINDOW_WAIT_TIMEOUT, "Outlook")
+    } else {
+        try {
+            RunApp("ms-outlook://", "", "Outlook")
+        } catch {
+            RunApp("https://outlook.live.com", "", "Outlook")
+        }
+    }
 }
 
 !g:: {
@@ -933,8 +949,16 @@ WatchScript() {
         "%StartMenuCommon%\Programs\Instagram.lnk",
         "%StartMenu%\Programs\Instagram.lnk"
     ])
-    ShowTransientToolTip("Instagram")
-    LaunchAndMaximize(instagramPath, "Instagram", WINDOW_WAIT_TIMEOUT)
+    if (instagramPath != "" && FileExist(instagramPath)) {
+        ShowTransientToolTip("Instagram")
+        LaunchAndMaximize(instagramPath, "Instagram", WINDOW_WAIT_TIMEOUT, "Instagram")
+    } else {
+        try {
+            RunApp("instagram://", "", "Instagram")
+        } catch {
+            RunApp("https://www.instagram.com", "", "Instagram")
+        }
+    }
 }
 
 !m:: RunApp("ms-windows-store:", "", "Microsoft Store")
@@ -1047,7 +1071,11 @@ WatchScript() {
         "%ProgramFiles%\Slack\slack.exe",
         "%StartMenuCommon%\Programs\Slack.lnk"
     ])
-    LaunchAndMaximize(slackPath, "ahk_exe slack.exe", WINDOW_WAIT_TIMEOUT, "Slack")
+    if (slackPath != "" && (FileExist(slackPath) || SearchSystemPath(slackPath))) {
+        LaunchAndMaximize(slackPath, "ahk_exe slack.exe", WINDOW_WAIT_TIMEOUT, "Slack")
+    } else {
+        RunApp("slack://", "", "Slack")
+    }
 }
 
 !t:: {
@@ -1090,7 +1118,11 @@ WatchScript() {
         "%LocalAppData%\Programs\Microsoft VS Code\Code.exe",
         "%ProgramFiles%\Microsoft VS Code\Code.exe"
     ])
-    HandleContextHotkey("v", "VS Code", vscodePath)
+    if (vscodePath != "" && (FileExist(vscodePath) || SearchSystemPath(vscodePath))) {
+        HandleContextHotkey("v", "VS Code", vscodePath)
+    } else {
+        RunApp("https://vscode.dev", "", "VS Code Web")
+    }
 }
 
 !+v:: {
@@ -1116,8 +1148,12 @@ WatchScript() {
         "%StartMenuCommon%\Programs\WhatsApp.lnk",
         "%StartMenu%\Programs\WhatsApp.lnk"
     ])
-    ShowTransientToolTip("WhatsApp")
-    LaunchAndMaximize(whatsappPath, "WhatsApp", WINDOW_WAIT_TIMEOUT)
+    if (whatsappPath != "" && (FileExist(whatsappPath) || InStr(whatsappPath, "\") = 0)) {
+        ShowTransientToolTip("WhatsApp")
+        LaunchAndMaximize(whatsappPath, "WhatsApp", WINDOW_WAIT_TIMEOUT, "WhatsApp")
+    } else {
+        RunApp("whatsapp://", "", "WhatsApp")
+    }
 }
 
 !y:: {
@@ -1125,7 +1161,11 @@ WatchScript() {
         "%AppData%\Microsoft\Windows\Start Menu\Programs\Chrome Apps\YouTube.lnk",
         "%StartMenuCommon%\Programs\Chrome Apps\YouTube.lnk"
     ])
-    LaunchAndMaximize(youtubePath, "YouTube", WINDOW_WAIT_TIMEOUT)
+    if (youtubePath != "" && FileExist(youtubePath)) {
+        LaunchAndMaximize(youtubePath, "YouTube", WINDOW_WAIT_TIMEOUT, "YouTube")
+    } else {
+        RunApp("https://www.youtube.com", "", "YouTube")
+    }
 }
 
 !z:: ExtractSelectedZip()
