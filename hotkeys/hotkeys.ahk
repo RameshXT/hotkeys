@@ -543,11 +543,12 @@ ShowTransientToolTip(message, durationMs := "") {
 
 SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "", micNameSubstr := "") {
     global LAST_SURROUND_VOLUME
+    deviceEnumerator := 0
+    devicesCollection := 0
     try {
         deviceEnumerator := ComObject("{BCDE0395-E52F-467C-8E3D-C4579291692E}", "{A95664D2-9614-4F35-A746-DE8DB63617E6}")
 
         ; 1. Switch Playback Device
-        devicesCollection := 0
         ComCall(3, deviceEnumerator, "int", 0, "uint", 1, "ptr*", &devicesCollection := 0)
 
         count := 0
@@ -607,8 +608,6 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
             ObjRelease(device)
         }
 
-        ObjRelease(devicesCollection)
-
         if (targetId = "") {
             ShowTransientToolTip("Audio device not found: " . deviceNameSubstr)
             return
@@ -642,70 +641,78 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
         if (micNameSubstr != "") {
             micsCollection := 0
             ComCall(3, deviceEnumerator, "int", 1, "uint", 1, "ptr*", &micsCollection := 0)
-            micCount := 0
-            ComCall(3, micsCollection, "uint*", &micCount)
+            try {
+                micCount := 0
+                ComCall(3, micsCollection, "uint*", &micCount)
 
-            micId := ""
-            Loop micCount {
-                device := 0
-                ComCall(4, micsCollection, "uint", A_Index - 1, "ptr*", &device := 0)
+                micId := ""
+                Loop micCount {
+                    device := 0
+                    ComCall(4, micsCollection, "uint", A_Index - 1, "ptr*", &device := 0)
 
-                idPtr := 0
-                ComCall(5, device, "ptr*", &idPtr)
-                id := StrGet(idPtr, "UTF-16")
-                DllCall("Ole32\CoTaskMemFree", "ptr", idPtr)
+                    idPtr := 0
+                    ComCall(5, device, "ptr*", &idPtr)
+                    id := StrGet(idPtr, "UTF-16")
+                    DllCall("Ole32\CoTaskMemFree", "ptr", idPtr)
 
-                propertyStore := 0
-                ComCall(4, device, "uint", 0, "ptr*", &propertyStore := 0)
+                    propertyStore := 0
+                    ComCall(4, device, "uint", 0, "ptr*", &propertyStore := 0)
 
-                keyGUID := Buffer(16)
-                DllCall("Ole32\CLSIDFromString", "str", "{A45C254E-DF1C-4EFD-8020-67D146A850E0}", "ptr", keyGUID)
-                propKey := Buffer(20)
-                DllCall("RtlMoveMemory", "ptr", propKey, "ptr", keyGUID, "ptr", 16)
-                NumPut("uint", 14, propKey, 16)
+                    keyGUID := Buffer(16)
+                    DllCall("Ole32\CLSIDFromString", "str", "{A45C254E-DF1C-4EFD-8020-67D146A850E0}", "ptr", keyGUID)
+                    propKey := Buffer(20)
+                    DllCall("RtlMoveMemory", "ptr", propKey, "ptr", keyGUID, "ptr", 16)
+                    NumPut("uint", 14, propKey, 16)
 
-                propVariant := Buffer(16, 0)
-                ComCall(5, propertyStore, "ptr", propKey, "ptr", propVariant)
+                    propVariant := Buffer(16, 0)
+                    ComCall(5, propertyStore, "ptr", propKey, "ptr", propVariant)
 
-                friendlyName := ""
-                if (NumGet(propVariant, 0, "ushort") = 31) {
-                    namePtr := NumGet(propVariant, 8, "ptr")
-                    friendlyName := StrGet(namePtr, "UTF-16")
+                    friendlyName := ""
+                    if (NumGet(propVariant, 0, "ushort") = 31) {
+                        namePtr := NumGet(propVariant, 8, "ptr")
+                        friendlyName := StrGet(namePtr, "UTF-16")
+                    }
+
+                    if (InStr(friendlyName, micNameSubstr)) {
+                        micId := id
+                    }
+
+                    ObjRelease(propertyStore)
+                    ObjRelease(device)
+
+                    if (micId != "")
+                        break
                 }
 
-                if (InStr(friendlyName, micNameSubstr)) {
-                    micId := id
+                if (micId != "") {
+                    defaultMicId := ""
+                    try {
+                        defaultMicDevice := 0
+                        ComCall(4, deviceEnumerator, "int", 1, "int", 0, "ptr*", &defaultMicDevice := 0)
+                        defaultMicIdPtr := 0
+                        ComCall(5, defaultMicDevice, "ptr*", &defaultMicIdPtr)
+                        defaultMicId := StrGet(defaultMicIdPtr, "UTF-16")
+                        DllCall("Ole32\CoTaskMemFree", "ptr", defaultMicIdPtr)
+                        ObjRelease(defaultMicDevice)
+                    }
+
+                    if (micId != defaultMicId) {
+                        ComCall(13, IPolicyConfig, "Str", micId, "UInt", 0)
+                        ComCall(13, IPolicyConfig, "Str", micId, "UInt", 1)
+                        ComCall(13, IPolicyConfig, "Str", micId, "UInt", 2)
+                    }
                 }
-
-                ObjRelease(propertyStore)
-                ObjRelease(device)
-
-                if (micId != "")
-                    break
-            }
-            ObjRelease(micsCollection)
-
-            if (micId != "") {
-                defaultMicId := ""
-                try {
-                    defaultMicDevice := 0
-                    ComCall(4, deviceEnumerator, "int", 1, "int", 0, "ptr*", &defaultMicDevice := 0)
-                    defaultMicIdPtr := 0
-                    ComCall(5, defaultMicDevice, "ptr*", &defaultMicIdPtr)
-                    defaultMicId := StrGet(defaultMicIdPtr, "UTF-16")
-                    DllCall("Ole32\CoTaskMemFree", "ptr", defaultMicIdPtr)
-                    ObjRelease(defaultMicDevice)
-                }
-
-                if (micId != defaultMicId) {
-                    ComCall(13, IPolicyConfig, "Str", micId, "UInt", 0)
-                    ComCall(13, IPolicyConfig, "Str", micId, "UInt", 1)
-                    ComCall(13, IPolicyConfig, "Str", micId, "UInt", 2)
-                }
+            } finally {
+                if (micsCollection)
+                    ObjRelease(micsCollection)
             }
         }
     } catch as e {
         ShowLaunchError("Audio Switch Error", e)
+    } finally {
+        if (devicesCollection)
+            ObjRelease(devicesCollection)
+        deviceEnumerator := 0
     }
 }
 
