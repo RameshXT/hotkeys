@@ -555,6 +555,18 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
 
         targetId := ""
         targetName := ""
+        defaultFriendlyName := ""
+
+        defaultId := ""
+        try {
+            defaultDevice := 0
+            ComCall(4, deviceEnumerator, "int", 0, "int", 0, "ptr*", &defaultDevice := 0)
+            defaultIdPtr := 0
+            ComCall(5, defaultDevice, "ptr*", &defaultIdPtr)
+            defaultId := StrGet(defaultIdPtr, "UTF-16")
+            DllCall("Ole32\CoTaskMemFree", "ptr", defaultIdPtr)
+            ObjRelease(defaultDevice)
+        }
 
         Loop count {
             device := 0
@@ -587,12 +599,12 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
                 targetId := id
                 targetName := friendlyName
             }
+            if (id = defaultId) {
+                defaultFriendlyName := friendlyName
+            }
 
             ObjRelease(propertyStore)
             ObjRelease(device)
-
-            if (targetId != "")
-                break
         }
 
         ObjRelease(devicesCollection)
@@ -602,21 +614,10 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
             return
         }
 
-        defaultId := ""
-        try {
-            defaultDevice := 0
-            ComCall(4, deviceEnumerator, "int", 0, "int", 0, "ptr*", &defaultDevice := 0)
-            defaultIdPtr := 0
-            ComCall(5, defaultDevice, "ptr*", &defaultIdPtr)
-            defaultId := StrGet(defaultIdPtr, "UTF-16")
-            DllCall("Ole32\CoTaskMemFree", "ptr", defaultIdPtr)
-            ObjRelease(defaultDevice)
-        }
-
         global LAST_DEVICE, DEVICE_VOLUME_HISTORY
-        if (LAST_DEVICE != "") {
+        if (LAST_DEVICE != "" && defaultFriendlyName != "") {
             try {
-                DEVICE_VOLUME_HISTORY[LAST_DEVICE] := SoundGetVolume()
+                DEVICE_VOLUME_HISTORY[LAST_DEVICE] := SoundGetVolume(, defaultFriendlyName)
             }
         }
 
@@ -631,11 +632,9 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
         ShowTransientToolTip("Active: " . dispName)
 
         if (targetVolume != "") {
-            Sleep 300
-            SoundSetVolume(targetVolume)
+            SoundSetVolume(targetVolume, , targetName)
         } else if (DEVICE_VOLUME_HISTORY.Has(friendlyNameOverride)) {
-            Sleep 300
-            SoundSetVolume(DEVICE_VOLUME_HISTORY[friendlyNameOverride])
+            SoundSetVolume(DEVICE_VOLUME_HISTORY[friendlyNameOverride], , targetName)
         }
         LAST_DEVICE := friendlyNameOverride
 
