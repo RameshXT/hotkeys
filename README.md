@@ -102,6 +102,7 @@ Advanced AutoHotkey system providing context-aware application launching, system
 | Alt + T               | Telegram              | NA                              |
 | Alt + U               | Ubuntu WSL            | Open in current Explorer folder |
 | Alt + V               | VS Code               | Open in current Explorer folder |
+| Alt + Shift + V       | WSL Path Paste        | Convert Windows clipboard path and paste as WSL/Unix format |
 | Alt + W               | WhatsApp              | Auto-Maximize                   |
 | Alt + Y               | YouTube               | Auto-Maximize                   |
 | Alt + Z               | Unzip Selected ZIP    | NA                              |

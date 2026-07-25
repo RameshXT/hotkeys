@@ -29,6 +29,7 @@
 ; Ctrl + Shift + Alt + N   → Network Reset
 ; Ctrl + Shift + Alt + U   → Windows Update
 ; Ctrl + Shift + Alt + Del → Empty Recycle Bin
+; Alt + Shift + V          → Paste path as WSL
 
 ; ====================[ Script Config & Variables ]====================
 #Requires AutoHotkey v2.0.26
@@ -1056,6 +1057,21 @@ WatchScript() {
     ])
     HandleContextHotkey("v", "VS Code", vscodePath)
 }
+
+!+v:: {
+    clipText := Trim(A_Clipboard, '`t`n`r "')
+    if (clipText != "" && (RegExMatch(clipText, "i)^[A-Z]:") || InStr(clipText, "\"))) {
+        wslPath := ConvertToWSLPath(clipText)
+        oldClip := A_Clipboard
+        A_Clipboard := wslPath
+        Send("^v")
+        Sleep(100)
+        A_Clipboard := oldClip
+    } else {
+        Send("^v")
+    }
+}
+
 
 !w:: {
     whatsappPath := AppResolver.Get("WhatsApp", "", [
