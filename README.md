@@ -79,8 +79,8 @@ If you have already cloned this repository locally, you can install directly fro
 
 1. Open PowerShell at the repository root.
 2. Run the installer:
-   ```cmd
-   .\xt.bat install
+   ```powershell
+   powershell -File .\xt.ps1 install
    ```
 3. Restart your terminal.
 

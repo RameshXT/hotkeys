@@ -106,15 +106,29 @@ function Invoke-Install ($Target, $Yes) {
         $localAHK = Join-Path $SourceDir "hotkeys.ahk"
         if (Test-Path $localAHK) {
             Copy-Item -Path $localAHK -Destination (Join-Path $InstallDir "hotkeys.ahk") -Force
-            Copy-Item -Path (Join-Path $SourceDir "xt.bat") -Destination (Join-Path $InstallDir "xt.bat") -Force
             Copy-Item -Path (Join-Path $SourceDir "xt.ps1") -Destination (Join-Path $InstallDir "xt.ps1") -Force
+            # Compile xt.cs to xt.exe in the install directory
+            $localCS = Join-Path $SourceDir "xt.cs"
+            if (Test-Path $localCS) {
+                $cscPath = if (Test-Path "$env:SystemRoot\Microsoft.NET\Framework64\v4.0.30319\csc.exe") { "$env:SystemRoot\Microsoft.NET\Framework64\v4.0.30319\csc.exe" } else { "$env:SystemRoot\Microsoft.NET\Framework\v4.0.30319\csc.exe" }
+                if (Test-Path $cscPath) {
+                    Start-Process -FilePath $cscPath -ArgumentList "/nologo", "/out:`"$(Join-Path $InstallDir 'xt.exe')`"", "`"$localCS`"" -Wait -NoNewWindow | Out-Null
+                }
+            }
             Write-OK "Copied script and CLI files to $InstallDir"
         } else {
             Write-Info "No local files found. Downloading from GitHub..."
             $repoUrl = "https://raw.githubusercontent.com/RameshXT/hotkeys/main"
             Invoke-WebRequest -Uri "$repoUrl/hotkeys.ahk" -OutFile (Join-Path $InstallDir "hotkeys.ahk") -UseBasicParsing | Out-Null
-            Invoke-WebRequest -Uri "$repoUrl/xt.bat" -OutFile (Join-Path $InstallDir "xt.bat") -UseBasicParsing | Out-Null
             Invoke-WebRequest -Uri "$repoUrl/xt.ps1" -OutFile (Join-Path $InstallDir "xt.ps1") -UseBasicParsing | Out-Null
+            # Download and compile xt.cs
+            $tempCS = Join-Path $env:TEMP "xt.cs"
+            Invoke-WebRequest -Uri "$repoUrl/xt.cs" -OutFile $tempCS -UseBasicParsing | Out-Null
+            $cscPath = if (Test-Path "$env:SystemRoot\Microsoft.NET\Framework64\v4.0.30319\csc.exe") { "$env:SystemRoot\Microsoft.NET\Framework64\v4.0.30319\csc.exe" } else { "$env:SystemRoot\Microsoft.NET\Framework\v4.0.30319\csc.exe" }
+            if (Test-Path $cscPath) {
+                Start-Process -FilePath $cscPath -ArgumentList "/nologo", "/out:`"$(Join-Path $InstallDir 'xt.exe')`"", "`"$tempCS`"" -Wait -NoNewWindow | Out-Null
+            }
+            Remove-Item $tempCS -Force -ErrorAction SilentlyContinue
             Write-OK "Downloaded files to $InstallDir"
         }
     } catch {
@@ -212,8 +226,15 @@ function Invoke-Update ($Target) {
 
             # Copy updated files
             Copy-Item -Path (Join-Path $SourceDir "hotkeys.ahk") -Destination (Join-Path $InstallDir "hotkeys.ahk") -Force
-            Copy-Item -Path (Join-Path $SourceDir "xt.bat") -Destination (Join-Path $InstallDir "xt.bat") -Force
             Copy-Item -Path (Join-Path $SourceDir "xt.ps1") -Destination (Join-Path $InstallDir "xt.ps1") -Force
+            # Recompile xt.cs to xt.exe in the install directory
+            $localCS = Join-Path $SourceDir "xt.cs"
+            if (Test-Path $localCS) {
+                $cscPath = if (Test-Path "$env:SystemRoot\Microsoft.NET\Framework64\v4.0.30319\csc.exe") { "$env:SystemRoot\Microsoft.NET\Framework64\v4.0.30319\csc.exe" } else { "$env:SystemRoot\Microsoft.NET\Framework\v4.0.30319\csc.exe" }
+                if (Test-Path $cscPath) {
+                    Start-Process -FilePath $cscPath -ArgumentList "/nologo", "/out:`"$(Join-Path $InstallDir 'xt.exe')`"", "`"$localCS`"" -Wait -NoNewWindow | Out-Null
+                }
+            }
             Write-OK "Updated files in $InstallDir"
 
             # Restart script
