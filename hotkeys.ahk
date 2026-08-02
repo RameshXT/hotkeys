@@ -442,10 +442,10 @@ LaunchAndMaximize(appPath, windowIdentifier := "", timeout := "", friendlyName :
 LaunchAndPosition(cmd, workingDir := "") {
     prevDetect := A_DetectHiddenWindows
     DetectHiddenWindows True
-    
+
     existingWindows := WinGetList("ahk_class ConsoleWindowClass")
     existingWT := WinGetList("ahk_class CASCADIA_HOSTING_WINDOW_CLASS")
-    
+
     pid := 0
     guard := Wow64RedirectionGuard()
     try {
@@ -454,14 +454,14 @@ LaunchAndPosition(cmd, workingDir := "") {
         DetectHiddenWindows prevDetect
         throw e
     }
-    
+
     targetHwnd := 0
     Loop 30 {
         if (pid != 0 && WinExist("ahk_pid " . pid)) {
             targetHwnd := WinExist("ahk_pid " . pid)
             break
         }
-        
+
         currentWindows := WinGetList("ahk_class ConsoleWindowClass")
         for hwnd in currentWindows {
             found := false
@@ -478,7 +478,7 @@ LaunchAndPosition(cmd, workingDir := "") {
         }
         if (targetHwnd != 0)
             break
-            
+
         currentWT := WinGetList("ahk_class CASCADIA_HOSTING_WINDOW_CLASS")
         for hwnd in currentWT {
             found := false
@@ -495,14 +495,14 @@ LaunchAndPosition(cmd, workingDir := "") {
         }
         if (targetHwnd != 0)
             break
-            
+
         Sleep 50
     }
-    
+
     if (targetHwnd != 0) {
         WinMove(-3, 5, , , "ahk_id " . targetHwnd)
     }
-    
+
     DetectHiddenWindows prevDetect
     return targetHwnd != 0
 }
@@ -913,9 +913,9 @@ WatchScript() {
         }
     }
 
-    if WinWait("ahk_exe chrome.exe", , WINDOW_WAIT_TIMEOUT)
-        WinMaximize
-    else
+    if WinWait("ahk_exe chrome.exe", , WINDOW_WAIT_TIMEOUT) {
+        try WinMaximize("ahk_exe chrome.exe")
+    } else
         ShowTransientToolTip("Chrome window not detected")
 }
 #MaxThreadsPerHotkey 1
