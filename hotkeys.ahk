@@ -937,12 +937,12 @@ WatchScript() {
             Run('"' . chromePath . '" --incognito')
         catch as e {
             ShowLaunchError("Failed to launch Chrome", e)
-            KeyWait "c", "T2"
+            KeyWait "c"
             return
         }
-        KeyWait "c", "T2"
+        KeyWait "c"
     } else {
-        KeyWait "c", "T2"
+        KeyWait "c"
         guard := Wow64RedirectionGuard()
         try
             Run('"' . chromePath . '"')
@@ -1026,7 +1026,7 @@ WatchScript() {
                     ShowLaunchError("Failed to launch Admin PowerShell in Folder", e)
             }
         }
-        KeyWait "p", "T2"
+        KeyWait "p"
     } else {
         singlePress() {
             ShowTransientToolTip("PowerShell")
@@ -1098,7 +1098,7 @@ WatchScript() {
                     ShowLaunchError("Failed to launch Admin CMD in Folder", e)
             }
         }
-        KeyWait "o", "T2"
+        KeyWait "o"
     } else {
         singlePress() {
             ShowTransientToolTip("CMD")
