@@ -83,6 +83,26 @@ GetEnvString(varName, defaultValue) {
     return (val != "") ? val : defaultValue
 }
 
+ResolveNativePath(cmd) {
+    if (A_Is64bitOS && A_PtrSize = 4) {
+        if (SubStr(cmd, 1, 7) = "*RunAs ") {
+            prefix := "*RunAs "
+            actualCmd := SubStr(cmd, 8)
+        } else {
+            prefix := ""
+            actualCmd := cmd
+        }
+
+        if (actualCmd = "cmd.exe" || SubStr(actualCmd, 1, 8) = "cmd.exe ") {
+            return prefix . "C:\Windows\Sysnative\" . actualCmd
+        }
+        if (actualCmd = "powershell.exe" || SubStr(actualCmd, 1, 15) = "powershell.exe ") {
+            return prefix . "C:\Windows\Sysnative\WindowsPowerShell\v1.0\" . actualCmd
+        }
+    }
+    return cmd
+}
+
 class Wow64RedirectionGuard {
     oldRedir := 0
 
@@ -150,7 +170,7 @@ ExtractSelectedZip() {
         safeSelectedPath := StrReplace(selectedPath, "'", "''")
         safeTargetDir := StrReplace(targetDir, "'", "''")
         guard := Wow64RedirectionGuard()
-        Run("powershell.exe -NoProfile -Command `"Expand-Archive -Path '" . safeSelectedPath . "' -DestinationPath '" . safeTargetDir . "' -Force`"", , "Hide")
+        Run(ResolveNativePath("powershell.exe") . " -NoProfile -Command `"Expand-Archive -Path '" . safeSelectedPath . "' -DestinationPath '" . safeTargetDir . "' -Force`"", , "Hide")
     }
 }
 
@@ -366,6 +386,7 @@ IsProtectedWindowClass(windowClass) {
 }
 
 SmartRun(targetPath, args := "", workingDir := "") {
+    targetPath := ResolveNativePath(targetPath)
     guard := Wow64RedirectionGuard()
     try {
         if (args != "")
@@ -440,6 +461,7 @@ LaunchAndMaximize(appPath, windowIdentifier := "", timeout := "", friendlyName :
     return true
 }
 LaunchAndPosition(cmd, workingDir := "") {
+    cmd := ResolveNativePath(cmd)
     prevDetect := A_DetectHiddenWindows
     DetectHiddenWindows True
 
@@ -500,7 +522,10 @@ LaunchAndPosition(cmd, workingDir := "") {
     }
 
     if (targetHwnd != 0) {
-        WinMove(-3, 5, , , "ahk_id " . targetHwnd)
+        try {
+            WinMove(-3, 5, , , "ahk_id " . targetHwnd)
+        } catch {
+        }
     }
 
     DetectHiddenWindows prevDetect
@@ -882,9 +907,9 @@ WatchScript() {
         ShowTransientToolTip("Opening Default Browser")
         try {
             if (pressDuration >= LONG_PRESS_THRESHOLD)
-                Run("cmd.exe /c start microsoft-edge:-private")
+                Run(ResolveNativePath("cmd.exe") . " /c start microsoft-edge:-private")
             else
-                Run("cmd.exe /c start https://www.google.com")
+                Run(ResolveNativePath("cmd.exe") . " /c start https://www.google.com")
         } catch as e {
             ShowLaunchError("Failed to launch Browser", e)
         }
@@ -1024,25 +1049,11 @@ WatchScript() {
 
 !o:: {
     singlePress() {
-        winClass := ""
-        try winClass := WinGetClass("A")
-        dir := ""
-        if (winClass = "CabinetWClass" || winClass = "ExploreWClass")
-            dir := GetExplorerPath()
-
-        if (dir != "") {
-            ShowTransientToolTip("CMD in Folder")
-            try
-                LaunchAndPosition("cmd.exe", dir)
-            catch as e
-                ShowLaunchError("Failed to launch CMD", e)
-        } else {
-            ShowTransientToolTip("CMD")
-            try
-                LaunchAndPosition("cmd.exe", USER_HOME)
-            catch as e
-                ShowLaunchError("Failed to launch CMD", e)
-        }
+        ShowTransientToolTip("CMD")
+        try
+            LaunchAndPosition("cmd.exe", USER_HOME)
+        catch as e
+            ShowLaunchError("Failed to launch CMD", e)
     }
     doublePress() {
         winClass := ""
