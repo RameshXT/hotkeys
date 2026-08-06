@@ -995,39 +995,59 @@ WatchScript() {
 
 !n:: RunApp("notepad.exe", "", "Notepad")
 
+#MaxThreadsPerHotkey 1
 !p:: {
-    singlePress() {
-        ShowTransientToolTip("PowerShell")
-        try
-            LaunchAndPosition("powershell.exe", USER_HOME)
-        catch as e
-            ShowLaunchError("Failed to launch PowerShell", e)
-    }
-    doublePress() {
-        winClass := ""
-        try winClass := WinGetClass("A")
-        dir := ""
-        if (winClass = "CabinetWClass" || winClass = "ExploreWClass")
-            dir := GetExplorerPath()
+    pressStart := A_TickCount
+    KeyWait "p", "T" . (LONG_PRESS_THRESHOLD / 1000)
+    pressDuration := A_TickCount - pressStart
 
+    if (pressDuration >= LONG_PRESS_THRESHOLD) {
+        dir := GetValidExplorerPath()
         if (dir != "") {
-            ShowTransientToolTip("PowerShell in Folder")
-            try
-                LaunchAndPosition("powershell.exe", dir)
-            catch as e
-                ShowLaunchError("Failed to launch PowerShell", e)
-        } else {
-            ShowTransientToolTip("Admin PowerShell")
-            try
-                LaunchAndPosition("*RunAs powershell.exe", USER_HOME)
-            catch as e {
+            ShowTransientToolTip("Admin PowerShell in Folder")
+            try {
+                LaunchAndPosition("*RunAs powershell.exe", dir)
+            } catch as e {
                 if (A_LastError != 1223)
-                    ShowLaunchError("Failed to launch Admin PowerShell", e)
+                    ShowLaunchError("Failed to launch Admin PowerShell in Folder", e)
             }
         }
+        KeyWait "p", "T2"
+    } else {
+        singlePress() {
+            ShowTransientToolTip("PowerShell")
+            try
+                LaunchAndPosition("powershell.exe", USER_HOME)
+            catch as e
+                ShowLaunchError("Failed to launch PowerShell", e)
+        }
+        doublePress() {
+            winClass := ""
+            try winClass := WinGetClass("A")
+            dir := ""
+            if (winClass = "CabinetWClass" || winClass = "ExploreWClass")
+                dir := GetExplorerPath()
+
+            if (dir != "") {
+                ShowTransientToolTip("PowerShell in Folder")
+                try
+                    LaunchAndPosition("powershell.exe", dir)
+                catch as e
+                    ShowLaunchError("Failed to launch PowerShell", e)
+            } else {
+                ShowTransientToolTip("Admin PowerShell")
+                try
+                    LaunchAndPosition("*RunAs powershell.exe", USER_HOME)
+                catch as e {
+                    if (A_LastError != 1223)
+                        ShowLaunchError("Failed to launch Admin PowerShell", e)
+                }
+            }
+        }
+        DoublePressManager.Handle("PowerShell", singlePress, doublePress)
     }
-    DoublePressManager.Handle("PowerShell", singlePress, doublePress)
 }
+#MaxThreadsPerHotkey 1
 
 !q:: {
     while GetKeyState("q", "P") && GetKeyState("Alt", "P") {
@@ -1047,39 +1067,59 @@ WatchScript() {
     }
 }
 
+#MaxThreadsPerHotkey 1
 !o:: {
-    singlePress() {
-        ShowTransientToolTip("CMD")
-        try
-            LaunchAndPosition("cmd.exe", USER_HOME)
-        catch as e
-            ShowLaunchError("Failed to launch CMD", e)
-    }
-    doublePress() {
-        winClass := ""
-        try winClass := WinGetClass("A")
-        dir := ""
-        if (winClass = "CabinetWClass" || winClass = "ExploreWClass")
-            dir := GetExplorerPath()
+    pressStart := A_TickCount
+    KeyWait "o", "T" . (LONG_PRESS_THRESHOLD / 1000)
+    pressDuration := A_TickCount - pressStart
 
+    if (pressDuration >= LONG_PRESS_THRESHOLD) {
+        dir := GetValidExplorerPath()
         if (dir != "") {
-            ShowTransientToolTip("CMD in Folder")
-            try
-                LaunchAndPosition("cmd.exe", dir)
-            catch as e
-                ShowLaunchError("Failed to launch CMD", e)
-        } else {
-            ShowTransientToolTip("Admin CMD")
-            try
-                LaunchAndPosition("*RunAs cmd.exe", USER_HOME)
-            catch as e {
+            ShowTransientToolTip("Admin CMD in Folder")
+            try {
+                LaunchAndPosition("*RunAs cmd.exe", dir)
+            } catch as e {
                 if (A_LastError != 1223)
-                    ShowLaunchError("Failed to launch Admin CMD", e)
+                    ShowLaunchError("Failed to launch Admin CMD in Folder", e)
             }
         }
+        KeyWait "o", "T2"
+    } else {
+        singlePress() {
+            ShowTransientToolTip("CMD")
+            try
+                LaunchAndPosition("cmd.exe", USER_HOME)
+            catch as e
+                ShowLaunchError("Failed to launch CMD", e)
+        }
+        doublePress() {
+            winClass := ""
+            try winClass := WinGetClass("A")
+            dir := ""
+            if (winClass = "CabinetWClass" || winClass = "ExploreWClass")
+                dir := GetExplorerPath()
+
+            if (dir != "") {
+                ShowTransientToolTip("CMD in Folder")
+                try
+                    LaunchAndPosition("cmd.exe", dir)
+                catch as e
+                    ShowLaunchError("Failed to launch CMD", e)
+            } else {
+                ShowTransientToolTip("Admin CMD")
+                try
+                    LaunchAndPosition("*RunAs cmd.exe", USER_HOME)
+                catch as e {
+                    if (A_LastError != 1223)
+                        ShowLaunchError("Failed to launch Admin CMD", e)
+                }
+            }
+        }
+        DoublePressManager.Handle("CMD", singlePress, doublePress)
     }
-    DoublePressManager.Handle("CMD", singlePress, doublePress)
 }
+#MaxThreadsPerHotkey 1
 
 !s:: {
     slackPath := AppResolver.Get("Slack", "slack.exe", [
