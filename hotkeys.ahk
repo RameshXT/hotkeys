@@ -462,6 +462,20 @@ LaunchAndMaximize(appPath, windowIdentifier := "", timeout := "", friendlyName :
 }
 LaunchAndPosition(cmd, workingDir := "") {
     cmd := ResolveNativePath(cmd)
+    if (SubStr(cmd, 1, 7) = "*RunAs " && workingDir != "") {
+        actualCmd := SubStr(cmd, 8)
+        if InStr(actualCmd, "cmd.exe") {
+            if !InStr(actualCmd, " /") {
+                cmd := '*RunAs ' . actualCmd . ' /k cd /d "' . workingDir . '"'
+                workingDir := ""
+            }
+        } else if InStr(actualCmd, "powershell.exe") {
+            if !InStr(actualCmd, " -") {
+                cmd := '*RunAs ' . actualCmd . ' -NoExit -Command Set-Location -LiteralPath "' . workingDir . '"'
+                workingDir := ""
+            }
+        }
+    }
     prevDetect := A_DetectHiddenWindows
     DetectHiddenWindows True
 
