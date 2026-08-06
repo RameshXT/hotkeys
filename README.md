@@ -20,8 +20,8 @@ Advanced AutoHotkey system providing context-aware application launching, system
 | **Alt + I** | Instagram (Auto-Maximize) | - | - |
 | **Alt + M** | Microsoft Store | - | - |
 | **Alt + N** | Notepad | - | - |
-| **Alt + O** | Command Prompt (CMD) | **Administrator CMD** | - |
-| **Alt + P** | PowerShell | **Administrator PowerShell** | - |
+| **Alt + O** | Command Prompt (CMD) | Open in active Explorer folder / **Admin CMD** (if no folder active) | **Admin CMD in Folder** (Hold >600ms) |
+| **Alt + P** | PowerShell | Open in active Explorer folder / **Admin PowerShell** (if no folder active) | **Admin PowerShell in Folder** (Hold >600ms) |
 | **Alt + Q** | Close Active Window | - | Continuous safe window close |
 | **Alt + S** | Slack (Auto-Maximize) | - | - |
 | **Alt + T** | Telegram | - | - |
@@ -98,8 +98,8 @@ Once installed, you can manage the hotkeys globally from any command line:
 
 - **Contextual Intelligence**:
   - **Double-Tap to Folder**: `Alt + V` (VS Code), `Alt + A` (Antigravity), `Alt + G` (Git Bash), `Alt + P` (PowerShell), and `Alt + U` (Ubuntu WSL) open the application directly in your **active File Explorer directory** when double-pressed.
-  - **Double-Tap to Admin**: `Alt + O` (CMD) and `Alt + P` (PowerShell) open standard shell (in folder if active) on single press, and their respective **Administrator** versions (when no folder is active) on double press.
-  - **Long-Press Interface**: `Alt + C` launches standard Chrome on a short tap, but triggers **Incognito Mode** if held for >600ms.
+  - **Multi-Press & Hold Shells**: `Alt + O` (CMD) and `Alt + P` (PowerShell) open normal shell in Home (Single Press), normal shell in active Explorer folder (Double Press if active), Administrator shell in Home (Double Press if not active), or **Administrator shell in active Explorer folder** (Long Press/Hold).
+  - **Long-Press Interface**: `Alt + C` launches standard Chrome on a short tap, but triggers **Incognito Mode** if held for >600ms. Also, holding `Alt + O`/`Alt + P` launches Admin shell in the active folder.
 - **Safety & Protection**: `Alt + Q` (Close Window) supports continuous closing when held, but is logic-locked to **prevent accidental closure** of critical system components, showing "Nothing to close" if there is no active/non-system window.
 - **Audio Output Switching**: Quickly switch audio playback and recording devices using `Ctrl + Shift + [Key]` combinations.
 - **Friendly Balloon Notifications**: Automatically intercepts launch or system errors and shows clean Windows tray notifications instead of blocking error popups.
