@@ -15,6 +15,7 @@
         xt update     -> Download latest and restart
         xt restart    -> Kill and re-launch hotkeys
         xt uninstall  -> Remove everything cleanly
+        xt help       -> Show this help message
 
 .NOTES
     Security: HTTPS-only, SHA-256 verified, user-scope only (no admin required).
@@ -336,6 +337,7 @@ function Invoke-Install {
     Write-Host '    xtkeys status    - check if running'    -ForegroundColor Cyan
     Write-Host '    xtkeys update    - pull latest version' -ForegroundColor Cyan
     Write-Host '    xtkeys uninstall - remove everything'   -ForegroundColor Cyan
+    Write-Host '    xtkeys help      - show this help message' -ForegroundColor Cyan
     Write-Host '  ========================================' -ForegroundColor Green
     Write-Host ''
 }
@@ -408,6 +410,14 @@ function Invoke-Uninstall {
     Write-Host '  Uninstalling hotkeys...' -ForegroundColor Yellow
     Write-Host ''
 
+    $uninstallAhk = $false
+    if ($Host.UI.RawUI -ne $null -and $MyInvocation.ScriptName) {
+        $response = Read-Host "  Do you want to uninstall AutoHotkey (compiler) as well? [y/N]"
+        if ($response -match '^[yY]') {
+            $uninstallAhk = $true
+        }
+    }
+
     Write-Step 'Stopping hotkeys process...'
     Stop-Hotkeys
     Write-OK 'Process stopped.'
@@ -426,9 +436,62 @@ function Invoke-Uninstall {
         Write-OK "Deleted: $INSTALL_DIR"
     }
 
+    if ($uninstallAhk) {
+        Write-Step 'Uninstalling AutoHotkey...'
+        $uninstalled = $false
+        if (Get-Command winget -ErrorAction SilentlyContinue) {
+            try {
+                winget uninstall --id $AHK_WINGET_ID --silent --accept-source-agreements 2>&1 | Out-Null
+                Write-OK 'AutoHotkey uninstalled via winget.'
+                $uninstalled = $true
+            } catch {
+                Write-Warn 'winget uninstall failed. Trying manual uninstaller...'
+            }
+        }
+
+        if (-not $uninstalled) {
+            $regPath = @(
+                "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
+                "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*"
+            )
+            $ahkReg = Get-ItemProperty $regPath -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like '*AutoHotkey*' } | Select-Object -First 1
+            if ($ahkReg -and $ahkReg.UninstallString) {
+                Write-Step 'Launching AutoHotkey uninstaller...'
+                if ($ahkReg.UninstallString -match '^"([^"]+)"\s+(.*)$') {
+                    $exe = $Matches[1]
+                    $args = $Matches[2]
+                    Start-Process -FilePath $exe -ArgumentList "$args /silent" -Wait -NoNewWindow -ErrorAction SilentlyContinue | Out-Null
+                } else {
+                    Start-Process -FilePath $ahkReg.UninstallString -Wait -NoNewWindow -ErrorAction SilentlyContinue | Out-Null
+                }
+                Write-OK 'AutoHotkey uninstaller executed.'
+            } else {
+                Write-Warn 'Could not find AutoHotkey uninstaller in registry. Please uninstall manually via Settings.'
+            }
+        }
+    }
+
     Write-Host ''
     Write-Host '  OK  Uninstall complete. hotkeys and xtkeys fully removed.' -ForegroundColor Green
-    Write-Host '  Note: AutoHotkey was NOT uninstalled (may be used elsewhere).' -ForegroundColor DarkGray
+    if (-not $uninstallAhk) {
+        Write-Host '  Note: AutoHotkey was NOT uninstalled (may be used elsewhere).' -ForegroundColor DarkGray
+    }
+    Write-Host ''
+}
+function Invoke-Help {
+    Write-Host ''
+    Write-Host '  xtkeys - Hotkeys Installer & CLI' -ForegroundColor Magenta
+    Write-Host ''
+    Write-Host '  Commands:' -ForegroundColor White
+    Write-Host '    xtkeys install     Install hotkeys on this machine'  -ForegroundColor Cyan
+    Write-Host '    xtkeys status      Check if hotkeys are running'     -ForegroundColor Cyan
+    Write-Host '    xtkeys update      Download latest and restart'      -ForegroundColor Cyan
+    Write-Host '    xtkeys restart     Kill and re-launch hotkeys'       -ForegroundColor Cyan
+    Write-Host '    xtkeys uninstall   Remove everything cleanly'        -ForegroundColor Cyan
+    Write-Host '    xtkeys help        Show this help message'           -ForegroundColor Cyan
+    Write-Host ''
+    Write-Host '  Web install (any Windows machine):' -ForegroundColor White
+    Write-Host "    irm https://github.com/$REPO_OWNER/$REPO_NAME/releases/latest/download/xtkeys.ps1 | iex" -ForegroundColor DarkCyan
     Write-Host ''
 }
 
@@ -448,18 +511,7 @@ elseif ($cmd -eq 'status')                 { Invoke-Status    }
 elseif ($cmd -eq 'update')                 { Invoke-Update    }
 elseif ($cmd -eq 'restart')                { Invoke-Restart   }
 elseif ($cmd -eq 'uninstall')              { Invoke-Uninstall }
+elseif ($cmd -eq 'help' -or $cmd -eq '-h' -or $cmd -eq '--help') { Invoke-Help }
 else {
-    Write-Host ''
-    Write-Host '  xtkeys - Hotkeys Installer & CLI' -ForegroundColor Magenta
-    Write-Host ''
-    Write-Host '  Commands:' -ForegroundColor White
-    Write-Host '    xtkeys install     Install hotkeys on this machine'  -ForegroundColor Cyan
-    Write-Host '    xtkeys status      Check if hotkeys are running'     -ForegroundColor Cyan
-    Write-Host '    xtkeys update      Download latest and restart'      -ForegroundColor Cyan
-    Write-Host '    xtkeys restart     Kill and re-launch hotkeys'       -ForegroundColor Cyan
-    Write-Host '    xtkeys uninstall   Remove everything cleanly'        -ForegroundColor Cyan
-    Write-Host ''
-    Write-Host '  Web install (any Windows machine):' -ForegroundColor White
-    Write-Host "    irm https://github.com/$REPO_OWNER/$REPO_NAME/releases/latest/download/xtkeys.ps1 | iex" -ForegroundColor DarkCyan
-    Write-Host ''
+    Invoke-Help
 }

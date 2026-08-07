@@ -31,6 +31,7 @@ xtkeys status      → check if hotkeys are running
 xtkeys update      → download latest version and restart
 xtkeys restart     → restart hotkeys
 xtkeys uninstall   → remove everything cleanly
+xtkeys help        → show this help message
 ```
 
 ---
