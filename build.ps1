@@ -1,139 +1,86 @@
-#Requires -Version 5.1
-$ErrorActionPreference = "Stop"
+<#
+.SYNOPSIS
+    build.ps1 — Release build script for xtkeys / hotkeys
+    Produces all artifacts needed for the GitHub Release.
 
-# Paths
-$RepoRoot = $PSScriptRoot
-if (-not $RepoRoot) { $RepoRoot = Get-Location }
+.OUTPUTS
+    dist/hotkeys.ahk       <- the script users download
+    dist/hotkeys.sha256    <- SHA-256 hash for integrity verification
+    dist/xtkeys.ps1        <- installer/CLI (so irm .../xtkeys.ps1 | iex always works)
+    dist/hotkeys.zip       <- zip bundle (hotkeys.ahk + xtkeys.ps1)
+#>
 
-$BuildDir = Join-Path $RepoRoot "build"
-$DistDir = Join-Path $RepoRoot "dist"
-$Ahk2ExeZip = Join-Path $BuildDir "ahk2exe.zip"
-$Ahk2ExeDir = Join-Path $BuildDir "ahk2exe"
-$CompilerExe = Join-Path $Ahk2ExeDir "Ahk2Exe.exe"
-$OutputFile = Join-Path $DistDir "hotkeys.exe"
-$ZipRelease = Join-Path $DistDir "hotkeys.zip"
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
 
-Write-Host "Creating build directories..." -ForegroundColor Cyan
-if (Test-Path $BuildDir) { Remove-Item $BuildDir -Recurse -Force }
-if (Test-Path $DistDir) { Remove-Item $DistDir -Recurse -Force }
-New-Item -ItemType Directory -Path $BuildDir | Out-Null
-New-Item -ItemType Directory -Path $DistDir | Out-Null
+$ROOT     = $PSScriptRoot
+$DIST     = Join-Path $ROOT 'dist'
+$AHK_SRC  = Join-Path $ROOT 'hotkeys.ahk'
+$CLI_SRC  = Join-Path $ROOT 'xtkeys.ps1'
 
-# 1. Detect AutoHotkey v2 Bin Path
-$ahkPaths = @(
-    "$env:ProgramFiles\AutoHotkey\v2\AutoHotkey64.exe",
-    "$env:ProgramFiles\AutoHotkey\v2\AutoHotkey32.exe",
-    "$env:LocalAppData\Programs\AutoHotkey\v2\AutoHotkey64.exe"
-)
-$ahkBin = $null
-foreach ($path in $ahkPaths) {
-    if (Test-Path $path) {
-        $ahkBin = $path
-        break
-    }
+# ==============================================================================
+# Validate source files
+# ==============================================================================
+
+if (-not (Test-Path $AHK_SRC)) { throw "Missing source: $AHK_SRC" }
+if (-not (Test-Path $CLI_SRC)) { throw "Missing source: $CLI_SRC" }
+
+Write-Host ''
+Write-Host '  Building release artifacts...' -ForegroundColor Cyan
+Write-Host ''
+
+# ==============================================================================
+# Clean and create dist/
+# ==============================================================================
+
+if (Test-Path $DIST) {
+    Remove-Item $DIST -Recurse -Force
 }
+New-Item -ItemType Directory -Path $DIST -Force | Out-Null
+Write-Host '  -> dist/ cleaned and ready.' -ForegroundColor DarkGray
 
-if ($null -eq $ahkBin) {
-    Write-Host "AutoHotkey v2 not found locally. Fetching latest portable AHK v2 from GitHub API..." -ForegroundColor Yellow
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    $ahkZip = Join-Path $BuildDir "ahk-v2.zip"
-    $ahkDir = Join-Path $BuildDir "ahk-v2"
-    try {
-        $apiResponse = Invoke-RestMethod -Uri "https://api.github.com/repos/AutoHotkey/AutoHotkey/releases/latest"
-        $zipAsset = $apiResponse.assets | Where-Object { $_.name -like "AutoHotkey_*.zip" } | Select-Object -First 1
-        $downloadUrl = $zipAsset.browser_download_url
-        Write-Host "Downloading AutoHotkey v2 from: $downloadUrl" -ForegroundColor Green
-        
-        $webClient = New-Object System.Net.WebClient
-        $webClient.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        $webClient.DownloadFile($downloadUrl, $ahkZip)
-        Expand-Archive -Path $ahkZip -DestinationPath $ahkDir -Force
-        
-        $ahkBin = Join-Path $ahkDir "AutoHotkey64.exe"
-        if (-not (Test-Path $ahkBin)) {
-            $ahkBin = Join-Path $ahkDir "AutoHotkey32.exe"
-        }
-    } catch {
-        Write-Error "Failed to download and extract portable AHK v2 from GitHub: $_"
-        exit 1
-    }
+# ==============================================================================
+# Copy hotkeys.ahk
+# ==============================================================================
+
+$AHK_DEST = Join-Path $DIST 'hotkeys.ahk'
+Copy-Item $AHK_SRC $AHK_DEST -Force
+Write-Host '  OK dist/hotkeys.ahk' -ForegroundColor Green
+
+# ==============================================================================
+# Generate SHA-256 checksum  (format: HASH  hotkeys.ahk)
+# ==============================================================================
+
+$hash     = (Get-FileHash -Path $AHK_DEST -Algorithm SHA256).Hash.ToUpper()
+$hashLine = "$hash  hotkeys.ahk"
+$HASH_DEST = Join-Path $DIST 'hotkeys.sha256'
+[System.IO.File]::WriteAllText($HASH_DEST, $hashLine, [System.Text.Encoding]::ASCII)
+Write-Host "  OK dist/hotkeys.sha256  ($hash)" -ForegroundColor Green
+
+# ==============================================================================
+# Copy xtkeys.ps1 (so the raw GitHub URL always serves the latest installer)
+# ==============================================================================
+
+$CLI_DEST = Join-Path $DIST 'xtkeys.ps1'
+Copy-Item $CLI_SRC $CLI_DEST -Force
+Write-Host '  OK dist/xtkeys.ps1' -ForegroundColor Green
+
+# ==============================================================================
+# Create hotkeys.zip  (bundle: hotkeys.ahk + xtkeys.ps1)
+# ==============================================================================
+
+$ZIP_DEST = Join-Path $DIST 'hotkeys.zip'
+Compress-Archive -Path $AHK_DEST, $CLI_DEST -DestinationPath $ZIP_DEST -Force
+Write-Host '  OK dist/hotkeys.zip' -ForegroundColor Green
+
+# ==============================================================================
+# Summary
+# ==============================================================================
+
+Write-Host ''
+Write-Host '  Release artifacts ready in dist/:' -ForegroundColor White
+Get-ChildItem $DIST | ForEach-Object {
+    $size = [math]::Round($_.Length / 1KB, 1)
+    Write-Host "    $($_.Name.PadRight(22)) $size KB" -ForegroundColor Cyan
 }
-Write-Host "Using AutoHotkey v2 base bin at: $ahkBin" -ForegroundColor Green
-
-# 2. Download Ahk2Exe Compiler
-Write-Host "Fetching latest compiler version from GitHub API..." -ForegroundColor Cyan
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-try {
-    $apiResponse = Invoke-RestMethod -Uri "https://api.github.com/repos/AutoHotkey/Ahk2Exe/releases/latest"
-    $zipAsset = $apiResponse.assets | Where-Object { $_.name -like "*.zip" } | Select-Object -First 1
-    $downloadUrl = $zipAsset.browser_download_url
-    Write-Host "Downloading AutoHotkey Compiler from: $downloadUrl" -ForegroundColor Green
-    $webClient = New-Object System.Net.WebClient
-    $webClient.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-    $webClient.DownloadFile($downloadUrl, $Ahk2ExeZip)
-} catch {
-    Write-Error "Failed to download compiler: $_"
-    exit 1
-}
-
-Write-Host "Extracting compiler..." -ForegroundColor Cyan
-Expand-Archive -Path $Ahk2ExeZip -DestinationPath $Ahk2ExeDir -Force
-
-if (-not (Test-Path $CompilerExe)) {
-    Write-Error "Ahk2Exe.exe was not found in the extracted files."
-    exit 1
-}
-
-# 3. Compile hotkeys.ahk to hotkeys.exe
-Write-Host "Compiling hotkeys.ahk to hotkeys.exe..." -ForegroundColor Cyan
-$sourceAHK = Join-Path $RepoRoot "hotkeys.ahk"
-
-# Compile arguments
-$compileArgs = @(
-    "/in", "`"$sourceAHK`"",
-    "/out", "`"$OutputFile`"",
-    "/bin", "`"$ahkBin`""
-)
-
-$process = Start-Process -FilePath $CompilerExe -ArgumentList $compileArgs -Wait -NoNewWindow -PassThru
-if ($process.ExitCode -ne 0) {
-    Write-Error "Compilation failed with exit code $($process.ExitCode)"
-    exit 1
-}
-Write-Host "Successfully compiled to $OutputFile" -ForegroundColor Green
-
-# 4. Compile C# xt.exe launcher wrapper
-Write-Host "Compiling xt.cs launcher..." -ForegroundColor Cyan
-$cscPath = "$env:SystemRoot\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
-if (-not (Test-Path $cscPath)) {
-    $cscPath = "$env:SystemRoot\Microsoft.NET\Framework\v4.0.30319\csc.exe"
-}
-if (-not (Test-Path $cscPath)) {
-    Write-Error "C# compiler csc.exe was not found."
-    exit 1
-}
-
-$xtExe = Join-Path $DistDir "xt.exe"
-$process = Start-Process -FilePath $cscPath -ArgumentList "/nologo", "/out:$xtExe", (Join-Path $RepoRoot "xt.cs") -Wait -NoNewWindow -PassThru
-if ($process.ExitCode -ne 0) {
-    Write-Error "C# launcher compilation failed."
-    exit 1
-}
-Write-Host "Successfully compiled xt.exe" -ForegroundColor Green
-
-# 5. Copy CLI wrappers and bundle into ZIP release
-Write-Host "Packaging build artifacts into ZIP..." -ForegroundColor Cyan
-$PackageFolder = Join-Path $BuildDir "package"
-New-Item -ItemType Directory -Path $PackageFolder | Out-Null
-
-Copy-Item -Path $OutputFile -Destination (Join-Path $PackageFolder "hotkeys.exe")
-Copy-Item -Path $xtExe -Destination (Join-Path $PackageFolder "xt.exe")
-Copy-Item -Path (Join-Path $RepoRoot "xt.ps1") -Destination (Join-Path $PackageFolder "xt.ps1")
-Copy-Item -Path (Join-Path $RepoRoot "README.md") -Destination (Join-Path $PackageFolder "README.md")
-Copy-Item -Path (Join-Path $RepoRoot "LICENSE") -Destination (Join-Path $PackageFolder "LICENSE")
-
-Compress-Archive -Path "$PackageFolder\*" -DestinationPath $ZipRelease -Force
-Write-Host "Successfully created release archive at: $ZipRelease" -ForegroundColor Green
-Write-Host "SHA256 Hash of ZIP release:" -ForegroundColor Yellow
-$hash = Get-FileHash -Path $ZipRelease -Algorithm SHA256
-Write-Host $hash.Hash -ForegroundColor Green
+Write-Host ''

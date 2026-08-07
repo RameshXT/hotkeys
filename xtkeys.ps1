@@ -1,0 +1,464 @@
+<#
+.SYNOPSIS
+    xt — Hotkeys Installer & CLI
+    One command to install, manage, and update your AutoHotkey hotkeys on any Windows machine.
+
+.DESCRIPTION
+    Installer usage (pipe from web):
+        irm https://raw.githubusercontent.com/RameshXT/hotkeys/main/xt.ps1 | iex
+
+    Local installer usage (from repo root):
+        powershell -ExecutionPolicy Bypass -File .\xt.ps1 install
+
+    CLI usage (after install, from any terminal):
+        xt status     -> Check if hotkeys are running
+        xt update     -> Download latest and restart
+        xt restart    -> Kill and re-launch hotkeys
+        xt uninstall  -> Remove everything cleanly
+
+.NOTES
+    Security: HTTPS-only, SHA-256 verified, user-scope only (no admin required).
+    Install location: %LocalAppData%\xt
+    AutoHotkey: Installed via winget (signed), with fallback to autohotkey.com HTTPS download.
+#>
+
+#Requires -Version 5.1
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+# ==============================================================================
+# CONSTANTS
+# ==============================================================================
+
+$REPO_OWNER  = 'RameshXT'
+$REPO_NAME   = 'hotkeys'
+$INSTALL_DIR = Join-Path $env:LOCALAPPDATA 'xtkeys'
+$AHK_FILE    = Join-Path $INSTALL_DIR 'hotkeys.ahk'
+$CLI_FILE    = Join-Path $INSTALL_DIR 'xtkeys.ps1'
+$CLI_BAT     = Join-Path $INSTALL_DIR 'xtkeys.cmd'
+$PID_FILE    = Join-Path $INSTALL_DIR 'hotkeys.pid'
+$STARTUP_LNK = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\xtkeys.lnk'
+
+$RELEASE_BASE   = "https://github.com/$REPO_OWNER/$REPO_NAME/releases/latest/download"
+$AHK_URL        = "$RELEASE_BASE/hotkeys.ahk"
+$HASH_URL       = "$RELEASE_BASE/hotkeys.sha256"
+$AHK_WINGET_ID  = 'AutoHotkey.AutoHotkey'
+$AHK_WINGET_VER = '2.0.26'           # exact version required by hotkeys.ahk (#Requires AutoHotkey v2.0.26)
+$AHK_MIN_VER    = [Version]'2.0.26'  # minimum acceptable version
+# Pinned direct download for AHK v2.0.26 from the official GitHub releases
+$AHK_DIRECT_URL = 'https://github.com/AutoHotkey/AutoHotkey/releases/download/v2.0.26/AutoHotkey_2.0.26_setup.exe'
+
+# ==============================================================================
+# HELPERS
+# ==============================================================================
+
+function Write-Step    ([string]$m) { Write-Host "  -> $m" -ForegroundColor Cyan   }
+function Write-OK      ([string]$m) { Write-Host "  OK $m" -ForegroundColor Green  }
+function Write-Warn    ([string]$m) { Write-Host "  !! $m" -ForegroundColor Yellow }
+function Write-Fail    ([string]$m) { Write-Host "  XX $m" -ForegroundColor Red    }
+
+function Write-Banner {
+    Write-Host ''
+    Write-Host '  ========================================' -ForegroundColor Magenta
+    Write-Host '         xtkeys  .  Hotkeys Installer        ' -ForegroundColor Magenta
+    Write-Host '  ========================================' -ForegroundColor Magenta
+    Write-Host ''
+}
+
+# Enforce TLS 1.2+ for all HTTPS in this session
+function Set-SecureTls {
+    [Net.ServicePointManager]::SecurityProtocol =
+        [Net.SecurityProtocolType]::Tls12 -bor
+        [Net.SecurityProtocolType]::Tls13
+}
+
+# Download file — refuses any non-HTTPS URL
+function Invoke-SecureDownload ([string]$Url, [string]$OutFile) {
+    if ($Url -notmatch '^https://') { throw "Security: refusing non-HTTPS URL: $Url" }
+    $wc = [System.Net.WebClient]::new()
+    $wc.Headers.Add('User-Agent', "xt-installer/1.0 (github.com/$REPO_OWNER/$REPO_NAME)")
+    $wc.DownloadFile($Url, $OutFile)
+}
+
+# SHA-256 verify downloaded file
+function Confirm-FileHash ([string]$File, [string]$Expected) {
+    $actual = (Get-FileHash -Path $File -Algorithm SHA256).Hash.ToUpper()
+    $expect = ($Expected.Trim().ToUpper() -replace '\s.*$', '')
+    if ($actual -ne $expect) {
+        throw "SHA-256 MISMATCH - aborting for security.`n  Expected: $expect`n  Got     : $actual"
+    }
+}
+
+# Find AutoHotkey v2 exe on this machine
+function Get-AhkExe {
+    $candidates = @(
+        'C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe',
+        'C:\Program Files\AutoHotkey\v2\AutoHotkey.exe',
+        'C:\Program Files\AutoHotkey\AutoHotkey.exe',
+        'C:\Program Files (x86)\AutoHotkey\AutoHotkey.exe'
+    )
+    foreach ($c in $candidates) { if (Test-Path $c) { return $c } }
+    $f = Get-Command 'AutoHotkey64.exe' -ErrorAction SilentlyContinue
+    if ($f) { return $f.Source }
+    $f = Get-Command 'AutoHotkey.exe'   -ErrorAction SilentlyContinue
+    if ($f) { return $f.Source }
+    return $null
+}
+
+# Get running hotkeys PID from the pid file
+function Get-HotkeysPid {
+    if (-not (Test-Path $PID_FILE)) { return $null }
+    $raw = (Get-Content $PID_FILE -Raw -ErrorAction SilentlyContinue).Trim()
+    if ($raw -match '^\d+$') { return [int]$raw }
+    return $null
+}
+
+# Check if hotkeys process is alive
+function Test-HotkeysRunning {
+    $hpid = Get-HotkeysPid
+    if ($null -eq $hpid) { return $false }
+    return ($null -ne (Get-Process -Id $hpid -ErrorAction SilentlyContinue))
+}
+
+# Kill the running hotkeys process
+function Stop-Hotkeys {
+    $hpid = Get-HotkeysPid
+    if ($null -ne $hpid) { Stop-Process -Id $hpid -Force -ErrorAction SilentlyContinue }
+    Start-Sleep -Milliseconds 500
+}
+
+# Launch hotkeys.ahk silently
+function Start-Hotkeys ([string]$AhkExe) {
+    Start-Process -FilePath $AhkExe -ArgumentList "`"$AHK_FILE`"" -WindowStyle Hidden
+}
+
+# Add dir to User PATH (idempotent)
+function Add-ToUserPath ([string]$Dir) {
+    $cur   = [Environment]::GetEnvironmentVariable('PATH', 'User')
+    if ($null -eq $cur) { $cur = '' }
+    $parts = $cur -split ';' | Where-Object { $_ -ne '' }
+    if ($parts -notcontains $Dir) {
+        [Environment]::SetEnvironmentVariable('PATH', (($parts + $Dir) -join ';'), 'User')
+        $env:PATH = $env:PATH + ';' + $Dir
+    }
+}
+
+# Remove dir from User PATH
+function Remove-FromUserPath ([string]$Dir) {
+    $cur   = [Environment]::GetEnvironmentVariable('PATH', 'User')
+    if ($null -eq $cur) { return }
+    $parts = $cur -split ';' | Where-Object { $_ -ne '' -and $_ -ne $Dir }
+    [Environment]::SetEnvironmentVariable('PATH', ($parts -join ';'), 'User')
+}
+
+# Create Windows Startup shortcut (.lnk)
+function New-StartupShortcut ([string]$AhkExe) {
+    $wsh      = New-Object -ComObject WScript.Shell
+    $lnk      = $wsh.CreateShortcut($STARTUP_LNK)
+    $lnk.TargetPath       = $AhkExe
+    $lnk.Arguments        = "`"$AHK_FILE`""
+    $lnk.WorkingDirectory = $INSTALL_DIR
+    $lnk.Description      = 'xt Hotkeys - AutoHotkey'
+    $lnk.IconLocation     = "$AhkExe,0"
+    $lnk.Save()
+}
+
+# Write the xtkeys.cmd wrapper so `xtkeys` works from any terminal
+function Write-CliWrapper {
+    $bat = "@echo off`r`npowershell.exe -NoProfile -ExecutionPolicy Bypass -File `"%~dp0xtkeys.ps1`" %*`r`n"
+    [System.IO.File]::WriteAllText($CLI_BAT, $bat, [System.Text.Encoding]::ASCII)
+}
+
+# ==============================================================================
+# AUTOHOTKEY INSTALL
+# ==============================================================================
+
+# Read the file-version of an AHK exe and return as [Version]
+function Get-AhkVersion ([string]$ExePath) {
+    try {
+        $ver = (Get-Item $ExePath).VersionInfo.FileVersion
+        # FileVersion can be '2.0.26.0' or '2.0.26' — strip build suffix
+        return [Version]($ver -replace '^(\d+\.\d+\.\d+).*$', '$1')
+    } catch { return $null }
+}
+
+# Return $true if the exe meets $AHK_MIN_VER
+function Test-AhkVersionOk ([string]$ExePath) {
+    $v = Get-AhkVersion $ExePath
+    if ($null -eq $v) { return $false }
+    return $v -ge $AHK_MIN_VER
+}
+
+function Install-AutoHotkey {
+    Write-Step "Checking for AutoHotkey >= v$AHK_WINGET_VER..."
+
+    # Check any existing install first
+    $existing = Get-AhkExe
+    if ($null -ne $existing) {
+        if (Test-AhkVersionOk $existing) {
+            $v = Get-AhkVersion $existing
+            Write-OK "AutoHotkey v$v found (meets v$AHK_WINGET_VER requirement): $existing"
+            return $existing
+        } else {
+            $v = Get-AhkVersion $existing
+            Write-Warn "AutoHotkey v$v found but is too old (need >= v$AHK_WINGET_VER). Installing correct version..."
+        }
+    }
+
+    # Preferred: winget — pin to exact required version
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        Write-Step "Installing AutoHotkey v$AHK_WINGET_VER via winget (pinned, signed)..."
+        try {
+            winget install --id $AHK_WINGET_ID --version $AHK_WINGET_VER --silent --accept-package-agreements --accept-source-agreements 2>&1 | Out-Null
+            $exe = Get-AhkExe
+            if ($null -ne $exe -and (Test-AhkVersionOk $exe)) {
+                $v = Get-AhkVersion $exe
+                Write-OK "AutoHotkey v$v installed via winget: $exe"
+                return $exe
+            }
+            Write-Warn 'winget install did not produce a valid v2.0.26+ exe. Trying direct download...'
+        } catch { Write-Warn 'winget failed, falling back to direct download...' }
+    }
+
+    # Fallback: pinned direct download from AutoHotkey GitHub releases (HTTPS)
+    Write-Step "Downloading AutoHotkey v$AHK_WINGET_VER from GitHub Releases (HTTPS, pinned)..."
+    $setup = Join-Path $env:TEMP "ahk-v${AHK_WINGET_VER}-setup.exe"
+    Invoke-SecureDownload $AHK_DIRECT_URL $setup
+    Write-Step 'Running AutoHotkey installer silently...'
+    Start-Process -FilePath $setup -ArgumentList '/silent' -Wait -NoNewWindow
+    Remove-Item $setup -Force -ErrorAction SilentlyContinue
+
+    $exe = Get-AhkExe
+    if ($null -eq $exe)              { throw "AutoHotkey install failed. Install manually: https://www.autohotkey.com" }
+    if (-not (Test-AhkVersionOk $exe)) {
+        $v = Get-AhkVersion $exe
+        throw "AutoHotkey v$v installed but does not meet the v$AHK_WINGET_VER requirement. Please install v$AHK_WINGET_VER manually."
+    }
+
+    $v = Get-AhkVersion $exe
+    Write-OK "AutoHotkey v$v installed: $exe"
+    return $exe
+}
+
+# ==============================================================================
+# DOWNLOAD hotkeys.ahk FROM GITHUB RELEASES
+# ==============================================================================
+
+function Get-LatestHotkeys {
+    $tmpAhk  = Join-Path $env:TEMP 'hotkeys_dl.ahk'
+    $tmpHash = Join-Path $env:TEMP 'hotkeys_dl.sha256'
+
+    Write-Step 'Downloading hotkeys.ahk from GitHub Releases...'
+    Invoke-SecureDownload $AHK_URL $tmpAhk
+
+    Write-Step 'Verifying SHA-256 checksum...'
+    try {
+        Invoke-SecureDownload $HASH_URL $tmpHash
+        $expected = Get-Content $tmpHash -Raw
+        Confirm-FileHash $tmpAhk $expected
+        Write-OK 'Integrity check passed.'
+        Remove-Item $tmpHash -Force -ErrorAction SilentlyContinue
+    } catch [System.Net.WebException] {
+        Write-Warn 'No SHA-256 file found in release — skipping hash check.'
+        Write-Warn 'Add hotkeys.sha256 to release assets to enable verification.'
+    }
+
+    return $tmpAhk
+}
+
+# ==============================================================================
+# COMMANDS
+# ==============================================================================
+
+function Invoke-Install {
+    Write-Banner
+    Write-Host '  Installing hotkeys...' -ForegroundColor White
+    Write-Host ''
+    Set-SecureTls
+
+    # 1. Create install dir
+    Write-Step "Setting up install directory: $INSTALL_DIR"
+    New-Item -ItemType Directory -Path $INSTALL_DIR -Force | Out-Null
+    Write-OK 'Directory ready.'
+
+    # 2. Install AutoHotkey v2
+    $ahkExe = Install-AutoHotkey
+
+    # 3. Download + verify hotkeys.ahk
+    $tmp = Get-LatestHotkeys
+    Copy-Item $tmp $AHK_FILE -Force
+    Remove-Item $tmp -Force -ErrorAction SilentlyContinue
+    Write-OK "hotkeys.ahk -> $AHK_FILE"
+
+    # 4. Copy (or download) xtkeys.ps1 itself into install dir for the CLI
+    $self = $MyInvocation.ScriptName
+    if ($self -and (Test-Path $self)) {
+        Copy-Item $self $CLI_FILE -Force
+    } else {
+        Write-Step 'Downloading xtkeys.ps1 for CLI...'
+        Invoke-SecureDownload "https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/main/xtkeys.ps1" $CLI_FILE
+    }
+    Write-OK "xtkeys CLI -> $CLI_FILE"
+
+    # 5. Write xt.cmd wrapper
+    Write-CliWrapper
+    Write-OK 'xt.cmd wrapper created.'
+
+    # 6. Add install dir to User PATH
+    Write-Step 'Adding to User PATH...'
+    Add-ToUserPath $INSTALL_DIR
+    Write-OK "$INSTALL_DIR added to User PATH."
+
+    # 7. Create Startup shortcut (auto-launch on login)
+    Write-Step 'Creating Startup shortcut...'
+    New-StartupShortcut $ahkExe
+    Write-OK "Startup shortcut: $STARTUP_LNK"
+
+    # 8. Launch immediately
+    Write-Step 'Launching hotkeys now...'
+    Stop-Hotkeys
+    Start-Hotkeys $ahkExe
+    Start-Sleep -Seconds 1
+
+    Write-Host ''
+    if (Test-HotkeysRunning) {
+        Write-OK 'hotkeys.ahk is RUNNING!'
+    } else {
+        Write-Warn 'hotkeys.ahk may not have started yet — run `xt status` to check.'
+    }
+
+    Write-Host ''
+    Write-Host '  ========================================' -ForegroundColor Green
+    Write-Host '  Installation complete!' -ForegroundColor Green
+    Write-Host '  Restart your terminal, then use:' -ForegroundColor White
+    Write-Host '    xtkeys status    - check if running'    -ForegroundColor Cyan
+    Write-Host '    xtkeys update    - pull latest version' -ForegroundColor Cyan
+    Write-Host '    xtkeys uninstall - remove everything'   -ForegroundColor Cyan
+    Write-Host '  ========================================' -ForegroundColor Green
+    Write-Host ''
+}
+
+function Invoke-Status {
+    Write-Host ''
+    if (Test-HotkeysRunning) {
+        $hpid = Get-HotkeysPid
+        Write-Host "  OK  hotkeys.ahk is RUNNING  (PID: $hpid)" -ForegroundColor Green
+    } else {
+        Write-Host '  XX  hotkeys.ahk is NOT running.' -ForegroundColor Red
+        Write-Host '      Run `xtkeys restart` to start it.' -ForegroundColor Yellow
+    }
+    Write-Host "  Dir    : $INSTALL_DIR" -ForegroundColor DarkGray
+    Write-Host "  Script : $AHK_FILE"   -ForegroundColor DarkGray
+    Write-Host ''
+}
+
+function Invoke-Update {
+    Write-Banner
+    Write-Host '  Updating hotkeys...' -ForegroundColor White
+    Write-Host ''
+    Set-SecureTls
+
+    if (-not (Test-Path $INSTALL_DIR)) {
+        Write-Fail 'xtkeys is not installed. Run the web installer first:'
+        Write-Host "  irm https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/main/xtkeys.ps1 | iex"
+        exit 1
+    }
+
+    $ahkExe = Get-AhkExe
+    if ($null -eq $ahkExe) { throw 'AutoHotkey not found. Reinstall xt.' }
+
+    # Update hotkeys.ahk
+    $tmp = Get-LatestHotkeys
+    Stop-Hotkeys
+    Copy-Item $tmp $AHK_FILE -Force
+    Remove-Item $tmp -Force -ErrorAction SilentlyContinue
+    Write-OK 'hotkeys.ahk updated.'
+
+    # Update xtkeys.ps1 CLI itself
+    Write-Step 'Updating xtkeys CLI...'
+    Invoke-SecureDownload "https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/main/xtkeys.ps1" $CLI_FILE
+    Write-CliWrapper
+    Write-OK 'xtkeys CLI updated.'
+
+    Write-Step 'Restarting hotkeys...'
+    Start-Hotkeys $ahkExe
+    Start-Sleep -Seconds 1
+
+    if (Test-HotkeysRunning) { Write-OK 'hotkeys.ahk running on latest version.' }
+    else                     { Write-Warn 'hotkeys may not have started — run `xt status`.' }
+    Write-Host ''
+}
+
+function Invoke-Restart {
+    $ahkExe = Get-AhkExe
+    if ($null -eq $ahkExe) { Write-Fail 'AutoHotkey not found.'; exit 1 }
+    Write-Step 'Stopping hotkeys...'
+    Stop-Hotkeys
+    Write-Step 'Starting hotkeys...'
+    Start-Hotkeys $ahkExe
+    Start-Sleep -Seconds 1
+    if (Test-HotkeysRunning) { Write-OK 'hotkeys.ahk restarted.' }
+    else                     { Write-Warn 'hotkeys may not have started — run `xt status`.' }
+}
+
+function Invoke-Uninstall {
+    Write-Host ''
+    Write-Host '  Uninstalling hotkeys...' -ForegroundColor Yellow
+    Write-Host ''
+
+    Write-Step 'Stopping hotkeys process...'
+    Stop-Hotkeys
+    Write-OK 'Process stopped.'
+
+    if (Test-Path $STARTUP_LNK) {
+        Remove-Item $STARTUP_LNK -Force
+        Write-OK 'Startup shortcut removed.'
+    }
+
+    Write-Step 'Removing from User PATH...'
+    Remove-FromUserPath $INSTALL_DIR
+    Write-OK 'PATH entry removed.'
+
+    if (Test-Path $INSTALL_DIR) {
+        Remove-Item $INSTALL_DIR -Recurse -Force
+        Write-OK "Deleted: $INSTALL_DIR"
+    }
+
+    Write-Host ''
+    Write-Host '  OK  Uninstall complete. hotkeys and xtkeys fully removed.' -ForegroundColor Green
+    Write-Host '  Note: AutoHotkey was NOT uninstalled (may be used elsewhere).' -ForegroundColor DarkGray
+    Write-Host ''
+}
+
+# ==============================================================================
+# ENTRY POINT
+# ==============================================================================
+# When piped via `irm ... | iex`, ScriptName is empty -> auto-install.
+# When called as `xt <command>` from PATH -> dispatch to command.
+
+$isPiped = [string]::IsNullOrEmpty($MyInvocation.ScriptName)
+$cmd     = if ($args.Count -gt 0) { $args[0].ToLower() } else { '' }
+
+switch ($true) {
+    ($isPiped -or $cmd -eq 'install')   { Invoke-Install;   break }
+    ($cmd -eq 'status')                 { Invoke-Status;    break }
+    ($cmd -eq 'update')                 { Invoke-Update;    break }
+    ($cmd -eq 'restart')                { Invoke-Restart;   break }
+    ($cmd -eq 'uninstall')              { Invoke-Uninstall; break }
+    default {
+        Write-Host ''
+        Write-Host '  xtkeys - Hotkeys Installer & CLI' -ForegroundColor Magenta
+        Write-Host ''
+        Write-Host '  Commands:' -ForegroundColor White
+        Write-Host '    xtkeys install     Install hotkeys on this machine'  -ForegroundColor Cyan
+        Write-Host '    xtkeys status      Check if hotkeys are running'     -ForegroundColor Cyan
+        Write-Host '    xtkeys update      Download latest and restart'      -ForegroundColor Cyan
+        Write-Host '    xtkeys restart     Kill and re-launch hotkeys'       -ForegroundColor Cyan
+        Write-Host '    xtkeys uninstall   Remove everything cleanly'        -ForegroundColor Cyan
+        Write-Host ''
+        Write-Host '  Web install (any Windows machine):' -ForegroundColor White
+        Write-Host "    irm https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/main/xtkeys.ps1 | iex" -ForegroundColor DarkCyan
+        Write-Host ''
+    }
+}

@@ -1,6 +1,47 @@
 # hotkeys
 
-Advanced AutoHotkey system providing context-aware application launching, system maintenance automation, and safe window management.
+> Advanced AutoHotkey system — context-aware app launching, audio switching, system automation, and safe window management for Windows.
+
+---
+
+## Install
+
+Open **PowerShell** and run:
+
+```powershell
+irm https://github.com/RameshXT/hotkeys/releases/latest/download/xtkeys.ps1 | iex
+```
+
+That's it. Hotkeys are active immediately. No admin rights needed.
+
+> **What it does automatically:**
+> - Installs AutoHotkey v2.0.26 (if not already installed)
+> - Downloads and verifies `hotkeys.ahk`
+> - Registers `xtkeys` as a global command in your terminal
+> - Creates a Startup shortcut so hotkeys launch on every login
+
+---
+
+## Manage
+
+After install, use `xtkeys` from any terminal:
+
+```
+xtkeys status      → check if hotkeys are running
+xtkeys update      → download latest version and restart
+xtkeys restart     → restart hotkeys
+xtkeys uninstall   → remove everything cleanly
+```
+
+---
+
+## Local Install (Developers)
+
+If you've cloned this repo, install directly from your local folder:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\xtkeys.ps1 install
+```
 
 ---
 
@@ -45,52 +86,6 @@ Advanced AutoHotkey system providing context-aware application launching, system
 | **Ctrl + Shift + Alt + N** | Network Reset | Resets network adapters, flushes DNS, and renews IP |
 | **Ctrl + Shift + Alt + L** | Logs Folder | Opens the logs directory in File Explorer |
 | **Ctrl + Shift + Alt + Del** | Empty Recycle Bin | Empties the Recycle Bin (requires confirmation prompt) |
-
----
-
-## Setup
-
-### Recommended: Install via WinGet
-
-You can install the hotkeys globally on **any Windows machine** directly using the official Windows Package Manager:
-
-```cmd
-winget install xt.hotkeys
-```
-
-*(Note: Once submitted and approved by Microsoft's winget-pkgs pipeline, this command will be active globally!)*
-
----
-
-### Alternative: 1-Click Web Installer
-
-You can also run this 1-click web installer command in PowerShell:
-
-1. Paste and run the following command:
-   ```powershell
-   irm https://raw.githubusercontent.com/RameshXT/hotkeys/main/xt.ps1 | iex
-   ```
-   *(This automatically downloads the required files under `%LocalAppData%\xt`, registers the `xt` command in your User `PATH`, creates the elevated Startup shortcut, and launches the hotkeys.)*
-2. Restart your terminal to begin using the `xt` command globally!
-
-### Local Developer Setup
-
-If you have already cloned this repository locally, you can install directly from your local folder:
-
-1. Open PowerShell at the repository root.
-2. Run the installer:
-   ```powershell
-   powershell -File .\xt.ps1 install
-   ```
-3. Restart your terminal.
-
-### CLI Commands Reference
-
-Once installed, you can manage the hotkeys globally from any command line:
-
-* **`xt status`**: Checks if the script is active and running.
-* **`xt update`**: Installs your latest local repository changes to the runtime folder and restarts the hotkeys.
-* **`xt uninstall`**: Removes the Startup shortcut, deletes all runtime files, and removes `xt` from your User `PATH`.
 
 ---
 
