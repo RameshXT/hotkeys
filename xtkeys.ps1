@@ -293,7 +293,8 @@ function Invoke-Install {
 
     # 4. Copy (or download) xtkeys.ps1 itself into install dir for the CLI
     $self = $MyInvocation.ScriptName
-    if ($self -and (Test-Path $self)) {
+    $isSelf = $self -and (Resolve-Path $self -ErrorAction SilentlyContinue) -eq (Resolve-Path $CLI_FILE -ErrorAction SilentlyContinue)
+    if ($self -and (Test-Path $self) -and -not $isSelf) {
         Copy-Item $self $CLI_FILE -Force
     } else {
         Write-Step 'Downloading xtkeys.ps1 for CLI...'
@@ -434,31 +435,31 @@ function Invoke-Uninstall {
 # ==============================================================================
 # ENTRY POINT
 # ==============================================================================
-# When piped via `irm ... | iex`, ScriptName is empty -> auto-install.
-# When called as `xt <command>` from PATH -> dispatch to command.
+# Detect how we are being invoked:
+#   - ScriptName empty + no args  = piped via `irm ... | iex`  -> install
+#   - ScriptName set              = called as a file via xtkeys.cmd -> dispatch
 
-$isPiped = [string]::IsNullOrEmpty($MyInvocation.ScriptName)
-$cmd     = if ($args.Count -gt 0) { $args[0].ToLower() } else { '' }
+$scriptName = $MyInvocation.ScriptName
+$cmd        = if ($args.Count -gt 0) { $args[0].ToLower() } else { '' }
+$isPiped    = [string]::IsNullOrEmpty($scriptName) -and ($cmd -eq '' -or $cmd -eq 'install')
 
-switch ($true) {
-    ($isPiped -or $cmd -eq 'install')   { Invoke-Install;   break }
-    ($cmd -eq 'status')                 { Invoke-Status;    break }
-    ($cmd -eq 'update')                 { Invoke-Update;    break }
-    ($cmd -eq 'restart')                { Invoke-Restart;   break }
-    ($cmd -eq 'uninstall')              { Invoke-Uninstall; break }
-    default {
-        Write-Host ''
-        Write-Host '  xtkeys - Hotkeys Installer & CLI' -ForegroundColor Magenta
-        Write-Host ''
-        Write-Host '  Commands:' -ForegroundColor White
-        Write-Host '    xtkeys install     Install hotkeys on this machine'  -ForegroundColor Cyan
-        Write-Host '    xtkeys status      Check if hotkeys are running'     -ForegroundColor Cyan
-        Write-Host '    xtkeys update      Download latest and restart'      -ForegroundColor Cyan
-        Write-Host '    xtkeys restart     Kill and re-launch hotkeys'       -ForegroundColor Cyan
-        Write-Host '    xtkeys uninstall   Remove everything cleanly'        -ForegroundColor Cyan
-        Write-Host ''
-        Write-Host '  Web install (any Windows machine):' -ForegroundColor White
-        Write-Host "    irm https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/main/xtkeys.ps1 | iex" -ForegroundColor DarkCyan
-        Write-Host ''
-    }
+if     ($isPiped -or $cmd -eq 'install')   { Invoke-Install   }
+elseif ($cmd -eq 'status')                 { Invoke-Status    }
+elseif ($cmd -eq 'update')                 { Invoke-Update    }
+elseif ($cmd -eq 'restart')                { Invoke-Restart   }
+elseif ($cmd -eq 'uninstall')              { Invoke-Uninstall }
+else {
+    Write-Host ''
+    Write-Host '  xtkeys - Hotkeys Installer & CLI' -ForegroundColor Magenta
+    Write-Host ''
+    Write-Host '  Commands:' -ForegroundColor White
+    Write-Host '    xtkeys install     Install hotkeys on this machine'  -ForegroundColor Cyan
+    Write-Host '    xtkeys status      Check if hotkeys are running'     -ForegroundColor Cyan
+    Write-Host '    xtkeys update      Download latest and restart'      -ForegroundColor Cyan
+    Write-Host '    xtkeys restart     Kill and re-launch hotkeys'       -ForegroundColor Cyan
+    Write-Host '    xtkeys uninstall   Remove everything cleanly'        -ForegroundColor Cyan
+    Write-Host ''
+    Write-Host '  Web install (any Windows machine):' -ForegroundColor White
+    Write-Host "    irm https://github.com/$REPO_OWNER/$REPO_NAME/releases/latest/download/xtkeys.ps1 | iex" -ForegroundColor DarkCyan
+    Write-Host ''
 }
