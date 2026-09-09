@@ -891,7 +891,13 @@ function Invoke-Serve {
             }
         }
     } catch [System.Net.HttpListenerException] {
-        # Ctrl+C — clean exit
+        if ($_.Exception.ErrorCode -eq 183 -or $_.Exception.Message -match 'conflicts|already|use') {
+            Write-Host "  ERROR: Port $port is already in use. Another process may be running xtkeys serve." -ForegroundColor Red
+            Write-Host "  Run: netstat -ano | findstr :$port  to find and kill it." -ForegroundColor DarkGray
+        }
+        # else: Ctrl+C clean exit, do nothing
+    } catch {
+        Write-Host "  ERROR: $($_.Exception.Message)" -ForegroundColor Red
     } finally {
         if ($listener.IsListening) { $listener.Stop() }
         $listener.Close()
