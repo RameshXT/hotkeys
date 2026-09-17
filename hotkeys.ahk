@@ -923,9 +923,14 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
                     }
 
                     if (micId != defaultMicId) {
-                        ComCall(13, IPolicyConfig, "Str", micId, "UInt", 0)
-                        ComCall(13, IPolicyConfig, "Str", micId, "UInt", 1)
-                        ComCall(13, IPolicyConfig, "Str", micId, "UInt", 2)
+                        try {
+                            ComCall(13, IPolicyConfig, "Str", micId, "UInt", 0)
+                            ComCall(13, IPolicyConfig, "Str", micId, "UInt", 1)
+                            ComCall(13, IPolicyConfig, "Str", micId, "UInt", 2)
+                        } catch as e {
+                            ShowTransientToolTip("Could not switch default microphone")
+                            ShowLaunchError("Microphone switch failed", e)
+                        }
                     }
                 }
             } finally {
