@@ -295,6 +295,8 @@ ExecuteGitClone(url, repoName, destBaseFolder) {
     SetTimer RemoveToolTip, -TOOLTIP_DURATION_MS
 
     exitCode := -1
+    prevPrompt := EnvGet("GIT_TERMINAL_PROMPT")
+    EnvSet("GIT_TERMINAL_PROMPT", "0")
     try {
         exitCode := RunWait(cmd, , "Hide")
     } catch as e {
@@ -302,6 +304,11 @@ ExecuteGitClone(url, repoName, destBaseFolder) {
         global g_lastClonedPath := ""
         TrayTip("Clone failed: " . repoName, "Git Clone", 2)
         return
+    } finally {
+        if (prevPrompt != "")
+            EnvSet("GIT_TERMINAL_PROMPT", prevPrompt)
+        else
+            EnvSet("GIT_TERMINAL_PROMPT", "")
     }
 
     ToolTip()
