@@ -286,7 +286,7 @@ ExecuteGitClone(url, repoName, destBaseFolder) {
 
     ; Disables 32-bit filesystem redirection on 64-bit systems for the duration of the clone operation (RAII)
     guard := Wow64RedirectionGuard()
-    cmd := A_ComSpec . ' /c cd /d "' . destBaseFolder . '" && git clone "' . url . '"'
+    cmd := 'git.exe -C "' . destBaseFolder . '" clone "' . url . '"'
     ToolTip("Cloning " . repoName . "...")
     SetTimer RemoveToolTip, -TOOLTIP_DURATION_MS
 
