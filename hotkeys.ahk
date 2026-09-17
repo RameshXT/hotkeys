@@ -1002,31 +1002,6 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
     }
 }
 
-TriggerScheduledTask(taskName, friendlyName, triggerFile := "", resultFile := "", timeoutSec := 60) {
-    if (taskName = "" || friendlyName = "") {
-        ShowTransientToolTip("Scheduled task configuration is invalid")
-        return
-    }
-
-
-    if (resultFile == "")
-        return
-
-    loop (timeoutSec * 2) {
-        Sleep 500
-        if FileExist(resultFile) {
-            Sleep 200
-            ResultData := FileRead(resultFile)
-            DeleteFileIfExists(resultFile)
-            ToolTip()
-            Parts := StrSplit(ResultData, "|")
-            TrayTip(Parts[2], Parts[1], InStr(Parts[1], "success") ? 1 : 2)
-            return
-        }
-    }
-    ToolTip()
-    TrayTip("Timed out - check logs", friendlyName, 3)
-}
 
 ; ====================[ Subroutines & Timers ]====================
 RemoveToolTip() {
