@@ -173,7 +173,7 @@ ExtractSelectedZip() {
         safeSelectedPath := StrReplace(selectedPath, "'", "''")
         safeTargetDir := StrReplace(targetDir, "'", "''")
         guard := Wow64RedirectionGuard()
-        Run(ResolveNativePath("powershell.exe") . " -NoProfile -Command `"Expand-Archive -Path '" . safeSelectedPath .
+        Run(ResolveNativePath("powershell.exe") . " -NoProfile -Command `"Expand-Archive -LiteralPath '" . safeSelectedPath .
         "' -DestinationPath '" . safeTargetDir . "' -Force`"", , "Hide")
     }
 }
