@@ -97,3 +97,5 @@ powershell -ExecutionPolicy Bypass -File .\xtkeys.ps1 install
 - **Friendly Balloon Notifications**: Automatically intercepts launch or system errors and shows clean Windows tray notifications instead of blocking error popups.
 - **Self-Maintaining**: Automatically reloads and applies changes the moment you save `hotkeys.ahk`.
 - **Automatic Error Logging**: All unhandled runtime exceptions and launch failures are intercepted and logged to `logs/hotkey_errors.log` (with timestamps, line numbers, and stack traces) while keeping the hotkey process running.
+- **Process Watchdog & Auto-Healing**: Periodically probes registered background services (e.g. Razer 7.1 engine) and automatically respawns them if they crash, backed by a 5-minute sliding-window circuit breaker to prevent crash loops.
+

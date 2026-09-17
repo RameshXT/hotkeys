@@ -47,6 +47,11 @@ SetTimer WatchScript, 3000
 OnMessage(0x404, TrayClickHandler)
 OnError(GlobalErrorHandler)
 
+global WATCHDOG_INTERVAL_MS := GetEnvInt("AHK_WATCHDOG_INTERVAL_MS", 30000)
+if (GetEnvInt("AHK_WATCHDOG_ENABLED", 1)) {
+    SetTimer(() => ProcessWatchdog.Poll(), WATCHDOG_INTERVAL_MS)
+}
+
 USER_HOME := EnvGet("USERPROFILE")
 global DOUBLE_PRESS_DELAY := GetEnvInt("AHK_DOUBLE_PRESS_DELAY", 400)
 global g_lastClonedPath := ""
@@ -848,6 +853,77 @@ ShowLaunchError(prefix, err) {
     }
 }
 
+class ProcessWatchdog {
+    static targets := Map()
+    static restartHistory := Map()
+    static maxRestarts := 3
+    static windowMs := 300000 ; 5-minute sliding window
+
+    static Register(exeName, friendlyName, launchFn) {
+        this.targets[exeName] := { name: friendlyName, launcher: launchFn, wasRunning: false }
+        this.restartHistory[exeName] := []
+    }
+
+    static Poll() {
+        now := A_TickCount
+        for exeName, info in this.targets {
+            pid := ProcessExist(exeName)
+            if (pid != 0) {
+                info.wasRunning := true
+            } else if (info.wasRunning) {
+                info.wasRunning := false
+
+                recent := []
+                for t in this.restartHistory[exeName] {
+                    if (now - t < this.windowMs)
+                        recent.Push(t)
+                }
+                this.restartHistory[exeName] := recent
+
+                if (recent.Length >= this.maxRestarts) {
+                    this.LogWatchdogEvent("CIRCUIT BREAKER TRIPPED", info.name,
+                        "Process crashed " . recent.Length . " times within 5 minutes. Auto-recovery suspended.")
+                    TrayTip("Auto-recovery suspended (repeated crashes)", info.name, 2)
+                    continue
+                }
+
+                recent.Push(now)
+                this.restartHistory[exeName] := recent
+
+                this.LogWatchdogEvent("PROCESS AUTO-HEALED", info.name,
+                    "Process terminated unexpectedly. Automatically respawned (attempt " . recent.Length . "/" . this.maxRestarts . ").")
+                ShowTransientToolTip(info.name . " recovered")
+
+                try {
+                    info.launcher()
+                } catch as err {
+                    ShowLaunchError("Watchdog Recovery Failed: " . info.name, err)
+                }
+            }
+        }
+    }
+
+    static LogWatchdogEvent(eventTitle, processName, details) {
+        try {
+            if !DirExist(LOGS_DIR)
+                DirCreate(LOGS_DIR)
+
+            logFile := LOGS_DIR . "\hotkey_errors.log"
+            if FileExist(logFile) && FileGetSize(logFile) >= 2097152
+                FileDelete(logFile)
+
+            timestamp := FormatTime(, "yyyy-MM-dd HH:mm:ss")
+            entry := "--------------------------------------------------------------------------------`n`n"
+            entry .= "  [" . timestamp . "] " . eventTitle . "`n"
+            entry .= "  Target:  " . processName . "`n"
+            entry .= "  Details: " . details . "`n`n"
+            entry .= "--------------------------------------------------------------------------------`n`n"
+
+            FileAppend(entry, logFile, "UTF-8")
+        }
+    }
+}
+
 ShowTransientToolTip(message, durationMs := "") {
     if (durationMs = "")
         durationMs := TOOLTIP_DURATION_MS
@@ -1089,7 +1165,7 @@ WatchScript() {
     DoublePressManager.Handle("Photoshop", "", doublePress)
 }
 
-!7:: {
+LaunchRazer71() {
     razer71Path := AppResolver.Get("Razer71", "rzappengine.exe", [
         "%ProgramFiles%\Razer\RzAppEngine\rzappengine.exe",
         "%StartMenuCommon%\Programs\Razer\7.1 Surround Sound.lnk"
@@ -1098,6 +1174,10 @@ WatchScript() {
     RunApp(razer71Path, "--url-params=apps=7.1-surround-sound --disable-background-timer-throttling",
         "7.1 Surround Sound", razer71Dir)
 }
+
+ProcessWatchdog.Register("rzappengine.exe", "7.1 Surround Sound", LaunchRazer71)
+
+!7:: LaunchRazer71()
 
 !a:: {
     antigravityPath := AppResolver.Get("Antigravity", "Antigravity IDE.exe", [
