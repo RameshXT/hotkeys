@@ -1302,17 +1302,16 @@ WatchScript() {
     singlePress() {
         ShowTransientToolTip("WSL")
         try
-            LaunchAndPosition('wsl.exe -- bash -lc "cd ~; exec bash"')
+            LaunchAndPosition('wsl.exe --cd ~')
         catch as e
             ShowTransientToolTip("Failed to launch WSL`nIs WSL installed? " . e.Message)
     }
     doublePress() {
         dir := GetValidExplorerPath()
         if (dir != "") {
-            unixPath := ConvertToWSLPath(dir)
             ShowTransientToolTip("WSL")
             try
-                LaunchAndPosition("wsl.exe -- bash -lc `"cd '" . unixPath . "'; exec bash`"")
+                LaunchAndPosition('wsl.exe --cd "' . dir . '"')
             catch as e
                 ShowTransientToolTip("Failed to launch WSL`nIs WSL installed? " . e.Message)
         }
