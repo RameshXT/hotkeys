@@ -665,7 +665,7 @@ LaunchAndPosition(cmd, workingDir := "") {
     }
 
     targetHwnd := 0
-    loop 30 {
+    loop 8 {
         if (pid != 0 && WinExist("ahk_pid " . pid)) {
             targetHwnd := WinExist("ahk_pid " . pid)
             break
