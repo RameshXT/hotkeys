@@ -194,7 +194,7 @@ BrowseForFolderD(repoName) {
 
     displayBuf := Buffer(520, 0)
     titleStr := "Clone  ·  " . repoName
-    cb := CallbackCreate(BrowseForFolderCallback, "Fast", 4)
+    cb := CallbackCreate(BrowseForFolderCallback, , 4)
     lpfnOffset := (A_PtrSize = 8) ? 40 : 20
     lParamOffset := lpfnOffset + A_PtrSize
 
