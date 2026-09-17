@@ -515,7 +515,12 @@ HandleContextHotkey(key, name, path, sArgs := "", dPre := "") {
 }
 
 IsProtectedWindowClass(windowClass) {
-    return (windowClass = "Shell_TrayWnd" || windowClass = "Progman" || windowClass = "WorkerW")
+    return (windowClass = "Shell_TrayWnd" || windowClass = "Progman" || windowClass = "WorkerW"
+        || windowClass = "ApplicationFrameHost"
+        || windowClass = "Windows.UI.Core.CoreWindow"
+        || windowClass = "SearchHost"
+        || windowClass = "StartMenuExperienceHostWindow"
+        || windowClass = "ImmersiveLauncher")
 }
 
 SmartRun(targetPath, args := "", workingDir := "") {
