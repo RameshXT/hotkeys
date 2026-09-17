@@ -104,19 +104,22 @@ ResolveNativePath(cmd) {
 
 class Wow64RedirectionGuard {
     oldRedir := 0
+    disabled := false
 
     __New() {
         if (A_Is64bitOS && A_PtrSize = 4) {
             oldVal := 0
-            DllCall("Wow64DisableWow64FsRedirection", "Ptr*", &oldVal)
-            this.oldRedir := oldVal
+            if DllCall("Wow64DisableWow64FsRedirection", "Ptr*", &oldVal) {
+                this.oldRedir := oldVal
+                this.disabled := true
+            }
         }
     }
 
     __Delete() {
-        if (this.oldRedir != 0) {
+        if (this.disabled) {
             DllCall("Wow64RevertWow64FsRedirection", "Ptr", this.oldRedir)
-            this.oldRedir := 0
+            this.disabled := false
         }
     }
 }
