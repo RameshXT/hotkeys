@@ -777,16 +777,22 @@ GlobalErrorHandler(thrown, mode) {
             FileDelete(logFile)
 
         timestamp := FormatTime(, "yyyy-MM-dd HH:mm:ss")
-        entry := "[" . timestamp . "] UNHANDLED ERROR (" . mode . ")`n"
+        entry := "--------------------------------------------------------------------------------`n`n"
+        entry .= "  [" . timestamp . "] UNHANDLED ERROR (" . mode . ")`n"
         entry .= "  Message: " . thrown.Message . "`n"
         entry .= "  What:    " . thrown.What . "`n"
         entry .= "  File:    " . thrown.File . "`n"
         entry .= "  Line:    " . thrown.Line . "`n"
         if (thrown.Extra != "")
             entry .= "  Extra:   " . thrown.Extra . "`n"
-        if (thrown.Stack != "")
-            entry .= "  Stack:`n" . thrown.Stack . "`n"
-        entry .= "----------------------------------------`n"
+        if (thrown.Stack != "") {
+            entry .= "  Stack:`n"
+            for line in StrSplit(thrown.Stack, "`n", "`r") {
+                if (line != "")
+                    entry .= "    " . line . "`n"
+            }
+        }
+        entry .= "`n--------------------------------------------------------------------------------`n`n"
 
         FileAppend(entry, logFile, "UTF-8")
         TrayTip(thrown.Message, "Hotkey Error Logged", 2)
@@ -815,21 +821,28 @@ ShowLaunchError(prefix, err) {
             DirCreate(LOGS_DIR)
 
         logFile := LOGS_DIR . "\hotkey_errors.log"
-        if FileExist(logFile) {
-            if (FileGetSize(logFile) >= 2097152) {
-                FileDelete(logFile)
-            }
-        }
+        if FileExist(logFile) && FileGetSize(logFile) >= 2097152
+            FileDelete(logFile)
 
         timestamp := FormatTime(, "yyyy-MM-dd HH:mm:ss")
-        logLine := "[" . timestamp . "] " . prefix . ": " . msg . "`n"
+        logLine := "--------------------------------------------------------------------------------`n`n"
+        logLine .= "  [" . timestamp . "] " . prefix . "`n"
+        logLine .= "  Message: " . msg . "`n"
         if (err is Error) {
-            logLine .= "  File: " . err.File . "`n"
-            logLine .= "  Line: " . err.Line . "`n"
-            logLine .= "  What: " . err.What . "`n"
-            logLine .= "  Extra: " . err.Extra . "`n"
+            logLine .= "  File:    " . err.File . "`n"
+            logLine .= "  Line:    " . err.Line . "`n"
+            logLine .= "  What:    " . err.What . "`n"
+            if (err.Extra != "")
+                logLine .= "  Extra:   " . err.Extra . "`n"
+            if (err.Stack != "") {
+                logLine .= "  Stack:`n"
+                for line in StrSplit(err.Stack, "`n", "`r") {
+                    if (line != "")
+                        logLine .= "    " . line . "`n"
+                }
+            }
         }
-        logLine .= "----------------------------------------`n"
+        logLine .= "`n--------------------------------------------------------------------------------`n`n"
 
         FileAppend(logLine, logFile, "UTF-8")
     }
