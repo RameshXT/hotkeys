@@ -836,9 +836,15 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
 
         IPolicyConfig := ComObject("{870AF99C-171D-4F9E-AF0D-E63DF40C2BC9}", "{F8679F50-850A-41CF-9C72-430F290290C8}")
         if (targetId != defaultId) {
-            ComCall(13, IPolicyConfig, "Str", targetId, "UInt", 0)
-            ComCall(13, IPolicyConfig, "Str", targetId, "UInt", 1)
-            ComCall(13, IPolicyConfig, "Str", targetId, "UInt", 2)
+            try {
+                ComCall(13, IPolicyConfig, "Str", targetId, "UInt", 0)
+                ComCall(13, IPolicyConfig, "Str", targetId, "UInt", 1)
+                ComCall(13, IPolicyConfig, "Str", targetId, "UInt", 2)
+            } catch as e {
+                ShowTransientToolTip("Could not switch default audio device")
+                ShowLaunchError("Audio device switch failed", e)
+                return
+            }
         }
 
         dispName := (friendlyNameOverride != "") ? friendlyNameOverride : targetName
