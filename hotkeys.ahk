@@ -470,12 +470,38 @@ GetExplorerPath() {
 }
 
 GetSelectedFilePath() {
-    hwnd := WinExist("A")
-    for window in ComObject("Shell.Application").Windows {
-        if (window.hwnd = hwnd) {
-            for item in window.Document.SelectedItems
-                return item.Path
+    hwnd := WinActive("A")
+    if (!hwnd || !(WinGetClass(hwnd) ~= "CabinetWClass|ExploreWClass"))
+        return ""
+
+    activeTab := 0
+    try activeTab := ControlGetHwnd("ShellTabWindowClass1", hwnd)
+
+    try {
+        for window in ComObject("Shell.Application").Windows {
+            try {
+                if (window.hwnd != hwnd)
+                    continue
+
+                if (activeTab) {
+                    static IID_IShellBrowser := "{000214E2-0000-0000-C000-000000000046}"
+                    shellBrowser := ComObjQuery(window, IID_IShellBrowser, IID_IShellBrowser)
+                    thisTab := 0
+                    if (shellBrowser) {
+                        ComCall(3, shellBrowser, "ptr*", &thisTab)
+                        if (thisTab != activeTab)
+                            continue
+                    }
+                }
+
+                for item in window.Document.SelectedItems
+                    return item.Path
+            } catch {
+                continue
+            }
         }
+    } catch as e {
+        ShowLaunchError("Error getting selected file", e)
     }
     return ""
 }
