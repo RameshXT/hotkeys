@@ -37,7 +37,9 @@ SendMode "Input"
 SetWorkingDir A_ScriptDir
 
 try {
-    FileOpen(A_ScriptDir . "\hotkeys.pid", "w").Write(DllCall("GetCurrentProcessId"))
+    f := FileOpen(A_ScriptDir . "\hotkeys.pid", "w")
+    f.Write(DllCall("GetCurrentProcessId"))
+    f.Close()
 } catch {
 }
 
