@@ -1,6 +1,6 @@
 ; ==================[ Hotkey Reference ]==================
 ; Alt + 0  → Calculator
-; Alt + 1  → Photoshop (Double)
+; Alt + 1  → Photoshop
 ; Alt + 7  → 7.1 Surround Sound
 ; Alt + A  → Antigravity            | Double: Current Folder
 ; Alt + C  → Chrome                 | Hold: Incognito
@@ -1030,22 +1030,19 @@ WatchScript() {
 !0:: RunApp("calc.exe", "", "Calculator")
 
 !1:: {
-    doublePress() {
-        photoshopPath := AppResolver.Get("Photoshop", "Photoshop.exe", [
-            "%ProgramFiles%\Adobe\Adobe Photoshop 2024\Photoshop.exe",
-            "%ProgramFiles%\Adobe\Adobe Photoshop 2023\Photoshop.exe",
-            "%ProgramFiles%\Adobe\Adobe Photoshop 2022\Photoshop.exe",
-            "%ProgramFiles%\Adobe\Adobe Photoshop 2021\Photoshop.exe",
-            "%ProgramFiles%\Adobe\Adobe Photoshop 2020\Photoshop.exe",
-            "%ProgramFiles%\Adobe\Adobe Photoshop CC 2019\Photoshop.exe",
-            "%ProgramFilesCommon%\Adobe Photoshop.lnk",
-            "%StartMenuCommon%\Programs\Adobe Photoshop.lnk",
-            "%StartMenu%\Programs\Adobe Photoshop.lnk"
-        ])
-        SplitPath photoshopPath, , &photoshopDir
-        RunApp(photoshopPath, "", "Photoshop", photoshopDir)
-    }
-    DoublePressManager.Handle("Photoshop", "", doublePress)
+    photoshopPath := AppResolver.Get("Photoshop", "Photoshop.exe", [
+        "%ProgramFiles%\Adobe\Adobe Photoshop 2024\Photoshop.exe",
+        "%ProgramFiles%\Adobe\Adobe Photoshop 2023\Photoshop.exe",
+        "%ProgramFiles%\Adobe\Adobe Photoshop 2022\Photoshop.exe",
+        "%ProgramFiles%\Adobe\Adobe Photoshop 2021\Photoshop.exe",
+        "%ProgramFiles%\Adobe\Adobe Photoshop 2020\Photoshop.exe",
+        "%ProgramFiles%\Adobe\Adobe Photoshop CC 2019\Photoshop.exe",
+        "%ProgramFilesCommon%\Adobe Photoshop.lnk",
+        "%StartMenuCommon%\Programs\Adobe Photoshop.lnk",
+        "%StartMenu%\Programs\Adobe Photoshop.lnk"
+    ])
+    SplitPath photoshopPath, , &photoshopDir
+    RunApp(photoshopPath, "", "Photoshop", photoshopDir)
 }
 
 !7:: {
