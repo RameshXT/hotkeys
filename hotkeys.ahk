@@ -451,9 +451,11 @@ GetExplorerPath() {
                     static IID_IShellBrowser := "{000214E2-0000-0000-C000-000000000046}"
                     shellBrowser := ComObjQuery(window, IID_IShellBrowser, IID_IShellBrowser)
                     thisTab := 0
-                    ComCall(3, shellBrowser, "ptr*", &thisTab)
-                    if (thisTab != activeTab)
-                        continue
+                    if (shellBrowser) {
+                        ComCall(3, shellBrowser, "ptr*", &thisTab)
+                        if (thisTab != activeTab)
+                            continue
+                    }
                 }
 
                 folderPath := window.Document.Folder.Self.Path
