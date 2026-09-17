@@ -800,7 +800,7 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
             DllCall("RtlMoveMemory", "ptr", propKey, "ptr", keyGUID, "ptr", 16)
             NumPut("uint", 14, propKey, 16)
 
-            propVariant := Buffer(16, 0)
+            propVariant := Buffer(24, 0)
             ComCall(5, propertyStore, "ptr", propKey, "ptr", propVariant)
 
             friendlyName := ""
@@ -808,6 +808,7 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
                 namePtr := NumGet(propVariant, 8, "ptr")
                 friendlyName := StrGet(namePtr, "UTF-16")
             }
+            DllCall("Ole32\PropVariantClear", "ptr", propVariant)
 
             if (InStr(friendlyName, deviceNameSubstr)) {
                 targetId := id
@@ -877,7 +878,7 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
                     DllCall("RtlMoveMemory", "ptr", propKey, "ptr", keyGUID, "ptr", 16)
                     NumPut("uint", 14, propKey, 16)
 
-                    propVariant := Buffer(16, 0)
+                    propVariant := Buffer(24, 0)
                     ComCall(5, propertyStore, "ptr", propKey, "ptr", propVariant)
 
                     friendlyName := ""
@@ -885,6 +886,7 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
                         namePtr := NumGet(propVariant, 8, "ptr")
                         friendlyName := StrGet(namePtr, "UTF-16")
                     }
+                    DllCall("Ole32\PropVariantClear", "ptr", propVariant)
 
                     if (InStr(friendlyName, micNameSubstr)) {
                         micId := id
