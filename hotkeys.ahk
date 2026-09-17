@@ -45,11 +45,12 @@ try {
 
 SetTimer WatchScript, 3000
 OnMessage(0x404, TrayClickHandler)
+OnError(GlobalErrorHandler)
 
 USER_HOME := EnvGet("USERPROFILE")
 global DOUBLE_PRESS_DELAY := GetEnvInt("AHK_DOUBLE_PRESS_DELAY", 400)
 global g_lastClonedPath := ""
-global LOGS_DIR := USER_HOME . "\sys-scripts\logs"
+global LOGS_DIR := GetEnvString("AHK_LOGS_DIR", A_ScriptDir . "\logs")
 global LONG_PRESS_THRESHOLD := GetEnvInt("AHK_LONG_PRESS_THRESHOLD", 600)
 global ScriptModTime := ""
 global TOOLTIP_DURATION_MS := GetEnvInt("AHK_TOOLTIP_DURATION_MS", 2000)
@@ -764,6 +765,33 @@ RunApp(path, args := "", name := "", workingDir := "") {
 RunAppAndNotify(path, args, name) {
     ShowTransientToolTip(name)
     RunApp(path, args, name)
+}
+
+GlobalErrorHandler(thrown, mode) {
+    try {
+        if !DirExist(LOGS_DIR)
+            DirCreate(LOGS_DIR)
+
+        logFile := LOGS_DIR . "\hotkey_errors.log"
+        if FileExist(logFile) && FileGetSize(logFile) >= 2097152
+            FileDelete(logFile)
+
+        timestamp := FormatTime(, "yyyy-MM-dd HH:mm:ss")
+        entry := "[" . timestamp . "] UNHANDLED ERROR (" . mode . ")`n"
+        entry .= "  Message: " . thrown.Message . "`n"
+        entry .= "  What:    " . thrown.What . "`n"
+        entry .= "  File:    " . thrown.File . "`n"
+        entry .= "  Line:    " . thrown.Line . "`n"
+        if (thrown.Extra != "")
+            entry .= "  Extra:   " . thrown.Extra . "`n"
+        if (thrown.Stack != "")
+            entry .= "  Stack:`n" . thrown.Stack . "`n"
+        entry .= "----------------------------------------`n"
+
+        FileAppend(entry, logFile, "UTF-8")
+        TrayTip(thrown.Message, "Hotkey Error Logged", 2)
+    }
+    return -1
 }
 
 ShowLaunchError(prefix, err) {

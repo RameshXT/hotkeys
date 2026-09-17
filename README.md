@@ -96,3 +96,4 @@ powershell -ExecutionPolicy Bypass -File .\xtkeys.ps1 install
 - **Audio Output Switching**: Quickly switch audio playback and recording devices using `Ctrl + Shift + [Key]` combinations.
 - **Friendly Balloon Notifications**: Automatically intercepts launch or system errors and shows clean Windows tray notifications instead of blocking error popups.
 - **Self-Maintaining**: Automatically reloads and applies changes the moment you save `hotkeys.ahk`.
+- **Automatic Error Logging**: All unhandled runtime exceptions and launch failures are intercepted and logged to `logs/hotkey_errors.log` (with timestamps, line numbers, and stack traces) while keeping the hotkey process running.
