@@ -43,7 +43,7 @@ try {
 } catch {
 }
 
-SetTimer WatchScript, 1000
+SetTimer WatchScript, 3000
 OnMessage(0x404, TrayClickHandler)
 
 USER_HOME := EnvGet("USERPROFILE")
