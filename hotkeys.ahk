@@ -141,7 +141,9 @@ ConvertToWSLPath(winPath) {
     if (winPath = "")
         return ""
     unixPath := StrReplace(winPath, "\", "/")
-    if (SubStr(unixPath, 2, 1) = ":") {
+    if (RegExMatch(unixPath, "i)^//wsl(?:\.localhost)?/[^/]+(/.*)?$", &m)) {
+        return m[1] != "" ? m[1] : "/"
+    } else if (SubStr(unixPath, 2, 1) = ":") {
         drive := Format("{:L}", SubStr(unixPath, 1, 1))
         unixPath := "/mnt/" . drive . SubStr(unixPath, 3)
     }
