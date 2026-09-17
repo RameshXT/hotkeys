@@ -376,6 +376,8 @@ class AppResolver {
         if (!InStr(str, "%"))
             return str
 
+        str := StrReplace(str, "%ProgramFilesCommon%", A_ProgramFiles . "\Common Files")
+        str := StrReplace(str, "%ProgramFiles(x86)%", EnvGet("ProgramFiles(x86)") || A_ProgramFiles)
         str := StrReplace(str, "%StartMenuCommon%", A_StartMenuCommon)
         str := StrReplace(str, "%StartMenu%", A_StartMenu)
         str := StrReplace(str, "%AppData%", A_AppData)
