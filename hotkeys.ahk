@@ -835,7 +835,7 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
         global LAST_DEVICE, DEVICE_VOLUME_HISTORY
         if (LAST_DEVICE != "" && defaultFriendlyName != "") {
             try {
-                DEVICE_VOLUME_HISTORY[LAST_DEVICE] := SoundGetVolume(, defaultFriendlyName)
+                DEVICE_VOLUME_HISTORY[LAST_DEVICE] := SoundGetVolume("", defaultFriendlyName)
             }
         }
 
