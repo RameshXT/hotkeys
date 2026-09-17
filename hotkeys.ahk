@@ -710,7 +710,18 @@ LaunchAndPosition(cmd, workingDir := "") {
 
     if (targetHwnd != 0) {
         try {
-            WinMove(-3, 5, , , "ahk_id " . targetHwnd)
+            MouseGetPos(&mX, &mY)
+            targetLeft := -3
+            targetTop := 5
+            loop MonitorGetCount() {
+                MonitorGetWorkArea(A_Index, &wLeft, &wTop, &wRight, &wBottom)
+                if (mX >= wLeft && mX <= wRight && mY >= wTop && mY <= wBottom) {
+                    targetLeft := wLeft - 3
+                    targetTop := wTop + 5
+                    break
+                }
+            }
+            WinMove(targetLeft, targetTop, , , "ahk_id " . targetHwnd)
         } catch {
         }
     }
