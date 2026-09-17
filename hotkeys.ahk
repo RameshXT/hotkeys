@@ -37,11 +37,13 @@ SendMode "Input"
 SetWorkingDir A_ScriptDir
 
 try {
-    FileOpen(A_ScriptDir . "\hotkeys.pid", "w").Write(DllCall("GetCurrentProcessId"))
+    f := FileOpen(A_ScriptDir . "\hotkeys.pid", "w")
+    f.Write(DllCall("GetCurrentProcessId"))
+    f.Close()
 } catch {
 }
 
-SetTimer WatchScript, 1000
+SetTimer WatchScript, 3000
 OnMessage(0x404, TrayClickHandler)
 
 USER_HOME := EnvGet("USERPROFILE")
@@ -62,7 +64,7 @@ global DEVICE_VOLUME_HISTORY := Map()
 global LAST_DEVICE := ""
 try {
     initVol := SoundGetVolume()
-    if (initVol = 25) {
+    if (Round(initVol) = 25) {
         LAST_DEVICE := "Sony MDRX-50"
         DEVICE_VOLUME_HISTORY["Sony MDRX-50"] := 25
     } else {
@@ -104,19 +106,22 @@ ResolveNativePath(cmd) {
 
 class Wow64RedirectionGuard {
     oldRedir := 0
+    disabled := false
 
     __New() {
         if (A_Is64bitOS && A_PtrSize = 4) {
             oldVal := 0
-            DllCall("Wow64DisableWow64FsRedirection", "Ptr*", &oldVal)
-            this.oldRedir := oldVal
+            if DllCall("Wow64DisableWow64FsRedirection", "Ptr*", &oldVal) {
+                this.oldRedir := oldVal
+                this.disabled := true
+            }
         }
     }
 
     __Delete() {
-        if (this.oldRedir != 0) {
+        if (this.disabled) {
             DllCall("Wow64RevertWow64FsRedirection", "Ptr", this.oldRedir)
-            this.oldRedir := 0
+            this.disabled := false
         }
     }
 }
@@ -138,7 +143,9 @@ ConvertToWSLPath(winPath) {
     if (winPath = "")
         return ""
     unixPath := StrReplace(winPath, "\", "/")
-    if (SubStr(unixPath, 2, 1) = ":") {
+    if (RegExMatch(unixPath, "i)^//wsl(?:\.localhost)?/[^/]+(/.*)?$", &m)) {
+        return m[1] != "" ? m[1] : "/"
+    } else if (SubStr(unixPath, 2, 1) = ":") {
         drive := Format("{:L}", SubStr(unixPath, 1, 1))
         unixPath := "/mnt/" . drive . SubStr(unixPath, 3)
     }
@@ -170,7 +177,7 @@ ExtractSelectedZip() {
         safeSelectedPath := StrReplace(selectedPath, "'", "''")
         safeTargetDir := StrReplace(targetDir, "'", "''")
         guard := Wow64RedirectionGuard()
-        Run(ResolveNativePath("powershell.exe") . " -NoProfile -Command `"Expand-Archive -Path '" . safeSelectedPath .
+        Run(ResolveNativePath("powershell.exe") . " -NoProfile -Command `"Expand-Archive -LiteralPath '" . safeSelectedPath .
         "' -DestinationPath '" . safeTargetDir . "' -Force`"", , "Hide")
     }
 }
@@ -191,7 +198,7 @@ BrowseForFolderD(repoName) {
 
     displayBuf := Buffer(520, 0)
     titleStr := "Clone  ·  " . repoName
-    cb := CallbackCreate(BrowseForFolderCallback, "Fast", 4)
+    cb := CallbackCreate(BrowseForFolderCallback, , 4)
     lpfnOffset := (A_PtrSize = 8) ? 40 : 20
     lParamOffset := lpfnOffset + A_PtrSize
 
@@ -283,11 +290,13 @@ ExecuteGitClone(url, repoName, destBaseFolder) {
 
     ; Disables 32-bit filesystem redirection on 64-bit systems for the duration of the clone operation (RAII)
     guard := Wow64RedirectionGuard()
-    cmd := A_ComSpec . ' /c cd /d "' . destBaseFolder . '" && git clone "' . url . '"'
+    cmd := 'git.exe -C "' . destBaseFolder . '" clone "' . url . '"'
     ToolTip("Cloning " . repoName . "...")
     SetTimer RemoveToolTip, -TOOLTIP_DURATION_MS
 
     exitCode := -1
+    prevPrompt := EnvGet("GIT_TERMINAL_PROMPT")
+    EnvSet("GIT_TERMINAL_PROMPT", "0")
     try {
         exitCode := RunWait(cmd, , "Hide")
     } catch as e {
@@ -295,6 +304,11 @@ ExecuteGitClone(url, repoName, destBaseFolder) {
         global g_lastClonedPath := ""
         TrayTip("Clone failed: " . repoName, "Git Clone", 2)
         return
+    } finally {
+        if (prevPrompt != "")
+            EnvSet("GIT_TERMINAL_PROMPT", prevPrompt)
+        else
+            EnvSet("GIT_TERMINAL_PROMPT", "")
     }
 
     ToolTip()
@@ -373,6 +387,8 @@ class AppResolver {
         if (!InStr(str, "%"))
             return str
 
+        str := StrReplace(str, "%ProgramFilesCommon%", A_ProgramFiles . "\Common Files")
+        str := StrReplace(str, "%ProgramFiles(x86)%", EnvGet("ProgramFiles(x86)") || A_ProgramFiles)
         str := StrReplace(str, "%StartMenuCommon%", A_StartMenuCommon)
         str := StrReplace(str, "%StartMenu%", A_StartMenu)
         str := StrReplace(str, "%AppData%", A_AppData)
@@ -444,9 +460,11 @@ GetExplorerPath() {
                     static IID_IShellBrowser := "{000214E2-0000-0000-C000-000000000046}"
                     shellBrowser := ComObjQuery(window, IID_IShellBrowser, IID_IShellBrowser)
                     thisTab := 0
-                    ComCall(3, shellBrowser, "ptr*", &thisTab)
-                    if (thisTab != activeTab)
-                        continue
+                    if (shellBrowser) {
+                        ComCall(3, shellBrowser, "ptr*", &thisTab)
+                        if (thisTab != activeTab)
+                            continue
+                    }
                 }
 
                 folderPath := window.Document.Folder.Self.Path
@@ -463,12 +481,38 @@ GetExplorerPath() {
 }
 
 GetSelectedFilePath() {
-    hwnd := WinExist("A")
-    for window in ComObject("Shell.Application").Windows {
-        if (window.hwnd = hwnd) {
-            for item in window.Document.SelectedItems
-                return item.Path
+    hwnd := WinActive("A")
+    if (!hwnd || !(WinGetClass(hwnd) ~= "CabinetWClass|ExploreWClass"))
+        return ""
+
+    activeTab := 0
+    try activeTab := ControlGetHwnd("ShellTabWindowClass1", hwnd)
+
+    try {
+        for window in ComObject("Shell.Application").Windows {
+            try {
+                if (window.hwnd != hwnd)
+                    continue
+
+                if (activeTab) {
+                    static IID_IShellBrowser := "{000214E2-0000-0000-C000-000000000046}"
+                    shellBrowser := ComObjQuery(window, IID_IShellBrowser, IID_IShellBrowser)
+                    thisTab := 0
+                    if (shellBrowser) {
+                        ComCall(3, shellBrowser, "ptr*", &thisTab)
+                        if (thisTab != activeTab)
+                            continue
+                    }
+                }
+
+                for item in window.Document.SelectedItems
+                    return item.Path
+            } catch {
+                continue
+            }
         }
+    } catch as e {
+        ShowLaunchError("Error getting selected file", e)
     }
     return ""
 }
@@ -515,7 +559,12 @@ HandleContextHotkey(key, name, path, sArgs := "", dPre := "") {
 }
 
 IsProtectedWindowClass(windowClass) {
-    return (windowClass = "Shell_TrayWnd" || windowClass = "Progman" || windowClass = "WorkerW")
+    return (windowClass = "Shell_TrayWnd" || windowClass = "Progman" || windowClass = "WorkerW"
+        || windowClass = "ApplicationFrameHost"
+        || windowClass = "Windows.UI.Core.CoreWindow"
+        || windowClass = "SearchHost"
+        || windowClass = "StartMenuExperienceHostWindow"
+        || windowClass = "ImmersiveLauncher")
 }
 
 SmartRun(targetPath, args := "", workingDir := "") {
@@ -625,7 +674,7 @@ LaunchAndPosition(cmd, workingDir := "") {
     }
 
     targetHwnd := 0
-    loop 30 {
+    loop 8 {
         if (pid != 0 && WinExist("ahk_pid " . pid)) {
             targetHwnd := WinExist("ahk_pid " . pid)
             break
@@ -670,7 +719,18 @@ LaunchAndPosition(cmd, workingDir := "") {
 
     if (targetHwnd != 0) {
         try {
-            WinMove(-3, 5, , , "ahk_id " . targetHwnd)
+            MouseGetPos(&mX, &mY)
+            targetLeft := -3
+            targetTop := 5
+            loop MonitorGetCount() {
+                MonitorGetWorkArea(A_Index, &wLeft, &wTop, &wRight, &wBottom)
+                if (mX >= wLeft && mX <= wRight && mY >= wTop && mY <= wBottom) {
+                    targetLeft := wLeft - 3
+                    targetTop := wTop + 5
+                    break
+                }
+            }
+            WinMove(targetLeft, targetTop, , , "ahk_id " . targetHwnd)
         } catch {
         }
     }
@@ -800,7 +860,7 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
             DllCall("RtlMoveMemory", "ptr", propKey, "ptr", keyGUID, "ptr", 16)
             NumPut("uint", 14, propKey, 16)
 
-            propVariant := Buffer(16, 0)
+            propVariant := Buffer(24, 0)
             ComCall(5, propertyStore, "ptr", propKey, "ptr", propVariant)
 
             friendlyName := ""
@@ -808,6 +868,7 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
                 namePtr := NumGet(propVariant, 8, "ptr")
                 friendlyName := StrGet(namePtr, "UTF-16")
             }
+            DllCall("Ole32\PropVariantClear", "ptr", propVariant)
 
             if (InStr(friendlyName, deviceNameSubstr)) {
                 targetId := id
@@ -829,15 +890,21 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
         global LAST_DEVICE, DEVICE_VOLUME_HISTORY
         if (LAST_DEVICE != "" && defaultFriendlyName != "") {
             try {
-                DEVICE_VOLUME_HISTORY[LAST_DEVICE] := SoundGetVolume(, defaultFriendlyName)
+                DEVICE_VOLUME_HISTORY[LAST_DEVICE] := SoundGetVolume("", defaultFriendlyName)
             }
         }
 
         IPolicyConfig := ComObject("{870AF99C-171D-4F9E-AF0D-E63DF40C2BC9}", "{F8679F50-850A-41CF-9C72-430F290290C8}")
         if (targetId != defaultId) {
-            ComCall(13, IPolicyConfig, "Str", targetId, "UInt", 0)
-            ComCall(13, IPolicyConfig, "Str", targetId, "UInt", 1)
-            ComCall(13, IPolicyConfig, "Str", targetId, "UInt", 2)
+            try {
+                ComCall(13, IPolicyConfig, "Str", targetId, "UInt", 0)
+                ComCall(13, IPolicyConfig, "Str", targetId, "UInt", 1)
+                ComCall(13, IPolicyConfig, "Str", targetId, "UInt", 2)
+            } catch as e {
+                ShowTransientToolTip("Could not switch default audio device")
+                ShowLaunchError("Audio device switch failed", e)
+                return
+            }
         }
 
         dispName := (friendlyNameOverride != "") ? friendlyNameOverride : targetName
@@ -877,7 +944,7 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
                     DllCall("RtlMoveMemory", "ptr", propKey, "ptr", keyGUID, "ptr", 16)
                     NumPut("uint", 14, propKey, 16)
 
-                    propVariant := Buffer(16, 0)
+                    propVariant := Buffer(24, 0)
                     ComCall(5, propertyStore, "ptr", propKey, "ptr", propVariant)
 
                     friendlyName := ""
@@ -885,6 +952,7 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
                         namePtr := NumGet(propVariant, 8, "ptr")
                         friendlyName := StrGet(namePtr, "UTF-16")
                     }
+                    DllCall("Ole32\PropVariantClear", "ptr", propVariant)
 
                     if (InStr(friendlyName, micNameSubstr)) {
                         micId := id
@@ -910,9 +978,14 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
                     }
 
                     if (micId != defaultMicId) {
-                        ComCall(13, IPolicyConfig, "Str", micId, "UInt", 0)
-                        ComCall(13, IPolicyConfig, "Str", micId, "UInt", 1)
-                        ComCall(13, IPolicyConfig, "Str", micId, "UInt", 2)
+                        try {
+                            ComCall(13, IPolicyConfig, "Str", micId, "UInt", 0)
+                            ComCall(13, IPolicyConfig, "Str", micId, "UInt", 1)
+                            ComCall(13, IPolicyConfig, "Str", micId, "UInt", 2)
+                        } catch as e {
+                            ShowTransientToolTip("Could not switch default microphone")
+                            ShowLaunchError("Microphone switch failed", e)
+                        }
                     }
                 }
             } finally {
@@ -929,31 +1002,6 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
     }
 }
 
-TriggerScheduledTask(taskName, friendlyName, triggerFile := "", resultFile := "", timeoutSec := 60) {
-    if (taskName = "" || friendlyName = "") {
-        ShowTransientToolTip("Scheduled task configuration is invalid")
-        return
-    }
-
-
-    if (resultFile == "")
-        return
-
-    loop (timeoutSec * 2) {
-        Sleep 500
-        if FileExist(resultFile) {
-            Sleep 200
-            ResultData := FileRead(resultFile)
-            DeleteFileIfExists(resultFile)
-            ToolTip()
-            Parts := StrSplit(ResultData, "|")
-            TrayTip(Parts[2], Parts[1], InStr(Parts[1], "success") ? 1 : 2)
-            return
-        }
-    }
-    ToolTip()
-    TrayTip("Timed out - check logs", friendlyName, 3)
-}
 
 ; ====================[ Subroutines & Timers ]====================
 RemoveToolTip() {
@@ -1279,17 +1327,16 @@ WatchScript() {
     singlePress() {
         ShowTransientToolTip("WSL")
         try
-            LaunchAndPosition('wsl.exe -- bash -lc "cd ~; exec bash"')
+            LaunchAndPosition('wsl.exe --cd ~')
         catch as e
             ShowTransientToolTip("Failed to launch WSL`nIs WSL installed? " . e.Message)
     }
     doublePress() {
         dir := GetValidExplorerPath()
         if (dir != "") {
-            unixPath := ConvertToWSLPath(dir)
             ShowTransientToolTip("WSL")
             try
-                LaunchAndPosition("wsl.exe -- bash -lc `"cd '" . unixPath . "'; exec bash`"")
+                LaunchAndPosition('wsl.exe --cd "' . dir . '"')
             catch as e
                 ShowTransientToolTip("Failed to launch WSL`nIs WSL installed? " . e.Message)
         }
@@ -1316,8 +1363,7 @@ WatchScript() {
         oldClip := A_Clipboard
         A_Clipboard := wslPath
         Send("^v")
-        Sleep(100)
-        A_Clipboard := oldClip
+        SetTimer(() => (A_Clipboard := oldClip), -500)
     } else {
         Send("^v")
     }
