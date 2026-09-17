@@ -64,7 +64,7 @@ global DEVICE_VOLUME_HISTORY := Map()
 global LAST_DEVICE := ""
 try {
     initVol := SoundGetVolume()
-    if (initVol = 25) {
+    if (Round(initVol) = 25) {
         LAST_DEVICE := "Sony MDRX-50"
         DEVICE_VOLUME_HISTORY["Sony MDRX-50"] := 25
     } else {
@@ -1381,8 +1381,7 @@ WatchScript() {
         oldClip := A_Clipboard
         A_Clipboard := wslPath
         Send("^v")
-        Sleep(100)
-        A_Clipboard := oldClip
+        SetTimer(() => (A_Clipboard := oldClip), -500)
     } else {
         Send("^v")
     }
