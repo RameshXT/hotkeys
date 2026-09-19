@@ -807,54 +807,76 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
         defaultFriendlyName := ""
 
         defaultId := ""
+        defaultDevice := 0
+        defaultIdPtr := 0
         try {
-            defaultDevice := 0
             ComCall(4, deviceEnumerator, "int", 0, "int", 0, "ptr*", &defaultDevice := 0)
-            defaultIdPtr := 0
-            ComCall(5, defaultDevice, "ptr*", &defaultIdPtr)
-            defaultId := StrGet(defaultIdPtr, "UTF-16")
-            DllCall("Ole32\CoTaskMemFree", "ptr", defaultIdPtr)
-            ObjRelease(defaultDevice)
+            if (defaultDevice) {
+                ComCall(5, defaultDevice, "ptr*", &defaultIdPtr)
+                if (defaultIdPtr) {
+                    defaultId := StrGet(defaultIdPtr, "UTF-16")
+                    DllCall("Ole32\CoTaskMemFree", "ptr", defaultIdPtr)
+                    defaultIdPtr := 0
+                }
+            }
+        } finally {
+            if (defaultIdPtr)
+                DllCall("Ole32\CoTaskMemFree", "ptr", defaultIdPtr)
+            if (defaultDevice)
+                ObjRelease(defaultDevice)
         }
 
         loop count {
             device := 0
-            ComCall(4, devicesCollection, "uint", A_Index - 1, "ptr*", &device := 0)
-
-            idPtr := 0
-            ComCall(5, device, "ptr*", &idPtr)
-            id := StrGet(idPtr, "UTF-16")
-            DllCall("Ole32\CoTaskMemFree", "ptr", idPtr)
-
             propertyStore := 0
-            ComCall(4, device, "uint", 0, "ptr*", &propertyStore := 0)
+            idPtr := 0
+            try {
+                ComCall(4, devicesCollection, "uint", A_Index - 1, "ptr*", &device := 0)
+                if (!device)
+                    continue
 
-            keyGUID := Buffer(16)
-            DllCall("Ole32\CLSIDFromString", "str", "{A45C254E-DF1C-4EFD-8020-67D146A850E0}", "ptr", keyGUID)
-            propKey := Buffer(20)
-            DllCall("RtlMoveMemory", "ptr", propKey, "ptr", keyGUID, "ptr", 16)
-            NumPut("uint", 14, propKey, 16)
+                ComCall(5, device, "ptr*", &idPtr)
+                id := (idPtr) ? StrGet(idPtr, "UTF-16") : ""
+                if (idPtr) {
+                    DllCall("Ole32\CoTaskMemFree", "ptr", idPtr)
+                    idPtr := 0
+                }
 
-            propVariant := Buffer(24, 0)
-            ComCall(5, propertyStore, "ptr", propKey, "ptr", propVariant)
+                ComCall(4, device, "uint", 0, "ptr*", &propertyStore := 0)
+                if (!propertyStore)
+                    continue
 
-            friendlyName := ""
-            if (NumGet(propVariant, 0, "ushort") = 31) {
-                namePtr := NumGet(propVariant, 8, "ptr")
-                friendlyName := StrGet(namePtr, "UTF-16")
+                keyGUID := Buffer(16)
+                DllCall("Ole32\CLSIDFromString", "str", "{A45C254E-DF1C-4EFD-8020-67D146A850E0}", "ptr", keyGUID)
+                propKey := Buffer(20)
+                DllCall("RtlMoveMemory", "ptr", propKey, "ptr", keyGUID, "ptr", 16)
+                NumPut("uint", 14, propKey, 16)
+
+                propVariant := Buffer(24, 0)
+                ComCall(5, propertyStore, "ptr", propKey, "ptr", propVariant)
+
+                friendlyName := ""
+                if (NumGet(propVariant, 0, "ushort") = 31) {
+                    namePtr := NumGet(propVariant, 8, "ptr")
+                    friendlyName := StrGet(namePtr, "UTF-16")
+                }
+                DllCall("Ole32\PropVariantClear", "ptr", propVariant)
+
+                if (InStr(friendlyName, deviceNameSubstr)) {
+                    targetId := id
+                    targetName := friendlyName
+                }
+                if (id = defaultId) {
+                    defaultFriendlyName := friendlyName
+                }
+            } finally {
+                if (idPtr)
+                    DllCall("Ole32\CoTaskMemFree", "ptr", idPtr)
+                if (propertyStore)
+                    ObjRelease(propertyStore)
+                if (device)
+                    ObjRelease(device)
             }
-            DllCall("Ole32\PropVariantClear", "ptr", propVariant)
-
-            if (InStr(friendlyName, deviceNameSubstr)) {
-                targetId := id
-                targetName := friendlyName
-            }
-            if (id = defaultId) {
-                defaultFriendlyName := friendlyName
-            }
-
-            ObjRelease(propertyStore)
-            ObjRelease(device)
         }
 
         if (targetId = "") {
@@ -903,38 +925,51 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
                 micId := ""
                 loop micCount {
                     device := 0
-                    ComCall(4, micsCollection, "uint", A_Index - 1, "ptr*", &device := 0)
-
-                    idPtr := 0
-                    ComCall(5, device, "ptr*", &idPtr)
-                    id := StrGet(idPtr, "UTF-16")
-                    DllCall("Ole32\CoTaskMemFree", "ptr", idPtr)
-
                     propertyStore := 0
-                    ComCall(4, device, "uint", 0, "ptr*", &propertyStore := 0)
+                    idPtr := 0
+                    try {
+                        ComCall(4, micsCollection, "uint", A_Index - 1, "ptr*", &device := 0)
+                        if (!device)
+                            continue
 
-                    keyGUID := Buffer(16)
-                    DllCall("Ole32\CLSIDFromString", "str", "{A45C254E-DF1C-4EFD-8020-67D146A850E0}", "ptr", keyGUID)
-                    propKey := Buffer(20)
-                    DllCall("RtlMoveMemory", "ptr", propKey, "ptr", keyGUID, "ptr", 16)
-                    NumPut("uint", 14, propKey, 16)
+                        ComCall(5, device, "ptr*", &idPtr)
+                        id := (idPtr) ? StrGet(idPtr, "UTF-16") : ""
+                        if (idPtr) {
+                            DllCall("Ole32\CoTaskMemFree", "ptr", idPtr)
+                            idPtr := 0
+                        }
 
-                    propVariant := Buffer(24, 0)
-                    ComCall(5, propertyStore, "ptr", propKey, "ptr", propVariant)
+                        ComCall(4, device, "uint", 0, "ptr*", &propertyStore := 0)
+                        if (!propertyStore)
+                            continue
 
-                    friendlyName := ""
-                    if (NumGet(propVariant, 0, "ushort") = 31) {
-                        namePtr := NumGet(propVariant, 8, "ptr")
-                        friendlyName := StrGet(namePtr, "UTF-16")
+                        keyGUID := Buffer(16)
+                        DllCall("Ole32\CLSIDFromString", "str", "{A45C254E-DF1C-4EFD-8020-67D146A850E0}", "ptr", keyGUID)
+                        propKey := Buffer(20)
+                        DllCall("RtlMoveMemory", "ptr", propKey, "ptr", keyGUID, "ptr", 16)
+                        NumPut("uint", 14, propKey, 16)
+
+                        propVariant := Buffer(24, 0)
+                        ComCall(5, propertyStore, "ptr", propKey, "ptr", propVariant)
+
+                        friendlyName := ""
+                        if (NumGet(propVariant, 0, "ushort") = 31) {
+                            namePtr := NumGet(propVariant, 8, "ptr")
+                            friendlyName := StrGet(namePtr, "UTF-16")
+                        }
+                        DllCall("Ole32\PropVariantClear", "ptr", propVariant)
+
+                        if (InStr(friendlyName, micNameSubstr)) {
+                            micId := id
+                        }
+                    } finally {
+                        if (idPtr)
+                            DllCall("Ole32\CoTaskMemFree", "ptr", idPtr)
+                        if (propertyStore)
+                            ObjRelease(propertyStore)
+                        if (device)
+                            ObjRelease(device)
                     }
-                    DllCall("Ole32\PropVariantClear", "ptr", propVariant)
-
-                    if (InStr(friendlyName, micNameSubstr)) {
-                        micId := id
-                    }
-
-                    ObjRelease(propertyStore)
-                    ObjRelease(device)
 
                     if (micId != "")
                         break
@@ -942,14 +977,23 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
 
                 if (micId != "") {
                     defaultMicId := ""
+                    defaultMicDevice := 0
+                    defaultMicIdPtr := 0
                     try {
-                        defaultMicDevice := 0
                         ComCall(4, deviceEnumerator, "int", 1, "int", 0, "ptr*", &defaultMicDevice := 0)
-                        defaultMicIdPtr := 0
-                        ComCall(5, defaultMicDevice, "ptr*", &defaultMicIdPtr)
-                        defaultMicId := StrGet(defaultMicIdPtr, "UTF-16")
-                        DllCall("Ole32\CoTaskMemFree", "ptr", defaultMicIdPtr)
-                        ObjRelease(defaultMicDevice)
+                        if (defaultMicDevice) {
+                            ComCall(5, defaultMicDevice, "ptr*", &defaultMicIdPtr)
+                            if (defaultMicIdPtr) {
+                                defaultMicId := StrGet(defaultMicIdPtr, "UTF-16")
+                                DllCall("Ole32\CoTaskMemFree", "ptr", defaultMicIdPtr)
+                                defaultMicIdPtr := 0
+                            }
+                        }
+                    } finally {
+                        if (defaultMicIdPtr)
+                            DllCall("Ole32\CoTaskMemFree", "ptr", defaultMicIdPtr)
+                        if (defaultMicDevice)
+                            ObjRelease(defaultMicDevice)
                     }
 
                     if (micId != defaultMicId) {
@@ -1205,6 +1249,7 @@ ProcessWatchdog.Register("rzappengine.exe", "7.1 Surround Sound", LaunchRazer71)
 #MaxThreadsPerHotkey 1
 
 !q:: {
+    isFirst := true
     while GetKeyState("q", "P") && GetKeyState("Alt", "P") {
         if !WinExist("A")
             break
@@ -1218,7 +1263,12 @@ ProcessWatchdog.Register("rzappengine.exe", "7.1 Surround Sound", LaunchRazer71)
         } catch {
             break
         }
-        Sleep 100
+        if (isFirst) {
+            Sleep 400
+            isFirst := false
+        } else {
+            Sleep 250
+        }
     }
 }
 
