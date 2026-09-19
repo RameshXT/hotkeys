@@ -672,6 +672,7 @@ RunAppAndNotify(path, args, name) {
 }
 
 WriteLogEntry(entry) {
+    OutputDebug(entry)
     try {
         if !DirExist(LOGS_DIR)
             DirCreate(LOGS_DIR)
@@ -686,6 +687,13 @@ WriteLogEntry(entry) {
         }
 
         FileAppend(entry, logFile, "UTF-8")
+    } catch as primaryErr {
+        try {
+            tempLog := A_Temp . "\xtkeys_hotkey_errors.log"
+            FileAppend(entry, tempLog, "UTF-8")
+        } catch as fallbackErr {
+            TrayTip("Log write failed: " . primaryErr.Message, "xtkeys Logging Error", "Icon!")
+        }
     }
 }
 
