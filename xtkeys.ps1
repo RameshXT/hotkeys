@@ -77,14 +77,14 @@ function Invoke-Spinner {
     $spinstr = "⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"
     $job = Start-Job -ScriptBlock $ScriptBlock -ArgumentList $ArgumentList
     $i = 0
-    while ($job.State -eq "Running" -or $i -lt 12) {
+    while ((Get-Job -Id $job.Id).State -eq "Running" -or $i -lt 12) {
         $char = $spinstr[$i % $spinstr.Length]
         Write-Host "`r[INFO]: $Message [$char] " -ForegroundColor Cyan -NoNewline
         Start-Sleep -Milliseconds 80
         $i++
     }
     $result = Receive-Job -Job $job
-    Remove-Job -Job $job
+    Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
     Write-Host "`r[OK]: $Message             " -ForegroundColor Green
     return $result
 }
@@ -188,7 +188,6 @@ function Get-AhkExe {
 }
 
 function Install-AutoHotkey {
-    Write-UI "Checking for AutoHotkey >= v$AHK_WINGET_VER..." "INFO"
     $existing = Get-AhkExe
     if ($null -ne $existing) {
         if (Test-AhkVersionOk $existing) {
@@ -223,21 +222,19 @@ function Install-AutoHotkey {
         $wc.Dispose()
     } -ArgumentList $AHK_PORTABLE_URL, $tmpZip
 
-    Write-UI "Extracting AutoHotkey portable runtime..." "INFO"
-    try {
-        if (Test-Path $AHK_PORTABLE_DIR) {
-            Remove-Item $AHK_PORTABLE_DIR -Recurse -Force -ErrorAction SilentlyContinue
+    Invoke-Spinner -Message "Extracting AutoHotkey portable runtime..." -ScriptBlock {
+        param($zip, $dest)
+        if (Test-Path $dest) {
+            Remove-Item $dest -Recurse -Force -ErrorAction SilentlyContinue
         }
-        New-Item -ItemType Directory -Path $AHK_PORTABLE_DIR -Force | Out-Null
-        Expand-Archive -Path $tmpZip -DestinationPath $AHK_PORTABLE_DIR -Force
-        Write-UI "AutoHotkey runtime extracted to $AHK_PORTABLE_DIR" "OK"
-    } catch {
-        throw "Failed to extract AutoHotkey portable ZIP. Details: $($_.Exception.Message)"
-    } finally {
-        if (Test-Path $tmpZip) {
-            Remove-Item $tmpZip -Force -ErrorAction SilentlyContinue
-        }
+        New-Item -ItemType Directory -Path $dest -Force | Out-Null
+        Expand-Archive -Path $zip -DestinationPath $dest -Force
+    } -ArgumentList $tmpZip, $AHK_PORTABLE_DIR
+
+    if (Test-Path $tmpZip) {
+        Remove-Item $tmpZip -Force -ErrorAction SilentlyContinue
     }
+
     $exe = Get-AhkExe
     if ($null -eq $exe -or -not (Test-AhkVersionOk $exe)) {
         throw 'AutoHotkey install failed. Check https://www.autohotkey.com/download/'
@@ -408,7 +405,7 @@ function Get-LatestHotkeys {
     $tmpAhk  = Join-Path $env:TEMP 'hotkeys_dl.ahk'
     $tmpHash = Join-Path $env:TEMP 'hotkeys_dl.sha256'
     
-    Invoke-Spinner -Message "Downloading latest hotkeys.ahk..." -ScriptBlock {
+    Invoke-Spinner -Message "Downloading latest hotkeys.ahk from GitHub..." -ScriptBlock {
         param($url, $dest)
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
         $wc = [System.Net.WebClient]::new()
@@ -450,9 +447,10 @@ function Invoke-Install {
     $localAhk = if ($scriptDir) { Join-Path $scriptDir 'hotkeys.ahk' } else { $null }
 
     if ($localAhk -and (Test-Path $localAhk)) {
-        Write-UI "Using local hotkeys.ahk source" "INFO"
-        Copy-Item $localAhk $AHK_FILE -Force
-        Write-UI "Copied hotkeys.ahk to $AHK_FILE" "OK"
+        Invoke-Spinner -Message "Deploying local hotkeys.ahk source..." -ScriptBlock {
+            param($src, $dst)
+            Copy-Item $src $dst -Force
+        } -ArgumentList $localAhk, $AHK_FILE
     } else {
         $tmp = Get-LatestHotkeys
         try {
@@ -463,27 +461,36 @@ function Invoke-Install {
         }
     }
 
-    if ($localCli -and (Test-Path $localCli)) {
-        Copy-Item $localCli $CLI_FILE -Force
-    } else {
-        Invoke-SecureDownload "$RELEASE_BASE/xtkeys.ps1" $CLI_FILE
-    }
-    if ($localInstaller -and (Test-Path $localInstaller)) {
-        Copy-Item $localInstaller (Join-Path $INSTALL_DIR 'install.ps1') -Force
-    } else {
-        Invoke-SecureDownload "$RELEASE_BASE/install.ps1" (Join-Path $INSTALL_DIR 'install.ps1')
-    }
-    Write-UI "Registered xtkeys CLI binaries" "OK"
+    Invoke-Spinner -Message "Configuring xtkeys CLI tools..." -ScriptBlock {
+        param($lCli, $cFile, $lInst, $iDir, $rBase)
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+        if ($lCli -and (Test-Path $lCli)) {
+            Copy-Item $lCli $cFile -Force
+        } else {
+            $wc = [System.Net.WebClient]::new()
+            $wc.DownloadFile("$rBase/xtkeys.ps1", $cFile)
+            $wc.Dispose()
+        }
+        $instDst = Join-Path $iDir 'install.ps1'
+        if ($lInst -and (Test-Path $lInst)) {
+            Copy-Item $lInst $instDst -Force
+        } else {
+            $wc = [System.Net.WebClient]::new()
+            $wc.DownloadFile("$rBase/install.ps1", $instDst)
+            $wc.Dispose()
+        }
+    } -ArgumentList $localCli, $CLI_FILE, $localInstaller, $INSTALL_DIR, $RELEASE_BASE
 
     Write-CliWrapper
     Set-ScriptExecutionPolicy
     Add-ToUserPath $INSTALL_DIR
     New-StartupShortcut $ahkExe
 
-    Write-UI "Launching hotkeys background process..." "INFO"
-    Stop-Hotkeys
-    Start-Hotkeys $ahkExe
-    Start-Sleep -Milliseconds 800
+    Invoke-Spinner -Message "Starting hotkeys background process..." -ScriptBlock {
+        param($exe, $file, $dir)
+        Start-Process -FilePath $exe -ArgumentList "`"$file`"" -WorkingDirectory $dir -WindowStyle Hidden
+        Start-Sleep -Milliseconds 600
+    } -ArgumentList $ahkExe, $AHK_FILE, $INSTALL_DIR
 
     Write-Host ""
     if (Test-HotkeysRunning) {
@@ -541,8 +548,15 @@ function Invoke-Update {
     $tmpCli = Join-Path $env:TEMP 'xtkeys_update.ps1'
     $tmpInst = Join-Path $env:TEMP 'install_update.ps1'
     try {
-        Invoke-SecureDownload "$RELEASE_BASE/xtkeys.ps1" $tmpCli
-        Invoke-SecureDownload "$RELEASE_BASE/install.ps1" $tmpInst
+        Invoke-Spinner -Message "Downloading latest CLI management scripts..." -ScriptBlock {
+            param($rBase, $cDst, $iDst)
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+            $wc = [System.Net.WebClient]::new()
+            $wc.DownloadFile("$rBase/xtkeys.ps1", $cDst)
+            $wc.DownloadFile("$rBase/install.ps1", $iDst)
+            $wc.Dispose()
+        } -ArgumentList $RELEASE_BASE, $tmpCli, $tmpInst
+
         Copy-Item $tmpCli $CLI_FILE -Force
         Copy-Item $tmpInst (Join-Path $INSTALL_DIR 'install.ps1') -Force
         Write-UI "Updated xtkeys CLI management files" "OK"
@@ -556,9 +570,12 @@ function Invoke-Update {
     Set-ScriptExecutionPolicy
     Add-ToUserPath $INSTALL_DIR
 
-    Write-UI "Restarting hotkeys background process..." "INFO"
-    Start-Hotkeys $ahkExe
-    Start-Sleep -Milliseconds 800
+    Invoke-Spinner -Message "Restarting hotkeys background process..." -ScriptBlock {
+        param($exe, $file, $dir)
+        Start-Process -FilePath $exe -ArgumentList "`"$file`"" -WorkingDirectory $dir -WindowStyle Hidden
+        Start-Sleep -Milliseconds 600
+    } -ArgumentList $ahkExe, $AHK_FILE, $INSTALL_DIR
+
     Write-Host ""
     if (Test-HotkeysRunning) {
         $hpid = Get-HotkeysPid
@@ -578,8 +595,13 @@ function Invoke-Restart {
         $ahkExe = Install-AutoHotkey
     }
     Stop-Hotkeys
-    Start-Hotkeys $ahkExe
-    Start-Sleep -Milliseconds 800
+
+    Invoke-Spinner -Message "Restarting hotkeys background process..." -ScriptBlock {
+        param($exe, $file, $dir)
+        Start-Process -FilePath $exe -ArgumentList "`"$file`"" -WorkingDirectory $dir -WindowStyle Hidden
+        Start-Sleep -Milliseconds 600
+    } -ArgumentList $ahkExe, $AHK_FILE, $INSTALL_DIR
+
     Write-Host ""
     if (Test-HotkeysRunning) {
         $hpid = Get-HotkeysPid
@@ -610,62 +632,79 @@ function Invoke-Uninstall {
             }
         }
     }
-    Write-UI "Stopping background hotkey processes..." "INFO"
-    Stop-Hotkeys
-    Write-UI "Background processes stopped" "OK"
 
-    try {
-        if (Test-Path $STARTUP_LNK) {
-            Remove-Item $STARTUP_LNK -Force -ErrorAction SilentlyContinue
-            Write-UI "Removed Startup shortcut" "OK"
+    Invoke-Spinner -Message "Stopping hotkey processes..." -ScriptBlock {
+        param($pidFile, $instDir)
+        if (Test-Path $pidFile) {
+            $raw = (Get-Content $pidFile -Raw -ErrorAction SilentlyContinue)
+            if ($raw -and $raw.Trim() -match '^\d+$') {
+                try { Stop-Process -Id ([int]$raw.Trim()) -Force -ErrorAction SilentlyContinue } catch {}
+            }
+            Remove-Item $pidFile -Force -ErrorAction SilentlyContinue
         }
-        Remove-FromUserPath $INSTALL_DIR
-        if (Test-Path $INSTALL_DIR) {
-            Get-ChildItem -Path $INSTALL_DIR -File -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+        try {
+            $ahkProcs = Get-CimInstance Win32_Process -Filter "Name LIKE 'AutoHotkey%'" -ErrorAction SilentlyContinue
+            foreach ($p in $ahkProcs) {
+                if ($p.CommandLine -and ($p.CommandLine -like "*hotkeys.ahk*" -or $p.CommandLine -like "*$instDir*")) {
+                    try { Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue } catch {}
+                }
+            }
+        } catch {}
+    } -ArgumentList $PID_FILE, $INSTALL_DIR
+
+    Invoke-Spinner -Message "Removing shortcuts, PATH entries, and directories..." -ScriptBlock {
+        param($sLnk, $iDir, $ahkDir)
+        if (Test-Path $sLnk) {
+            Remove-Item $sLnk -Force -ErrorAction SilentlyContinue
+        }
+        $cur = [Environment]::GetEnvironmentVariable('PATH', 'User')
+        if ($null -ne $cur) {
+            $parts = $cur -split ';' | Where-Object { [string]::IsNullOrWhiteSpace($_) -eq $false -and $_ -ne $iDir }
+            [Environment]::SetEnvironmentVariable('PATH', ($parts -join ';'), 'User')
+        }
+        if (Test-Path $iDir) {
+            Get-ChildItem -Path $iDir -File -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
                 try { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue } catch {}
             }
-            if (Test-Path $AHK_PORTABLE_DIR) {
-                try { Remove-Item $AHK_PORTABLE_DIR -Recurse -Force -ErrorAction SilentlyContinue } catch {}
+            if (Test-Path $ahkDir) {
+                try { Remove-Item $ahkDir -Recurse -Force -ErrorAction SilentlyContinue } catch {}
             }
             try {
-                Remove-Item $INSTALL_DIR -Recurse -Force -ErrorAction SilentlyContinue
+                Remove-Item $iDir -Recurse -Force -ErrorAction SilentlyContinue
             } catch {}
-            if (Test-Path $INSTALL_DIR) {
-                Start-Process -FilePath 'cmd.exe' -ArgumentList "/c timeout /t 1 /nobreak >nul & rmdir /s /q `"$INSTALL_DIR`"" -WindowStyle Hidden -ErrorAction SilentlyContinue
+            if (Test-Path $iDir) {
+                Start-Process -FilePath 'cmd.exe' -ArgumentList "/c timeout /t 1 /nobreak >nul & rmdir /s /q `"$iDir`"" -WindowStyle Hidden -ErrorAction SilentlyContinue
             }
-            Write-UI "Cleaned up installation directory $INSTALL_DIR" "OK"
         }
-    } catch {
-        throw "Failed to clean up files during uninstallation. Details: $($_.Exception.Message)"
-    }
+    } -ArgumentList $STARTUP_LNK, $INSTALL_DIR, $AHK_PORTABLE_DIR
 
     if ($uninstallAhk) {
-        Write-UI "Uninstalling AutoHotkey..." "INFO"
-        $uninstalled = $false
-        if (Get-Command winget -ErrorAction SilentlyContinue) {
-            try {
-                winget uninstall --id $AHK_WINGET_ID --silent --accept-source-agreements 2>&1 | Out-Null
-                Write-UI "AutoHotkey uninstalled via winget" "OK"
-                $uninstalled = $true
-            } catch {}
-        }
-        if (-not $uninstalled) {
-            $regPath = @(
-                "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
-                "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*"
-            )
-            $ahkReg = Get-ItemProperty $regPath -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like '*AutoHotkey*' } | Select-Object -First 1
-            if ($ahkReg -and $ahkReg.UninstallString) {
+        Invoke-Spinner -Message "Uninstalling AutoHotkey compiler..." -ScriptBlock {
+            param($wingetId)
+            $uninstalled = $false
+            if (Get-Command winget -ErrorAction SilentlyContinue) {
                 try {
-                    if ($ahkReg.UninstallString -match '^"([^"]+)"\s+(.*)$') {
-                        Start-Process -FilePath $Matches[1] -ArgumentList "$($Matches[2]) /silent" -Wait -NoNewWindow -ErrorAction SilentlyContinue | Out-Null
-                    } else {
-                        Start-Process -FilePath $ahkReg.UninstallString -Wait -NoNewWindow -ErrorAction SilentlyContinue | Out-Null
-                    }
-                    Write-UI "AutoHotkey uninstalled via system uninstaller" "OK"
+                    winget uninstall --id $wingetId --silent --accept-source-agreements 2>&1 | Out-Null
+                    $uninstalled = $true
                 } catch {}
             }
-        }
+            if (-not $uninstalled) {
+                $regPath = @(
+                    "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
+                    "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*"
+                )
+                $ahkReg = Get-ItemProperty $regPath -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like '*AutoHotkey*' } | Select-Object -First 1
+                if ($ahkReg -and $ahkReg.UninstallString) {
+                    try {
+                        if ($ahkReg.UninstallString -match '^"([^"]+)"\s+(.*)$') {
+                            Start-Process -FilePath $Matches[1] -ArgumentList "$($Matches[2]) /silent" -Wait -NoNewWindow -ErrorAction SilentlyContinue | Out-Null
+                        } else {
+                            Start-Process -FilePath $ahkReg.UninstallString -Wait -NoNewWindow -ErrorAction SilentlyContinue | Out-Null
+                        }
+                    } catch {}
+                }
+            }
+        } -ArgumentList $AHK_WINGET_ID
     }
 
     Write-Host ""
@@ -712,4 +751,5 @@ switch ($Command) {
         throw "Invalid command received: $Command"
     }
 }
+
 
