@@ -180,11 +180,9 @@ ExtractSelectedZip() {
         guard := Wow64RedirectionGuard()
         Run('"' . winrarPath . '" x -o+ "' . selectedPath . '" "' . targetDir . '"')
     } else {
-        safeSelectedPath := StrReplace(selectedPath, "'", "''")
-        safeTargetDir := StrReplace(targetDir, "'", "''")
         guard := Wow64RedirectionGuard()
-        Run(ResolveNativePath("powershell.exe") . " -NoProfile -Command `"Expand-Archive -LiteralPath '" . safeSelectedPath .
-        "' -DestinationPath '" . safeTargetDir . "' -Force`"", , "Hide")
+        psCmd := ResolveNativePath("powershell.exe") . " -NoProfile -NonInteractive -Command `"& { param([string]`$s, [string]`$d) Expand-Archive -LiteralPath `$s -DestinationPath `$d -Force }`" -args `"" . StrReplace(selectedPath, '"', '\"') . "`" `"" . StrReplace(targetDir, '"', '\"') . "`""
+        Run(psCmd, , "Hide")
     }
 }
 
