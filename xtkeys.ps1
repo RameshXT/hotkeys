@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     xtkeys is a command-line management tool and installer for AutoHotkey-based system hotkeys.
 
@@ -58,8 +58,9 @@ param(
     [switch]$Force
 )
 
-Set-StrictMode -Version Latest
-$ErrorActionPreference = 'Stop'
+try {
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+} catch {}
 
 function Write-UI {
     param([string]$Message, [string]$Type="INFO")
@@ -711,3 +712,4 @@ switch ($Command) {
         throw "Invalid command received: $Command"
     }
 }
+
