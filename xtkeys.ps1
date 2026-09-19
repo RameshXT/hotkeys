@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     xtkeys is a command-line management tool and installer for AutoHotkey-based system hotkeys.
 
@@ -60,6 +60,7 @@ param(
 
 try {
     [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+    $OutputEncoding = [System.Text.Encoding]::UTF8
 } catch {}
 
 function Write-UI {
@@ -74,7 +75,10 @@ function Write-UI {
 
 function Invoke-Spinner {
     param([scriptblock]$ScriptBlock, [string]$Message, [array]$ArgumentList = @())
-    $spinstr = "⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"
+    $spinstr = @(
+        [char]0x280B, [char]0x2819, [char]0x2839, [char]0x2838, [char]0x283C,
+        [char]0x2834, [char]0x2826, [char]0x2827, [char]0x2807, [char]0x280F
+    )
     $job = Start-Job -ScriptBlock $ScriptBlock -ArgumentList $ArgumentList
     $i = 0
     while ((Get-Job -Id $job.Id).State -eq "Running" -or $i -lt 12) {
