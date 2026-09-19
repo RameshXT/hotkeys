@@ -26,7 +26,6 @@
 ; Ctrl + Shift + Z         → Switch to HEAT
 ; Ctrl + Shift + Alt + Del → Empty Recycle Bin
 ; Alt + Shift + V          → Paste path as WSL
-; Alt + Shift + R          → Git Clone Repo
 
 ; ====================[ Script Config & Variables ]====================
 #Requires AutoHotkey v2.0.26
@@ -44,7 +43,6 @@ try {
 }
 
 SetTimer WatchScript, 3000
-OnMessage(0x404, TrayClickHandler)
 OnError(GlobalErrorHandler)
 
 global WATCHDOG_INTERVAL_MS := GetEnvInt("AHK_WATCHDOG_INTERVAL_MS", 30000)
@@ -54,7 +52,6 @@ if (GetEnvInt("AHK_WATCHDOG_ENABLED", 1)) {
 
 USER_HOME := EnvGet("USERPROFILE")
 global DOUBLE_PRESS_DELAY := GetEnvInt("AHK_DOUBLE_PRESS_DELAY", 400)
-global g_lastClonedPath := ""
 global LOGS_DIR := GetEnvString("AHK_LOGS_DIR", A_ScriptDir . "\logs")
 global LONG_PRESS_THRESHOLD := GetEnvInt("AHK_LONG_PRESS_THRESHOLD", 600)
 global ScriptModTime := ""
@@ -183,145 +180,6 @@ ExtractSelectedZip() {
         guard := Wow64RedirectionGuard()
         psCmd := ResolveNativePath("powershell.exe") . " -NoProfile -NonInteractive -Command `"& { param([string]`$s, [string]`$d) Expand-Archive -LiteralPath `$s -DestinationPath `$d -Force }`" -args `"" . StrReplace(selectedPath, '"', '\"') . "`" `"" . StrReplace(targetDir, '"', '\"') . "`""
         Run(psCmd, , "Hide")
-    }
-}
-
-TrayClickHandler(wParam, lParam, msg, hwnd) {
-    if (lParam = 0x405) {
-        if (g_lastClonedPath != "" && DirExist(g_lastClonedPath))
-            Run(g_lastClonedPath)
-    }
-}
-
-; Shows a folder-picker dialog rooted strictly at D:\ — nothing above it is visible.
-BrowseForFolderD(repoName) {
-    pidlRoot := 0
-    DllCall("shell32\SHParseDisplayName", "wstr", "D:\", "ptr", 0, "ptr*", &pidlRoot, "uint", 0, "uint*", 0)
-    if (!pidlRoot)
-        return ""
-
-    displayBuf := Buffer(520, 0)
-    titleStr := "Clone  ·  " . repoName
-    cb := CallbackCreate(BrowseForFolderCallback, , 4)
-    lpfnOffset := (A_PtrSize = 8) ? 40 : 20
-    lParamOffset := lpfnOffset + A_PtrSize
-
-    bi := Buffer(64, 0)
-    NumPut("ptr", 0, bi, 0)
-    NumPut("ptr", pidlRoot, bi, A_PtrSize)
-    NumPut("ptr", displayBuf.Ptr, bi, A_PtrSize * 2)
-    NumPut("ptr", 0, bi, A_PtrSize * 3)
-    NumPut("uint", 0x41, bi, A_PtrSize * 4)
-    NumPut("ptr", cb, bi, lpfnOffset)
-    NumPut("ptr", StrPtr(titleStr), bi, lParamOffset)
-
-    resultPidl := DllCall("shell32\SHBrowseForFolder", "ptr", bi.Ptr, "ptr")
-    DllCall("ole32\CoTaskMemFree", "ptr", pidlRoot)
-    CallbackFree(cb)
-
-    if (!resultPidl)
-        return ""
-
-    pathBuf := Buffer(520, 0)
-    DllCall("shell32\SHGetPathFromIDListW", "ptr", resultPidl, "ptr", pathBuf.Ptr)
-    DllCall("ole32\CoTaskMemFree", "ptr", resultPidl)
-
-    return StrGet(pathBuf, "UTF-16")
-}
-
-; Callback for SHBrowseForFolder: renames the title bar and brings the dialog to front.
-BrowseForFolderCallback(hwnd, msg, lParam, lpData) {
-    if (msg = 1) {
-        DllCall("SetWindowTextW", "ptr", hwnd, "ptr", lpData)
-        DllCall("SetForegroundWindow", "ptr", hwnd)
-    }
-    return 0
-}
-
-CloneRepoFromClipboard() {
-    rawUrl := Trim(A_Clipboard, ' `t`n`r"')
-    if (rawUrl == "") {
-        TrayTip("Clipboard is not a valid SSH or HTTPS repo URL", "Git Clone", 2)
-        return
-    }
-
-    url := RegExReplace(rawUrl, "i)^\s*git\s+clone\s+", "")
-    url := Trim(url, ' `t`n`r"')
-
-    pattern :=
-        "i)^(?:git@[\w.-]+:[\w.-]+(?:/[\w.-]+)+(?:\.git)?/?|ssh://(?:git@)?[\w.-]+(?::\w+)?(?:/[\w.-]+)+(?:\.git)?/?|https?://(?:[\w.-]+@)?[\w.-]+(?::\w+)?(?:/[\w.-]+)+(?:\.git)?/?)$"
-    if !RegExMatch(url, pattern) {
-        TrayTip("Clipboard is not a valid SSH or HTTPS repo URL", "Git Clone", 2)
-        return
-    }
-
-    cleanUrl := RTrim(url, "/")
-    if (SubStr(cleanUrl, -4) = ".git")
-        cleanUrl := SubStr(cleanUrl, 1, -4)
-
-    repoName := ""
-    if (RegExMatch(cleanUrl, "([^/:]+)$", &m))
-        repoName := m[1]
-
-    if (repoName == "") {
-        TrayTip("Clipboard is not a valid SSH or HTTPS repo URL", "Git Clone", 2)
-        return
-    }
-
-    selectedFolder := BrowseForFolderD(repoName)
-    if (selectedFolder == "")
-        return
-
-    ExecuteGitClone(url, repoName, selectedFolder)
-}
-
-ExecuteGitClone(url, repoName, destBaseFolder) {
-    try {
-        if !DirExist(destBaseFolder)
-            DirCreate(destBaseFolder)
-    } catch as e {
-        global g_lastClonedPath := ""
-        TrayTip("Failed to create destination folder: " . destBaseFolder, "Git Clone", 2)
-        return
-    }
-
-    targetDir := destBaseFolder . "\" . repoName
-    if DirExist(targetDir) || FileExist(targetDir) {
-        global g_lastClonedPath := ""
-        TrayTip("Folder already exists: " . targetDir, "Git Clone", 2)
-        return
-    }
-
-    ; Disables 32-bit filesystem redirection on 64-bit systems for the duration of the clone operation (RAII)
-    guard := Wow64RedirectionGuard()
-    cmd := 'git.exe -C "' . destBaseFolder . '" clone "' . url . '"'
-    ToolTip("Cloning " . repoName . "...")
-    SetTimer RemoveToolTip, -TOOLTIP_DURATION_MS
-
-    exitCode := -1
-    prevPrompt := EnvGet("GIT_TERMINAL_PROMPT")
-    EnvSet("GIT_TERMINAL_PROMPT", "0")
-    try {
-        exitCode := RunWait(cmd, , "Hide")
-    } catch as e {
-        ToolTip()
-        global g_lastClonedPath := ""
-        TrayTip("Clone failed: " . repoName, "Git Clone", 2)
-        return
-    } finally {
-        if (prevPrompt != "")
-            EnvSet("GIT_TERMINAL_PROMPT", prevPrompt)
-        else
-            EnvSet("GIT_TERMINAL_PROMPT", "")
-    }
-
-    ToolTip()
-    if (exitCode = 0) {
-        global g_lastClonedPath := targetDir
-        TrayTip("Cloned " . repoName . " to " . targetDir, "Git Clone", 1)
-    } else {
-        global g_lastClonedPath := ""
-        TrayTip("Clone failed: " . repoName, "Git Clone", 2)
     }
 }
 
@@ -1489,8 +1347,6 @@ ProcessWatchdog.Register("rzappengine.exe", "7.1 Surround Sound", LaunchRazer71)
         Send("^v")
     }
 }
-
-!+r:: CloneRepoFromClipboard()
 
 !w:: {
     whatsappPath := AppResolver.Get("WhatsApp", "", [
