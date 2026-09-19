@@ -1336,13 +1336,20 @@ ProcessWatchdog.Register("rzappengine.exe", "7.1 Surround Sound", LaunchRazer71)
 }
 
 !+v:: {
+    static isPasting := false
+    if (isPasting)
+        return
+
     clipText := Trim(A_Clipboard, '`t`n`r "')
     if (clipText != "" && (RegExMatch(clipText, "i)^[A-Z]:") || InStr(clipText, "\"))) {
+        isPasting := true
         wslPath := ConvertToWSLPath(clipText)
-        oldClip := A_Clipboard
+        oldClip := ClipboardAll()
         A_Clipboard := wslPath
         Send("^v")
-        SetTimer(() => (A_Clipboard := oldClip), -500)
+        Sleep 50
+        A_Clipboard := oldClip
+        isPasting := false
     } else {
         Send("^v")
     }
