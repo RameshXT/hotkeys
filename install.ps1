@@ -82,6 +82,7 @@ $CLI_BAT          = Join-Path $INSTALL_DIR 'xtkeys.cmd'
 $PID_FILE         = Join-Path $INSTALL_DIR 'hotkeys.pid'
 $STARTUP_LNK      = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\xtkeys.lnk'
 $RELEASE_BASE     = "https://github.com/$REPO_OWNER/$REPO_NAME/releases/latest/download"
+$ZIP_URL          = "$RELEASE_BASE/hotkeys.zip"
 $AHK_URL          = "$RELEASE_BASE/hotkeys.ahk"
 $HASH_URL         = "$RELEASE_BASE/hotkeys.sha256"
 $AHK_WINGET_ID    = 'AutoHotkey.AutoHotkey'
@@ -386,29 +387,52 @@ function Set-ScriptExecutionPolicy {
 }
 
 function Get-LatestHotkeys {
+    $tmpZip  = Join-Path $env:TEMP 'hotkeys_dl.zip'
     $tmpAhk  = Join-Path $env:TEMP 'hotkeys_dl.ahk'
     $tmpHash = Join-Path $env:TEMP 'hotkeys_dl.sha256'
     
-    Invoke-Spinner -Message "Downloading latest hotkeys.ahk from GitHub..." -ScriptBlock {
-        param($url, $dest)
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
-        $wc = [System.Net.WebClient]::new()
-        $wc.DownloadFile($url, $dest)
-        $wc.Dispose()
-    } -ArgumentList $AHK_URL, $tmpAhk
-
+    $downloadedZip = $false
     try {
-        Invoke-SecureDownload $HASH_URL $tmpHash
-        $expected = Get-Content $tmpHash -Raw
-        Confirm-FileHash $tmpAhk $expected
-        Write-UI "SHA-256 integrity verification passed" "OK"
-        Remove-Item $tmpHash -Force -ErrorAction SilentlyContinue
-    } catch [System.Net.WebException] {
-        Write-UI "No SHA-256 file found in release - skipping hash check." "WARN"
+        Invoke-Spinner -Message "Downloading latest release package from GitHub..." -ScriptBlock {
+            param($url, $dest)
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+            $wc = [System.Net.WebClient]::new()
+            $wc.DownloadFile($url, $dest)
+            $wc.Dispose()
+        } -ArgumentList $ZIP_URL, $tmpZip
+        $downloadedZip = $true
     } catch {
-        Write-UI "SHA-256 check skipped or failed: $($_.Exception.Message)" "WARN"
+        Invoke-Spinner -Message "Downloading latest hotkeys.ahk from GitHub..." -ScriptBlock {
+            param($url, $dest)
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+            $wc = [System.Net.WebClient]::new()
+            $wc.DownloadFile($url, $dest)
+            $wc.Dispose()
+        } -ArgumentList $AHK_URL, $tmpAhk
     }
-    return $tmpAhk
+
+    if ($downloadedZip) {
+        try {
+            Expand-Archive -Path $tmpZip -DestinationPath $INSTALL_DIR -Force
+            Write-UI "Extracted release package to $INSTALL_DIR" "OK"
+        } finally {
+            if (Test-Path $tmpZip) { Remove-Item $tmpZip -Force -ErrorAction SilentlyContinue }
+        }
+        return $null
+    } else {
+        try {
+            Invoke-SecureDownload $HASH_URL $tmpHash
+            $expected = Get-Content $tmpHash -Raw
+            Confirm-FileHash $tmpAhk $expected
+            Write-UI "SHA-256 integrity verification passed" "OK"
+            Remove-Item $tmpHash -Force -ErrorAction SilentlyContinue
+        } catch [System.Net.WebException] {
+            Write-UI "No SHA-256 file found in release - skipping hash check." "WARN"
+        } catch {
+            Write-UI "SHA-256 check skipped or failed: $($_.Exception.Message)" "WARN"
+        }
+        return $tmpAhk
+    }
 }
 
 function Invoke-Install {
@@ -429,19 +453,26 @@ function Invoke-Install {
     $localCli = if ($scriptDir) { Join-Path $scriptDir 'xtkeys.ps1' } else { $null }
     $localInstaller = if ($scriptDir) { Join-Path $scriptDir 'install.ps1' } else { $null }
     $localAhk = if ($scriptDir) { Join-Path $scriptDir 'hotkeys.ahk' } else { $null }
+    $localSrc = if ($scriptDir) { Join-Path $scriptDir 'src' } else { $null }
 
     if ($localAhk -and (Test-Path $localAhk)) {
-        Invoke-Spinner -Message "Deploying local hotkeys.ahk source..." -ScriptBlock {
-            param($src, $dst)
-            Copy-Item $src $dst -Force
-        } -ArgumentList $localAhk, $AHK_FILE
+        Invoke-Spinner -Message "Deploying local hotkeys source..." -ScriptBlock {
+            param($srcAhk, $dstAhk, $srcDir, $dstDir)
+            Copy-Item $srcAhk $dstAhk -Force
+            if ($srcDir -and (Test-Path $srcDir)) {
+                $targetSrc = Join-Path $dstDir 'src'
+                Copy-Item $srcDir $targetSrc -Recurse -Force
+            }
+        } -ArgumentList $localAhk, $AHK_FILE, $localSrc, $INSTALL_DIR
     } else {
         $tmp = Get-LatestHotkeys
-        try {
-            Copy-Item $tmp $AHK_FILE -Force
-            Write-UI "Saved hotkeys.ahk to $AHK_FILE" "OK"
-        } finally {
-            if (Test-Path $tmp) { Remove-Item $tmp -Force -ErrorAction SilentlyContinue }
+        if ($tmp) {
+            try {
+                Copy-Item $tmp $AHK_FILE -Force
+                Write-UI "Saved hotkeys.ahk to $AHK_FILE" "OK"
+            } finally {
+                if (Test-Path $tmp) { Remove-Item $tmp -Force -ErrorAction SilentlyContinue }
+            }
         }
     }
 
@@ -520,13 +551,15 @@ function Invoke-Update {
     if ($null -eq $ahkExe) {
         $ahkExe = Install-AutoHotkey
     }
-    $tmp = Get-LatestHotkeys
     Stop-Hotkeys
-    try {
-        Copy-Item $tmp $AHK_FILE -Force
-        Write-UI "Updated hotkeys.ahk" "OK"
-    } finally {
-        if (Test-Path $tmp) { Remove-Item $tmp -Force -ErrorAction SilentlyContinue }
+    $tmp = Get-LatestHotkeys
+    if ($tmp) {
+        try {
+            Copy-Item $tmp $AHK_FILE -Force
+            Write-UI "Updated hotkeys.ahk" "OK"
+        } finally {
+            if (Test-Path $tmp) { Remove-Item $tmp -Force -ErrorAction SilentlyContinue }
+        }
     }
 
     $tmpCli = Join-Path $env:TEMP 'xtkeys_update.ps1'

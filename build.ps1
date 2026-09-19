@@ -46,6 +46,13 @@ Write-Host '  -> dist/ cleaned and ready.' -ForegroundColor DarkGray
 $AHK_DEST = Join-Path $DIST 'hotkeys.ahk'
 Copy-Item $AHK_SRC $AHK_DEST -Force
 Write-Host '  OK dist/hotkeys.ahk' -ForegroundColor Green
+
+$SRC_DIR = Join-Path $ROOT 'src'
+if (Test-Path $SRC_DIR) {
+    Copy-Item $SRC_DIR (Join-Path $DIST 'src') -Recurse -Force
+    Write-Host '  OK dist/src/' -ForegroundColor Green
+}
+
 $hash     = (Get-FileHash -Path $AHK_DEST -Algorithm SHA256).Hash.ToUpper()
 $hashLine = "$hash  hotkeys.ahk"
 $HASH_DEST = Join-Path $DIST 'hotkeys.sha256'
@@ -104,12 +111,20 @@ if ($cert) {
 
 Write-Host ''
 $ZIP_DEST = Join-Path $DIST 'hotkeys.zip'
-Compress-Archive -Path $AHK_DEST, $CLI_DEST, $INSTALL_DEST -DestinationPath $ZIP_DEST -Force
+$zipItems = @($AHK_DEST, $CLI_DEST, $INSTALL_DEST)
+if (Test-Path (Join-Path $DIST 'src')) {
+    $zipItems += (Join-Path $DIST 'src')
+}
+Compress-Archive -Path $zipItems -DestinationPath $ZIP_DEST -Force
 Write-Host '  OK dist/hotkeys.zip' -ForegroundColor Green
 Write-Host ''
 Write-Host '  Release artifacts ready in dist/:' -ForegroundColor White
 Get-ChildItem $DIST | ForEach-Object {
-    $size = [math]::Round($_.Length / 1KB, 1)
-    Write-Host "    $($_.Name.PadRight(22)) $size KB" -ForegroundColor Cyan
+    if ($_.PSIsContainer) {
+        Write-Host "    $($_.Name.PadRight(22)) <DIR>" -ForegroundColor Cyan
+    } else {
+        $size = [math]::Round($_.Length / 1KB, 1)
+        Write-Host "    $($_.Name.PadRight(22)) $size KB" -ForegroundColor Cyan
+    }
 }
 Write-Host ''
