@@ -718,15 +718,36 @@ class ProcessWatchdog {
     static windowMs := 300000 ; 5-minute sliding window
 
     static Register(exeName, friendlyName, launchFn) {
-        this.targets[exeName] := { name: friendlyName, launcher: launchFn, wasRunning: false }
+        this.targets[exeName] := { name: friendlyName, launcher: launchFn, wasRunning: false, hProcess: 0, pid: 0 }
         this.restartHistory[exeName] := []
     }
 
     static Poll() {
         now := A_TickCount
         for exeName, info in this.targets {
-            pid := ProcessExist(exeName)
-            if (pid != 0) {
+            isRunning := false
+
+            if (info.hProcess != 0) {
+                waitRes := DllCall("WaitForSingleObject", "ptr", info.hProcess, "uint", 0, "uint")
+                if (waitRes = 258) {
+                    isRunning := true
+                } else {
+                    DllCall("CloseHandle", "ptr", info.hProcess)
+                    info.hProcess := 0
+                    info.pid := 0
+                }
+            }
+
+            if (!isRunning && info.hProcess = 0) {
+                pid := ProcessExist(exeName)
+                if (pid != 0) {
+                    info.pid := pid
+                    info.hProcess := DllCall("OpenProcess", "uint", 0x00100000, "int", 0, "uint", pid, "ptr")
+                    isRunning := true
+                }
+            }
+
+            if (isRunning) {
                 info.wasRunning := true
             } else if (info.wasRunning) {
                 info.wasRunning := false
