@@ -341,50 +341,108 @@ class DoublePressManager {
 
 GetExplorerPath() {
     hwnd := WinActive("A")
-    if (!hwnd || !(WinGetClass(hwnd) ~= "CabinetWClass|ExploreWClass"))
+    if (!hwnd)
         return ""
 
-    activeTab := 0
-    try activeTab := ControlGetHwnd("ShellTabWindowClass1", hwnd)
+    winClass := WinGetClass(hwnd)
+    if (winClass = "Progman" || winClass = "WorkerW")
+        return A_Desktop
 
+    if (winClass != "CabinetWClass" && winClass != "ExploreWClass")
+        return ""
+
+    ; Method 1: Shell.Application COM (Windows 10 & 11 tabs)
     try {
+        candidatePaths := []
+        activeTabHwnd := 0
+        try {
+            focusedHwnd := DllCall("user32\GetFocus", "ptr")
+            if (focusedHwnd && DllCall("user32\IsChild", "ptr", hwnd, "ptr", focusedHwnd))
+                activeTabHwnd := focusedHwnd
+        }
+
         for window in ComObject("Shell.Application").Windows {
             try {
                 if (window.hwnd != hwnd)
                     continue
 
-                if (activeTab) {
-                    static IID_IShellBrowser := "{000214E2-0000-0000-C000-000000000046}"
-                    shellBrowser := ComObjQuery(window, IID_IShellBrowser, IID_IShellBrowser)
-                    thisTab := 0
-                    if (shellBrowser) {
-                        ComCall(3, shellBrowser, "ptr*", &thisTab)
-                        ObjRelease(shellBrowser)
-                        if (thisTab != activeTab)
-                            continue
+                path := ""
+                try path := window.Document.Folder.Self.Path
+
+                ; If Self.Path is virtual or empty, fallback to LocationURL
+                if (path = "" || InStr(path, "::{")) {
+                    try {
+                        locUrl := window.LocationURL
+                        if (locUrl != "" && RegExMatch(locUrl, "i)^file:///(.+)$", &m)) {
+                            decoded := StrReplace(m[1], "/", "\")
+                            decoded := StrReplace(decoded, "%20", " ")
+                            if (DirExist(decoded))
+                                path := decoded
+                        }
                     }
                 }
 
-                folderPath := window.Document.Folder.Self.Path
-                if (folderPath != "")
-                    return folderPath
+                if (path != "" && !InStr(path, "::{") && DirExist(path)) {
+                    if (activeTabHwnd) {
+                        try {
+                            static IID_IShellBrowser := "{000214E2-0000-0000-C000-000000000046}"
+                            shellBrowser := ComObjQuery(window, IID_IShellBrowser, IID_IShellBrowser)
+                            if (shellBrowser) {
+                                thisTab := 0
+                                ComCall(3, shellBrowser, "ptr*", &thisTab)
+                                ObjRelease(shellBrowser)
+                                if (thisTab && (thisTab == activeTabHwnd || DllCall("user32\IsChild", "ptr", thisTab, "ptr", activeTabHwnd)))
+                                    return path
+                            }
+                        }
+                    }
+                    candidatePaths.Push(path)
+                }
             } catch {
                 continue
             }
         }
-    } catch as e {
-        ShowLaunchError("Error getting Explorer path", e)
+
+        if (candidatePaths.Length > 0)
+            return candidatePaths[1]
+    } catch {
     }
+
+    ; Method 2: Address ToolbarWindow32 control
+    try {
+        loop 5 {
+            ctrlName := "ToolbarWindow32" . A_Index
+            try {
+                text := ControlGetText(ctrlName, hwnd)
+                if (text != "" && RegExMatch(text, "i)Address:\s*(.+)$", &m)) {
+                    candidate := Trim(m[1])
+                    if (DirExist(candidate))
+                        return candidate
+                }
+            }
+        }
+    } catch {
+    }
+
+    ; Method 3: Address Edit control
+    try {
+        editPath := ControlGetText("Edit1", hwnd)
+        if (editPath != "" && DirExist(editPath))
+            return editPath
+    } catch {
+    }
+
     return ""
 }
 
 GetSelectedFilePath() {
     hwnd := WinActive("A")
-    if (!hwnd || !(WinGetClass(hwnd) ~= "CabinetWClass|ExploreWClass"))
+    if (!hwnd)
         return ""
 
-    activeTab := 0
-    try activeTab := ControlGetHwnd("ShellTabWindowClass1", hwnd)
+    winClass := WinGetClass(hwnd)
+    if (winClass != "CabinetWClass" && winClass != "ExploreWClass" && winClass != "Progman" && winClass != "WorkerW")
+        return ""
 
     try {
         for window in ComObject("Shell.Application").Windows {
@@ -392,20 +450,10 @@ GetSelectedFilePath() {
                 if (window.hwnd != hwnd)
                     continue
 
-                if (activeTab) {
-                    static IID_IShellBrowser := "{000214E2-0000-0000-C000-000000000046}"
-                    shellBrowser := ComObjQuery(window, IID_IShellBrowser, IID_IShellBrowser)
-                    thisTab := 0
-                    if (shellBrowser) {
-                        ComCall(3, shellBrowser, "ptr*", &thisTab)
-                        ObjRelease(shellBrowser)
-                        if (thisTab != activeTab)
-                            continue
-                    }
+                for item in window.Document.SelectedItems {
+                    if (item.Path != "")
+                        return item.Path
                 }
-
-                for item in window.Document.SelectedItems
-                    return item.Path
             } catch {
                 continue
             }
@@ -417,7 +465,16 @@ GetSelectedFilePath() {
 }
 
 GetValidExplorerPath() {
-    winClass := WinGetClass("A")
+    hwnd := WinActive("A")
+    if (!hwnd) {
+        ShowTransientToolTip("Please focus on a File Explorer window")
+        return ""
+    }
+
+    winClass := WinGetClass(hwnd)
+    if (winClass = "Progman" || winClass = "WorkerW")
+        return A_Desktop
+
     if (winClass != "CabinetWClass" && winClass != "ExploreWClass") {
         ShowTransientToolTip("Please focus on a File Explorer window")
         return ""
@@ -425,6 +482,14 @@ GetValidExplorerPath() {
 
     path := GetExplorerPath()
     if (path = "") {
+        sel := GetSelectedFilePath()
+        if (sel != "") {
+            if (DirExist(sel))
+                return sel
+            SplitPath sel, , &parentDir
+            if (parentDir != "" && DirExist(parentDir))
+                return parentDir
+        }
         ShowTransientToolTip("Could not get folder path")
         return ""
     }
