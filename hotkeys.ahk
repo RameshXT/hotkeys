@@ -163,6 +163,20 @@ DeleteFileIfExists(path) {
         FileDelete(path)
 }
 
+ZipHasRootFolder(zipPath) {
+    try {
+        shell := ComObject("Shell.Application")
+        zipObj := shell.Namespace(zipPath)
+        if (zipObj) {
+            items := zipObj.Items()
+            if (items.Count = 1) {
+                return items.Item(0).IsFolder ? true : false
+            }
+        }
+    }
+    return false
+}
+
 ExtractSelectedZip() {
     winClass := WinGetClass("A")
     if (winClass != "CabinetWClass" && winClass != "ExploreWClass")
@@ -173,16 +187,34 @@ ExtractSelectedZip() {
     SplitPath selectedPath, , &fileDir, &fileExtension, &nameNoExt
     if (fileExtension != "zip" && fileExtension != "ZIP")
         return
-    targetDir := fileDir . "\" . nameNoExt . "\"
+
+    hasRootFolder := ZipHasRootFolder(selectedPath)
+    targetDir := hasRootFolder ? fileDir : (fileDir . "\" . nameNoExt)
+
     winrarPath := AppResolver.Get("WinRAR", "WinRAR.exe", ["%ProgramFiles%\WinRAR\WinRAR.exe",
         "%ProgramFiles(x86)%\WinRAR\WinRAR.exe"])
     if FileExist(winrarPath) {
         guard := Wow64RedirectionGuard()
         Run('"' . winrarPath . '" x -o+ "' . selectedPath . '" "' . targetDir . '"')
-    } else {
+        return
+    }
+
+    tarExe := ResolveNativePath("tar.exe")
+    if FileExist(tarExe) {
+        try DirCreate(targetDir)
         guard := Wow64RedirectionGuard()
-        psCmd := ResolveNativePath("powershell.exe") . " -NoProfile -NonInteractive -Command `"& { param([string]`$s, [string]`$d) Expand-Archive -LiteralPath `$s -DestinationPath `$d -Force }`" -args `"" . StrReplace(selectedPath, '"', '\"') . "`" `"" . StrReplace(targetDir, '"', '\"') . "`""
-        Run(psCmd, , "Hide")
+        Run('"' . tarExe . '" -xf "' . selectedPath . '" -C "' . targetDir . '"', , "Hide")
+        return
+    }
+
+    try {
+        DirCreate(targetDir)
+        shell := ComObject("Shell.Application")
+        zipFolder := shell.Namespace(selectedPath)
+        destFolder := shell.Namespace(targetDir)
+        if (zipFolder && destFolder) {
+            destFolder.CopyHere(zipFolder.Items(), 4 | 16 | 512 | 1024)
+        }
     }
 }
 
