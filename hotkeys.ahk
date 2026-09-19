@@ -466,6 +466,7 @@ GetExplorerPath() {
                     thisTab := 0
                     if (shellBrowser) {
                         ComCall(3, shellBrowser, "ptr*", &thisTab)
+                        ObjRelease(shellBrowser)
                         if (thisTab != activeTab)
                             continue
                     }
@@ -504,6 +505,7 @@ GetSelectedFilePath() {
                     thisTab := 0
                     if (shellBrowser) {
                         ComCall(3, shellBrowser, "ptr*", &thisTab)
+                        ObjRelease(shellBrowser)
                         if (thisTab != activeTab)
                             continue
                     }
