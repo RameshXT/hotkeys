@@ -36,7 +36,10 @@ SendMode "Input"
 SetWorkingDir A_ScriptDir
 
 try {
-    f := FileOpen(A_ScriptDir . "\hotkeys.pid", "w")
+    pidDir := EnvGet("LOCALAPPDATA") ? (EnvGet("LOCALAPPDATA") . "\xtkeys") : A_ScriptDir
+    if !DirExist(pidDir)
+        DirCreate(pidDir)
+    f := FileOpen(pidDir . "\hotkeys.pid", "w")
     f.Write(DllCall("GetCurrentProcessId"))
     f.Close()
 } catch {
@@ -412,7 +415,8 @@ HandleContextHotkey(key, name, path, sArgs := "", dPre := "") {
         dir := GetValidExplorerPath()
         if (dir != "") {
             ShowTransientToolTip(name)
-            RunApp(path, dPre . '"' . dir . '"')
+            cleanDir := (SubStr(dir, -1) == "\") ? (dir . "\") : dir
+            RunApp(path, dPre . '"' . cleanDir . '"')
         }
     } else {
         lastPresses[key] := now
@@ -489,12 +493,12 @@ LaunchAndMaximize(appPath, windowIdentifier := "", timeout := "", friendlyName :
         oldMatchMode := A_TitleMatchMode
         SetTitleMatchMode 2
         if WinWait(windowIdentifier, , timeout) {
-            WinActivate
-            WinMaximize
+            WinActivate(windowIdentifier)
+            WinMaximize(windowIdentifier)
             loop 10 {
-                if (WinGetMinMax() = 1)
+                if (WinGetMinMax(windowIdentifier) = 1)
                     break
-                WinMaximize
+                WinMaximize(windowIdentifier)
                 Sleep 50
             }
         } else {
@@ -512,12 +516,12 @@ LaunchAndPosition(cmd, workingDir := "") {
         actualCmd := SubStr(cmd, 8)
         if InStr(actualCmd, "cmd.exe") {
             if !InStr(actualCmd, " /") {
-                cmd := '*RunAs ' . actualCmd . ' /k cd /d "' . workingDir . '"'
+                cmd := '*RunAs ' . actualCmd . ' /k cd /d "' . StrReplace(workingDir, '"', '\"') . '"'
                 workingDir := ""
             }
         } else if InStr(actualCmd, "powershell.exe") {
             if !InStr(actualCmd, " -") {
-                cmd := '*RunAs ' . actualCmd . ' -NoExit -Command Set-Location -LiteralPath "' . workingDir . '"'
+                cmd := '*RunAs ' . actualCmd . " -NoExit -Command Set-Location -LiteralPath '" . StrReplace(workingDir, "'", "''") . "'"
                 workingDir := ""
             }
         }
@@ -584,15 +588,20 @@ LaunchAndPosition(cmd, workingDir := "") {
     if (targetHwnd != 0) {
         try {
             MouseGetPos(&mX, &mY)
-            targetLeft := -3
-            targetTop := 5
+            matched := false
             loop MonitorGetCount() {
                 MonitorGetWorkArea(A_Index, &wLeft, &wTop, &wRight, &wBottom)
                 if (mX >= wLeft && mX <= wRight && mY >= wTop && mY <= wBottom) {
                     targetLeft := wLeft - 3
                     targetTop := wTop + 5
+                    matched := true
                     break
                 }
+            }
+            if (!matched) {
+                MonitorGetWorkArea(1, &wLeft, &wTop, &wRight, &wBottom)
+                targetLeft := wLeft - 3
+                targetTop := wTop + 5
             }
             WinMove(targetLeft, targetTop, , , "ahk_id " . targetHwnd)
         } catch {
@@ -630,15 +639,26 @@ RunAppAndNotify(path, args, name) {
     RunApp(path, args, name)
 }
 
-GlobalErrorHandler(thrown, mode) {
+WriteLogEntry(entry) {
     try {
         if !DirExist(LOGS_DIR)
             DirCreate(LOGS_DIR)
 
         logFile := LOGS_DIR . "\hotkey_errors.log"
-        if FileExist(logFile) && FileGetSize(logFile) >= 2097152
-            FileDelete(logFile)
+        maxLogSize := 5242880 ; 5 MB
+        if FileExist(logFile) && FileGetSize(logFile) >= maxLogSize {
+            oldLog := LOGS_DIR . "\hotkey_errors.log.old"
+            if FileExist(oldLog)
+                FileDelete(oldLog)
+            FileMove(logFile, oldLog, 1)
+        }
 
+        FileAppend(entry, logFile, "UTF-8")
+    }
+}
+
+GlobalErrorHandler(thrown, mode) {
+    try {
         timestamp := FormatTime(, "yyyy-MM-dd HH:mm:ss")
         entry := "--------------------------------------------------------------------------------`n`n"
         entry .= "  [" . timestamp . "] UNHANDLED ERROR (" . mode . ")`n"
@@ -657,7 +677,7 @@ GlobalErrorHandler(thrown, mode) {
         }
         entry .= "`n--------------------------------------------------------------------------------`n`n"
 
-        FileAppend(entry, logFile, "UTF-8")
+        WriteLogEntry(entry)
         TrayTip(thrown.Message, "Hotkey Error Logged", 2)
     }
     return -1
@@ -680,13 +700,6 @@ ShowLaunchError(prefix, err) {
     TrayTip(friendlyMsg, prefix, 2)
 
     try {
-        if !DirExist(LOGS_DIR)
-            DirCreate(LOGS_DIR)
-
-        logFile := LOGS_DIR . "\hotkey_errors.log"
-        if FileExist(logFile) && FileGetSize(logFile) >= 2097152
-            FileDelete(logFile)
-
         timestamp := FormatTime(, "yyyy-MM-dd HH:mm:ss")
         logLine := "--------------------------------------------------------------------------------`n`n"
         logLine .= "  [" . timestamp . "] " . prefix . "`n"
@@ -707,7 +720,7 @@ ShowLaunchError(prefix, err) {
         }
         logLine .= "`n--------------------------------------------------------------------------------`n`n"
 
-        FileAppend(logLine, logFile, "UTF-8")
+        WriteLogEntry(logLine)
     }
 }
 
@@ -783,23 +796,14 @@ class ProcessWatchdog {
     }
 
     static LogWatchdogEvent(eventTitle, processName, details) {
-        try {
-            if !DirExist(LOGS_DIR)
-                DirCreate(LOGS_DIR)
+        timestamp := FormatTime(, "yyyy-MM-dd HH:mm:ss")
+        entry := "--------------------------------------------------------------------------------`n`n"
+        entry .= "  [" . timestamp . "] " . eventTitle . "`n"
+        entry .= "  Target:  " . processName . "`n"
+        entry .= "  Details: " . details . "`n`n"
+        entry .= "--------------------------------------------------------------------------------`n`n"
 
-            logFile := LOGS_DIR . "\hotkey_errors.log"
-            if FileExist(logFile) && FileGetSize(logFile) >= 2097152
-                FileDelete(logFile)
-
-            timestamp := FormatTime(, "yyyy-MM-dd HH:mm:ss")
-            entry := "--------------------------------------------------------------------------------`n`n"
-            entry .= "  [" . timestamp . "] " . eventTitle . "`n"
-            entry .= "  Target:  " . processName . "`n"
-            entry .= "  Details: " . details . "`n`n"
-            entry .= "--------------------------------------------------------------------------------`n`n"
-
-            FileAppend(entry, logFile, "UTF-8")
-        }
+        WriteLogEntry(entry)
     }
 }
 
