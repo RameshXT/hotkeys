@@ -713,7 +713,7 @@ RunApp(path, args := "", name := "", workingDir := "") {
     if (name != "")
         ShowTransientToolTip(name)
     try {
-        if InStr(path, "://") {
+        if InStr(path, "://") || (RegExMatch(path, "^[a-zA-Z][a-zA-Z0-9+.-]+:") && !RegExMatch(path, "^[a-zA-Z]:[\\/]")) {
             Run(path)
         } else {
             if (InStr(path, "\") && !FileExist(path)) {
@@ -1320,7 +1320,20 @@ ProcessWatchdog.Register("rzappengine.exe", "7.1 Surround Sound", LaunchRazer71)
     }
 }
 
-!m:: RunApp("ms-windows-store:", "", "Microsoft Store")
+LaunchMicrosoftStore() {
+    ShowTransientToolTip("Microsoft Store")
+    try {
+        Run("ms-windows-store:")
+    } catch {
+        try {
+            Run("explorer.exe shell:AppsFolder\Microsoft.WindowsStore_8wekyb3d8bbwe!App")
+        } catch as e {
+            ShowLaunchError("Microsoft Store", e)
+        }
+    }
+}
+
+!m:: LaunchMicrosoftStore()
 
 !n:: RunApp("notepad.exe", "", "Notepad")
 
