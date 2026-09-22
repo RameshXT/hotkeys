@@ -95,7 +95,7 @@ function Invoke-Spinner {
 
 $REPO_OWNER       = 'RameshXT'
 $REPO_NAME        = 'hotkeys'
-$INSTALL_DIR      = Join-Path $env:LOCALAPPDATA 'xtkeys'
+$INSTALL_DIR      = Join-Path $env:LOCALAPPDATA 'Programs\xtkeys'
 $AHK_FILE         = Join-Path $INSTALL_DIR 'hotkeys.ahk'
 $CLI_FILE         = Join-Path $INSTALL_DIR 'xtkeys.ps1'
 $CLI_BAT          = Join-Path $INSTALL_DIR 'xtkeys.cmd'

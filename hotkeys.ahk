@@ -1356,7 +1356,7 @@ AudioEndpoint.Init()
 
 ; --- Process PID Registration ---
 try {
-    pidDir := EnvGet("LOCALAPPDATA") ? (EnvGet("LOCALAPPDATA") . "\xtkeys") : A_ScriptDir
+    pidDir := EnvGet("LOCALAPPDATA") ? (EnvGet("LOCALAPPDATA") . "\Programs\xtkeys") : A_ScriptDir
     if !DirExist(pidDir)
         DirCreate(pidDir)
     f := FileOpen(pidDir . "\hotkeys.pid", "w")
