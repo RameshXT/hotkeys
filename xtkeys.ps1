@@ -48,7 +48,7 @@
 [OutputType([void])]
 param(
     [Parameter(Mandatory = $false, Position = 0)]
-    [ValidateSet('status', 'update', 'restart', 'uninstall', 'install', 'help', 'default')]
+    [ValidateSet('status', 'update', 'restart', 'uninstall', 'install', 'help', 'doctor', 'default')]
     [string]$Command = 'default',
 
     [Parameter(Mandatory = $false)]
@@ -720,6 +720,71 @@ function Invoke-Uninstall {
     Write-Host ""
 }
 
+function Invoke-Doctor {
+    Write-Host ""
+    Write-Host "=== xtkeys Environment & Health Diagnostics ===" -ForegroundColor Cyan
+    Write-Host ""
+
+    # 1. AutoHotkey Check
+    $ahkExe = Get-AhkExe
+    if ($ahkExe -and (Test-Path $ahkExe)) {
+        $ver = Get-AhkVersion $ahkExe
+        Write-UI "AutoHotkey v2: Installed ($ver) at $ahkExe" "OK"
+    } else {
+        Write-UI "AutoHotkey v2: NOT detected" "ERROR"
+    }
+
+    # 2. Installed hotkeys.ahk Check
+    if (Test-Path $AHK_FILE) {
+        $hash = (Get-FileHash -Path $AHK_FILE -Algorithm SHA256).Hash.Substring(0, 12)
+        Write-UI "Script Bundle: Installed at $AHK_FILE (SHA: $hash...)" "OK"
+    } else {
+        Write-UI "Script Bundle: Not installed in $INSTALL_DIR" "WARN"
+    }
+
+    # 3. Process Status
+    $ahkPid = Get-HotkeysPid
+    if ($ahkPid -ne $null -and (Test-HotkeysRunning)) {
+        Write-UI "Runtime Process: Active (PID: $ahkPid)" "OK"
+    } else {
+        Write-UI "Runtime Process: Not currently running" "WARN"
+    }
+
+    # 4. Startup Shortcut
+    if (Test-Path $STARTUP_LNK) {
+        Write-UI "Startup Shortcut: Active at $STARTUP_LNK" "OK"
+    } else {
+        Write-UI "Startup Shortcut: Not found in Windows Startup" "WARN"
+    }
+
+    # 5. Audio Endpoints
+    Write-Host ""
+    Write-Host "Detected Sound Devices:" -ForegroundColor Gray
+    try {
+        $soundDevices = Get-CimInstance Win32_SoundDevice -ErrorAction SilentlyContinue
+        if ($soundDevices) {
+            foreach ($dev in $soundDevices) {
+                Write-Host "  - $($dev.Description) ($($dev.Status))" -ForegroundColor DarkGray
+            }
+        } else {
+            Write-Host "  (No devices reported via WMI)" -ForegroundColor DarkGray
+        }
+    } catch {
+        Write-Host "  (Unable to query WMI sound devices)" -ForegroundColor DarkGray
+    }
+
+    # 6. Error Log Status
+    $logFile = Join-Path $INSTALL_DIR 'logs\hotkey_errors.log'
+    if (Test-Path $logFile) {
+        $sizeKb = [math]::Round((Get-Item $logFile).Length / 1KB, 1)
+        Write-UI "Log File: $logFile ($sizeKb KB)" "INFO"
+    } else {
+        Write-UI "Log File: Clean (no error logs present)" "OK"
+    }
+
+    Write-Host ""
+}
+
 function Invoke-Help {
     Write-Host ""
     Write-UI "xtkeys command-line management tool" "INFO"
@@ -728,6 +793,7 @@ function Invoke-Help {
     Write-Host "  xtkeys status      Check if hotkeys are running"     -ForegroundColor Cyan
     Write-Host "  xtkeys update      Download latest version & restart"-ForegroundColor Cyan
     Write-Host "  xtkeys restart     Restart hotkeys background process"-ForegroundColor Cyan
+    Write-Host "  xtkeys doctor      Diagnose environment and runtime"  -ForegroundColor Cyan
     Write-Host "  xtkeys uninstall   Remove everything cleanly"        -ForegroundColor Cyan
     Write-Host "  xtkeys install     Install or reinstall hotkeys"     -ForegroundColor Cyan
     Write-Host "  xtkeys help        Show this help message"           -ForegroundColor Cyan
@@ -749,6 +815,7 @@ switch ($Command) {
     'status'    { Invoke-Status }
     'update'    { Invoke-Update }
     'restart'   { Invoke-Restart }
+    'doctor'    { Invoke-Doctor }
     'uninstall' { Invoke-Uninstall }
     'help'      { Invoke-Help }
     Default {

@@ -2,13 +2,71 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $ROOT     = $PSScriptRoot
 $DIST     = Join-Path $ROOT 'dist'
-$AHK_SRC  = Join-Path $ROOT 'hotkeys.ahk'
+$SRC_DIR  = Join-Path $ROOT 'src'
+$MAIN_AHK = Join-Path $SRC_DIR 'main.ahk'
+$AHK_DEST = Join-Path $ROOT 'hotkeys.ahk'
 $CLI_SRC  = Join-Path $ROOT 'xtkeys.ps1'
 $INSTALL_SRC = Join-Path $ROOT 'install.ps1'
 
-if (-not (Test-Path $AHK_SRC)) { throw "Missing source: $AHK_SRC" }
 if (-not (Test-Path $CLI_SRC)) { throw "Missing source: $CLI_SRC" }
 if (-not (Test-Path $INSTALL_SRC)) { throw "Missing source: $INSTALL_SRC" }
+
+function Bundle-AhkScript {
+    param(
+        [string]$MainPath,
+        [string]$OutputPath
+    )
+
+    Write-Host "  Bundling modular AHK sources from $MainPath..." -ForegroundColor Cyan
+    $visited = New-Object 'System.Collections.Generic.HashSet[string]'
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+
+    function Process-File {
+        param([string]$FilePath)
+        $fullPath = [System.IO.Path]::GetFullPath($FilePath)
+        if ($visited.Contains($fullPath)) {
+            return ""
+        }
+        $visited.Add($fullPath) | Out-Null
+        $dir = [System.IO.Path]::GetDirectoryName($fullPath)
+
+        $lines = [System.IO.File]::ReadAllLines($fullPath)
+        $outputLines = [System.Collections.Generic.List[string]]::new()
+
+        foreach ($line in $lines) {
+            if ($line -match '^\s*#Include\s+["'']?([^"'']+)["'']?') {
+                $includeRel = $matches[1].Trim()
+                $includeFull = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($dir, $includeRel))
+                if (Test-Path $includeFull) {
+                    $outputLines.Add("; --- BEGIN INLINE: $includeRel ---")
+                    $inlined = Process-File -FilePath $includeFull
+                    if ($inlined) {
+                        $outputLines.Add($inlined)
+                    }
+                    $outputLines.Add("; --- END INLINE: $includeRel ---")
+                } else {
+                    $outputLines.Add($line)
+                }
+            } elseif ($line -match '^\s*#Requires\s+AutoHotkey\s+v2' -and $visited.Count -gt 1) {
+                # Strip redundant inner #Requires directives
+                continue
+            } else {
+                $outputLines.Add($line)
+            }
+        }
+        return [string]::Join("`r`n", $outputLines)
+    }
+
+    $bundledContent = Process-File -FilePath $MainPath
+    [System.IO.File]::WriteAllText($OutputPath, $bundledContent, $utf8NoBom)
+    Write-Host "  OK Bundled standalone: $OutputPath" -ForegroundColor Green
+}
+
+Write-Host ''
+Write-Host '  Bundling modular source files...' -ForegroundColor Cyan
+if (Test-Path $MAIN_AHK) {
+    Bundle-AhkScript -MainPath $MAIN_AHK -OutputPath $AHK_DEST
+}
 
 Write-Host ''
 Write-Host '  Linting PowerShell scripts with PSScriptAnalyzer...' -ForegroundColor Cyan
@@ -43,10 +101,12 @@ if (Test-Path $DIST) {
 }
 New-Item -ItemType Directory -Path $DIST -Force | Out-Null
 Write-Host '  -> dist/ cleaned and ready.' -ForegroundColor DarkGray
-$AHK_DEST = Join-Path $DIST 'hotkeys.ahk'
-Copy-Item $AHK_SRC $AHK_DEST -Force
+
+$DIST_AHK = Join-Path $DIST 'hotkeys.ahk'
+Copy-Item $AHK_DEST $DIST_AHK -Force
 Write-Host '  OK dist/hotkeys.ahk' -ForegroundColor Green
-$hash     = (Get-FileHash -Path $AHK_DEST -Algorithm SHA256).Hash.ToUpper()
+
+$hash     = (Get-FileHash -Path $DIST_AHK -Algorithm SHA256).Hash.ToUpper()
 $hashLine = "$hash  hotkeys.ahk"
 $HASH_DEST = Join-Path $DIST 'hotkeys.sha256'
 [System.IO.File]::WriteAllText($HASH_DEST, $hashLine, [System.Text.Encoding]::ASCII)
@@ -103,7 +163,7 @@ if ($cert) {
 
 Write-Host ''
 $ZIP_DEST = Join-Path $DIST 'hotkeys.zip'
-Compress-Archive -Path $AHK_DEST, $CLI_DEST, $INSTALL_DEST -DestinationPath $ZIP_DEST -Force
+Compress-Archive -Path $DIST_AHK, $CLI_DEST, $INSTALL_DEST -DestinationPath $ZIP_DEST -Force
 Write-Host '  OK dist/hotkeys.zip' -ForegroundColor Green
 Write-Host ''
 Write-Host '  Release artifacts ready in dist/:' -ForegroundColor White

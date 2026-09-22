@@ -14,6 +14,14 @@ irm https://github.com/RameshXT/hotkeys/releases/latest/download/install.ps1 | i
 
 That's it. Hotkeys are active immediately. No admin rights needed.
 
+### Dev / Feature Branch Install
+
+To install from a specific feature/dev release:
+
+```powershell
+irm https://github.com/RameshXT/hotkeys/releases/download/dev-feat-refactor/install.ps1 | iex
+```
+
 > **What it does automatically:**
 > - Installs AutoHotkey v2.0.26 (if not already installed)
 > - Downloads and verifies `hotkeys.ahk`
@@ -30,6 +38,7 @@ After install, use `xtkeys` from any terminal:
 xtkeys status      → check if hotkeys are running
 xtkeys update      → download latest version and restart
 xtkeys restart     → restart hotkeys
+xtkeys doctor      → diagnose environment & runtime health
 xtkeys uninstall   → remove everything cleanly
 xtkeys help        → show this help message
 ```

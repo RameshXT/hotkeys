@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+      - 'feat-*'
+      - 'dev*'
   workflow_dispatch:
 
 permissions:
@@ -39,6 +41,10 @@ jobs:
           $store.Add($pfx)
           $store.Close()
           Add-Content -Path $env:GITHUB_ENV -Value "SIGNING_CERT_THUMBPRINT=$($pfx.Thumbprint)"
+
+      - name: Run Test Suite
+        shell: powershell
+        run: Invoke-Pester .\tests\Pester\xtkeys.Tests.ps1
 
       - name: Run Build Script
         shell: powershell
