@@ -1,53 +1,59 @@
 Describe "Repository Structure and Integrity" {
-    $RepoRoot = Resolve-Path "$PSScriptRoot\..\.."
-    $XtkeysScript = "$RepoRoot\xtkeys.ps1"
-    $InstallScript = "$RepoRoot\install.ps1"
-    $DefaultConfig = "$RepoRoot\config\default.config.json"
+    BeforeAll {
+        $RepoRoot = Resolve-Path "$PSScriptRoot\..\.."
+        $XtkeysScript = "$RepoRoot\xtkeys.ps1"
+        $InstallScript = "$RepoRoot\install.ps1"
+        $DefaultConfig = "$RepoRoot\config\default.config.json"
+    }
 
     It "Should contain default configuration schema" {
-        (Test-Path $DefaultConfig) | Should Be $true
+        if (-not (Test-Path $DefaultConfig)) { throw "Default config not found at $DefaultConfig" }
     }
 
     It "Should have a valid JSON config file" {
         $json = Get-Content -Raw $DefaultConfig | ConvertFrom-Json
-        $json.general | Should Not Be $null
-        $json.general.doublePressDelayMs | Should Be 400
+        if ($null -eq $json.general -or $json.general.doublePressDelayMs -ne 400) { throw "Invalid default config JSON" }
     }
 
     It "Should contain modular src architecture" {
-        (Test-Path "$RepoRoot\src\main.ahk") | Should Be $true
-        (Test-Path "$RepoRoot\src\core\Config.ahk") | Should Be $true
-        (Test-Path "$RepoRoot\src\core\Logger.ahk") | Should Be $true
-        (Test-Path "$RepoRoot\src\core\ErrorHandler.ahk") | Should Be $true
-        (Test-Path "$RepoRoot\src\core\ToolTip.ahk") | Should Be $true
-        (Test-Path "$RepoRoot\src\core\Watchdog.ahk") | Should Be $true
-        (Test-Path "$RepoRoot\src\interop\Win32.ahk") | Should Be $true
-        (Test-Path "$RepoRoot\src\interop\Explorer.ahk") | Should Be $true
-        (Test-Path "$RepoRoot\src\interop\AudioEndpoint.ahk") | Should Be $true
-        (Test-Path "$RepoRoot\src\managers\AppResolver.ahk") | Should Be $true
-        (Test-Path "$RepoRoot\src\managers\GestureManager.ahk") | Should Be $true
-        (Test-Path "$RepoRoot\src\managers\WindowManager.ahk") | Should Be $true
-        (Test-Path "$RepoRoot\src\actions\AppActions.ahk") | Should Be $true
-        (Test-Path "$RepoRoot\src\actions\AudioActions.ahk") | Should Be $true
-        (Test-Path "$RepoRoot\src\actions\UtilityActions.ahk") | Should Be $true
-        (Test-Path "$RepoRoot\src\bindings\Hotkeys.ahk") | Should Be $true
+        $required = @(
+            "$RepoRoot\src\main.ahk",
+            "$RepoRoot\src\core\Config.ahk",
+            "$RepoRoot\src\core\Logger.ahk",
+            "$RepoRoot\src\core\ErrorHandler.ahk",
+            "$RepoRoot\src\core\ToolTip.ahk",
+            "$RepoRoot\src\core\Watchdog.ahk",
+            "$RepoRoot\src\interop\Win32.ahk",
+            "$RepoRoot\src\interop\Explorer.ahk",
+            "$RepoRoot\src\interop\AudioEndpoint.ahk",
+            "$RepoRoot\src\managers\AppResolver.ahk",
+            "$RepoRoot\src\managers\GestureManager.ahk",
+            "$RepoRoot\src\managers\WindowManager.ahk",
+            "$RepoRoot\src\actions\AppActions.ahk",
+            "$RepoRoot\src\actions\AudioActions.ahk",
+            "$RepoRoot\src\actions\UtilityActions.ahk",
+            "$RepoRoot\src\bindings\Hotkeys.ahk"
+        )
+        foreach ($file in $required) {
+            if (-not (Test-Path $file)) { throw "Missing required module: $file" }
+        }
     }
 
     It "Should have valid PowerShell syntax in CLI scripts" {
         $errors = $null
         [System.Management.Automation.Language.Parser]::ParseFile($XtkeysScript, [ref]$null, [ref]$errors)
-        $errors.Count | Should Be 0
+        if ($errors.Count -gt 0) { throw "Syntax error in ${XtkeysScript}: $($errors | Out-String)" }
 
         $errors = $null
         [System.Management.Automation.Language.Parser]::ParseFile($InstallScript, [ref]$null, [ref]$errors)
-        $errors.Count | Should Be 0
+        if ($errors.Count -gt 0) { throw "Syntax error in ${InstallScript}: $($errors | Out-String)" }
     }
 
     It "Should pass AutoHotkey v2 syntax validation" {
         $valScript = "$RepoRoot\tests\Ahk\validate_syntax.ps1"
         if (Test-Path $valScript) {
             $null = & $valScript
-            $LASTEXITCODE | Should Be 0
+            if ($LASTEXITCODE -ne 0) { throw "AHK syntax validation failed with exit code $LASTEXITCODE" }
         }
     }
 }
