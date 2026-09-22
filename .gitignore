@@ -1,16 +1,11 @@
 logs/
 update/update_result.txt
-
 *.log
 *.txt
-
 Thumbs.db
 desktop.ini
-
 .vscode/
 .idea/
 *.pid
 build/
 dist/
-
-

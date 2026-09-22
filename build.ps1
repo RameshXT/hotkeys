@@ -75,7 +75,6 @@ if ($devTag) {
 [System.IO.File]::WriteAllText($INSTALL_DEST, $installContent, $utf8)
 Write-Host '  OK dist/install.ps1' -ForegroundColor Green
 
-# Authenticode Script Signing Step
 Write-Host ''
 Write-Host '  Checking for Code Signing Certificate...' -ForegroundColor Cyan
 $certThumbprint = $env:SIGNING_CERT_THUMBPRINT

@@ -351,7 +351,6 @@ GetExplorerPath() {
     if (winClass != "CabinetWClass" && winClass != "ExploreWClass")
         return ""
 
-    ; Method 1: Shell.Application COM (Windows 10 & 11 tabs)
     try {
         candidatePaths := []
         activeTabHwnd := 0
@@ -369,7 +368,6 @@ GetExplorerPath() {
                 path := ""
                 try path := window.Document.Folder.Self.Path
 
-                ; If Self.Path is virtual or empty, fallback to LocationURL
                 if (path = "" || InStr(path, "::{")) {
                     try {
                         locUrl := window.LocationURL
@@ -408,7 +406,6 @@ GetExplorerPath() {
     } catch {
     }
 
-    ; Method 2: Address ToolbarWindow32 control
     try {
         loop 5 {
             ctrlName := "ToolbarWindow32" . A_Index
@@ -424,7 +421,6 @@ GetExplorerPath() {
     } catch {
     }
 
-    ; Method 3: Address Edit control
     try {
         editPath := ControlGetText("Edit1", hwnd)
         if (editPath != "" && DirExist(editPath))
@@ -833,7 +829,7 @@ class ProcessWatchdog {
     static targets := Map()
     static restartHistory := Map()
     static maxRestarts := 3
-    static windowMs := 300000 ; 5-minute sliding window
+    static windowMs := 300000
 
     static Register(exeName, friendlyName, launchFn) {
         this.targets[exeName] := { name: friendlyName, launcher: launchFn, wasRunning: false, hProcess: 0, pid: 0 }
@@ -926,7 +922,6 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
         deviceEnumerator := ComObject("{BCDE0395-E52F-467C-8E3D-C4579291692E}",
             "{A95664D2-9614-4F35-A746-DE8DB63617E6}")
 
-        ; 1. Switch Playback Device
         ComCall(3, deviceEnumerator, "int", 0, "uint", 1, "ptr*", &devicesCollection := 0)
 
         count := 0
@@ -1044,7 +1039,6 @@ SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "",
         }
         LAST_DEVICE := friendlyNameOverride
 
-        ; 2. Switch Recording Device (Microphone)
         if (micNameSubstr != "") {
             micsCollection := 0
             ComCall(3, deviceEnumerator, "int", 1, "uint", 1, "ptr*", &micsCollection := 0)
