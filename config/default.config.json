@@ -1,0 +1,47 @@
+{
+  "general": {
+    "doublePressDelayMs": 400,
+    "longPressThresholdMs": 600,
+    "tooltipDurationMs": 2000,
+    "windowWaitTimeoutSec": 5,
+    "watchdogIntervalMs": 30000,
+    "watchdogEnabled": true
+  },
+  "audio": {
+    "devices": {
+      "sony": {
+        "playback": "Surround",
+        "mic": "Microphone (Realtek(R) Audio)",
+        "volume": 25,
+        "label": "Sony MDRX-50"
+      },
+      "blackShark": {
+        "playback": "Speakers (Realtek",
+        "mic": "Razer",
+        "label": "Black Shark V2"
+      },
+      "resound": {
+        "playback": "Resound",
+        "mic": "Microphone (Realtek(R) Audio)",
+        "label": "Resound"
+      },
+      "heat": {
+        "playback": "HEAT",
+        "mic": "Microphone (Realtek(R) Audio)",
+        "label": "HEAT"
+      }
+    }
+  },
+  "watchdog": [
+    {
+      "exe": "Razer Synapse.exe",
+      "name": "Razer Synapse",
+      "launchPath": "%ProgramFiles%\\Razer\\Synapse3\\WPFUI\\Framework\\Razer Synapse 3 Host\\Razer Synapse 3.exe"
+    },
+    {
+      "exe": "Razer Central.exe",
+      "name": "Razer Central",
+      "launchPath": "%ProgramFiles(x86)%\\Razer\\Razer Services\\Razer Central\\Razer Central.exe"
+    }
+  ]
+}
