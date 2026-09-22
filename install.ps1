@@ -184,11 +184,14 @@ function Install-AutoHotkey {
         }
     }
     if (Get-Command winget -ErrorAction SilentlyContinue) {
-        Write-UI "Attempting winget install for AutoHotkey v$AHK_WINGET_VER..." "INFO"
         try {
-            winget install --id $AHK_WINGET_ID --version $AHK_WINGET_VER `
-                --silent --force --accept-package-agreements --accept-source-agreements 2>&1 | Out-Null
-            Start-Sleep -Seconds 2
+            Invoke-Spinner -Message "Installing AutoHotkey v$AHK_WINGET_VER via winget..." -ScriptBlock {
+                param($id, $ver)
+                winget install --id $id --version $ver `
+                    --silent --force --accept-package-agreements --accept-source-agreements 2>&1 | Out-Null
+                Start-Sleep -Seconds 2
+            } -ArgumentList $AHK_WINGET_ID, $AHK_WINGET_VER
+
             $exe = Get-AhkExe
             if ($null -ne $exe -and (Test-AhkVersionOk $exe)) {
                 $v = Get-AhkVersion $exe
