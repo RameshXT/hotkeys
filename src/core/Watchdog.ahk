@@ -4,7 +4,7 @@ class ProcessWatchdog {
     static targets := Map()
     static restartHistory := Map()
     static maxRestarts := 3
-    static windowMs := 300000 ; 5-minute sliding window
+    static windowMs := 300000
 
     static Register(exeName, friendlyName, launchFn) {
         this.targets[exeName] := { name: friendlyName, launcher: launchFn, wasRunning: false, hProcess: 0, pid: 0 }

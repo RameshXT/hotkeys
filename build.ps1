@@ -38,17 +38,14 @@ function Bundle-AhkScript {
                 $includeRel = $matches[1].Trim()
                 $includeFull = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($dir, $includeRel))
                 if (Test-Path $includeFull) {
-                    $outputLines.Add("; --- BEGIN INLINE: $includeRel ---")
                     $inlined = Process-File -FilePath $includeFull
                     if ($inlined) {
                         $outputLines.Add($inlined)
                     }
-                    $outputLines.Add("; --- END INLINE: $includeRel ---")
                 } else {
                     $outputLines.Add($line)
                 }
             } elseif ($line -match '^\s*#Requires\s+AutoHotkey\s+v2' -and $visited.Count -gt 1) {
-                # Strip redundant inner #Requires directives
                 continue
             } else {
                 $outputLines.Add($line)

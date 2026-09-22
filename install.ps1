@@ -705,7 +705,6 @@ function Invoke-Doctor {
     Write-Host "=== xtkeys Environment & Health Diagnostics ===" -ForegroundColor Cyan
     Write-Host ""
 
-    # 1. AutoHotkey Check
     $ahkExe = Get-AhkExe
     if ($ahkExe -and (Test-Path $ahkExe)) {
         $ver = Get-AhkVersion $ahkExe
@@ -714,7 +713,6 @@ function Invoke-Doctor {
         Write-UI "AutoHotkey v2: NOT detected" "ERROR"
     }
 
-    # 2. Installed hotkeys.ahk Check
     if (Test-Path $AHK_FILE) {
         $hash = (Get-FileHash -Path $AHK_FILE -Algorithm SHA256).Hash.Substring(0, 12)
         Write-UI "Script Bundle: Installed at $AHK_FILE (SHA: $hash...)" "OK"
@@ -722,7 +720,6 @@ function Invoke-Doctor {
         Write-UI "Script Bundle: Not installed in $INSTALL_DIR" "WARN"
     }
 
-    # 3. Process Status
     $ahkPid = Get-HotkeysPid
     if ($ahkPid -ne $null -and (Test-HotkeysRunning)) {
         Write-UI "Runtime Process: Active (PID: $ahkPid)" "OK"
@@ -730,14 +727,12 @@ function Invoke-Doctor {
         Write-UI "Runtime Process: Not currently running" "WARN"
     }
 
-    # 4. Startup Shortcut
     if (Test-Path $STARTUP_LNK) {
         Write-UI "Startup Shortcut: Active at $STARTUP_LNK" "OK"
     } else {
         Write-UI "Startup Shortcut: Not found in Windows Startup" "WARN"
     }
 
-    # 5. Audio Endpoints
     Write-Host ""
     Write-Host "Detected Sound Devices:" -ForegroundColor Gray
     try {
@@ -753,7 +748,6 @@ function Invoke-Doctor {
         Write-Host "  (Unable to query WMI sound devices)" -ForegroundColor DarkGray
     }
 
-    # 6. Error Log Status
     $logFile = Join-Path $INSTALL_DIR 'logs\hotkey_errors.log'
     if (Test-Path $logFile) {
         $sizeKb = [math]::Round((Get-Item $logFile).Length / 1KB, 1)

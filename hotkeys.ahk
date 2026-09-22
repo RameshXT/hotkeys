@@ -6,7 +6,6 @@ SendMode "Input"
 SetWorkingDir A_ScriptDir
 
 ; --- Module Inclusions ---
-; --- BEGIN INLINE: core\Config.ahk ---
 
 class Config {
     static DOUBLE_PRESS_DELAY := 400
@@ -51,8 +50,6 @@ class Config {
         return (val != "") ? val : defaultValue
     }
 }
-; --- END INLINE: core\Config.ahk ---
-; --- BEGIN INLINE: core\Logger.ahk ---
 
 class Logger {
     static MAX_LOG_SIZE := 5242880 ; 5 MB
@@ -108,8 +105,6 @@ class Logger {
         return entry
     }
 }
-; --- END INLINE: core\Logger.ahk ---
-; --- BEGIN INLINE: core\ToolTip.ahk ---
 
 class NotificationManager {
     static ShowTransient(message, durationMs := "") {
@@ -136,8 +131,6 @@ ShowTransientToolTip(message, durationMs := "") {
 RemoveToolTip() {
     NotificationManager.Clear()
 }
-; --- END INLINE: core\ToolTip.ahk ---
-; --- BEGIN INLINE: core\ErrorHandler.ahk ---
 
 class ErrorHandler {
     static Init() {
@@ -179,14 +172,12 @@ class ErrorHandler {
 ShowLaunchError(prefix, err) {
     ErrorHandler.HandleLaunchError(prefix, err)
 }
-; --- END INLINE: core\ErrorHandler.ahk ---
-; --- BEGIN INLINE: core\Watchdog.ahk ---
 
 class ProcessWatchdog {
     static targets := Map()
     static restartHistory := Map()
     static maxRestarts := 3
-    static windowMs := 300000 ; 5-minute sliding window
+    static windowMs := 300000
 
     static Register(exeName, friendlyName, launchFn) {
         this.targets[exeName] := { name: friendlyName, launcher: launchFn, wasRunning: false, hProcess: 0, pid: 0 }
@@ -254,9 +245,7 @@ class ProcessWatchdog {
         }
     }
 }
-; --- END INLINE: core\Watchdog.ahk ---
 
-; --- BEGIN INLINE: interop\Win32.ahk ---
 
 class Wow64RedirectionGuard {
     oldRedir := 0
@@ -355,8 +344,6 @@ ResolveNativePath(cmd) => Win32.ResolveNativePath(cmd)
 SearchSystemPath(exe) => Win32.SearchSystemPath(exe)
 SmartRun(target, args := "", dir := "") => Win32.SmartRun(target, args, dir)
 IsProtectedWindowClass(cls) => Win32.IsProtectedWindowClass(cls)
-; --- END INLINE: interop\Win32.ahk ---
-; --- BEGIN INLINE: interop\Explorer.ahk ---
 
 class ShellExplorer {
     static GetActiveExplorerPath() {
@@ -517,8 +504,6 @@ class ShellExplorer {
 GetExplorerPath() => ShellExplorer.GetActiveExplorerPath()
 GetSelectedFilePath() => ShellExplorer.GetSelectedFilePath()
 GetValidExplorerPath() => ShellExplorer.GetValidExplorerPath()
-; --- END INLINE: interop\Explorer.ahk ---
-; --- BEGIN INLINE: interop\AudioEndpoint.ahk ---
 
 class AudioEndpoint {
     static volumeHistory := Map()
@@ -771,9 +756,7 @@ class AudioEndpoint {
 SetAudioOutput(deviceNameSubstr, targetVolume := "", friendlyNameOverride := "", micNameSubstr := "") {
     AudioEndpoint.SwitchOutput(deviceNameSubstr, targetVolume, friendlyNameOverride, micNameSubstr)
 }
-; --- END INLINE: interop\AudioEndpoint.ahk ---
 
-; --- BEGIN INLINE: managers\AppResolver.ahk ---
 
 class AppResolver {
     static cache := Map()
@@ -862,8 +845,6 @@ class AppResolver {
         return str
     }
 }
-; --- END INLINE: managers\AppResolver.ahk ---
-; --- BEGIN INLINE: managers\GestureManager.ahk ---
 
 class GestureManager {
     static lastPresses := Map()
@@ -932,8 +913,6 @@ class DoublePressManager {
 HandleContextHotkey(key, name, path, sArgs := "", dPre := "") {
     GestureManager.HandleContextHotkey(key, name, path, sArgs, dPre)
 }
-; --- END INLINE: managers\GestureManager.ahk ---
-; --- BEGIN INLINE: managers\WindowManager.ahk ---
 
 class WindowManager {
     static SafeCloseActiveWindow() {
@@ -1114,9 +1093,7 @@ class WindowManager {
 
 LaunchAndMaximize(path, ident := "", timeout := "", friendly := "") => WindowManager.LaunchAndMaximize(path, ident, timeout, friendly)
 LaunchAndPosition(cmd, dir := "") => WindowManager.LaunchAndPosition(cmd, dir)
-; --- END INLINE: managers\WindowManager.ahk ---
 
-; --- BEGIN INLINE: actions\AppActions.ahk ---
 
 class AppActions {
     static Run(path, args := "", name := "", workingDir := "") {
@@ -1218,8 +1195,6 @@ RunApp(path, args := "", name := "", dir := "") => AppActions.Run(path, args, na
 RunAppAndNotify(path, args, name) => AppActions.RunAndNotify(path, args, name)
 LaunchMicrosoftStore() => AppActions.LaunchMicrosoftStore()
 LaunchRazer71() => AppActions.LaunchRazer71()
-; --- END INLINE: actions\AppActions.ahk ---
-; --- BEGIN INLINE: actions\AudioActions.ahk ---
 
 class AudioActions {
     static SwitchToSony() {
@@ -1238,8 +1213,6 @@ class AudioActions {
         AudioEndpoint.SwitchOutput(Config.AUDIO_DEVICE_3, , "Heat", Config.AUDIO_MIC_1)
     }
 }
-; --- END INLINE: actions\AudioActions.ahk ---
-; --- BEGIN INLINE: actions\UtilityActions.ahk ---
 
 class UtilityActions {
     static ConvertToWSLPath(winPath) {
@@ -1347,7 +1320,6 @@ class UtilityActions {
 
 ConvertToWSLPath(winPath) => UtilityActions.ConvertToWSLPath(winPath)
 ExtractSelectedZip() => UtilityActions.ExtractSelectedZip()
-; --- END INLINE: actions\UtilityActions.ahk ---
 
 ; --- Initialization ---
 Config.Init()
@@ -1395,14 +1367,10 @@ if (Config.WATCHDOG_ENABLED) {
 }
 
 ; --- Bindings ---
-; --- BEGIN INLINE: bindings\Hotkeys.ahk ---
 
 ; ====================[ Application & Utility Hotkeys ]====================
-
-; Alt + 0 → Calculator
 !0:: AppActions.Run("calc.exe", "", "Calculator")
 
-; Alt + 1 → Photoshop (Double-Press)
 !1:: {
     doublePress() {
         photoshopPath := AppResolver.Get("Photoshop", "Photoshop.exe", [
@@ -1422,10 +1390,8 @@ if (Config.WATCHDOG_ENABLED) {
     GestureManager.HandleDoublePress("Photoshop", "", doublePress)
 }
 
-; Alt + 7 → 7.1 Surround Sound
 !7:: AppActions.LaunchRazer71()
 
-; Alt + A → Antigravity IDE (Single: Launch / Double: Open in Active Folder)
 !a:: {
     antigravityPath := AppResolver.Get("Antigravity", "Antigravity IDE.exe", [
         "%LocalAppData%\Programs\Antigravity IDE\Antigravity IDE.exe",
@@ -1438,7 +1404,6 @@ if (Config.WATCHDOG_ENABLED) {
     GestureManager.HandleContextHotkey("a", "Antigravity", antigravityPath)
 }
 
-; Alt + C → Chrome (Single: Normal / Long Press: Incognito)
 #MaxThreadsPerHotkey 1
 !c:: {
     pressStart := A_TickCount
@@ -1448,7 +1413,6 @@ if (Config.WATCHDOG_ENABLED) {
 }
 #MaxThreadsPerHotkey 1
 
-; Alt + E → Outlook
 !e:: {
     outlookPath := AppResolver.Get("Outlook", "", [
         "%AppData%\Microsoft\Windows\Start Menu\Programs\Chrome Apps\Outlook (PWA).lnk",
@@ -1465,7 +1429,6 @@ if (Config.WATCHDOG_ENABLED) {
     }
 }
 
-; Alt + G → Git Bash (Single: Home / Double: Active Folder)
 !g:: {
     gitBashPath := AppResolver.Get("GitBash", "git-bash.exe", [
         "%ProgramFiles%\Git\git-bash.exe",
@@ -1476,7 +1439,6 @@ if (Config.WATCHDOG_ENABLED) {
     GestureManager.HandleContextHotkey("g", "Git Bash", gitBashPath, "--cd-to-home", "--cd=")
 }
 
-; Alt + I → Instagram
 !i:: {
     instagramPath := AppResolver.Get("Instagram", "", [
         "%AppData%\Microsoft\Windows\Start Menu\Programs\Chrome Apps\Instagram.lnk",
@@ -1497,13 +1459,9 @@ if (Config.WATCHDOG_ENABLED) {
     }
 }
 
-; Alt + M → Microsoft Store
 !m:: AppActions.LaunchMicrosoftStore()
-
-; Alt + N → Notepad
 !n:: AppActions.Run("notepad.exe", "", "Notepad")
 
-; Alt + O → CMD (Single: Home / Double: Active Folder or Admin / Long Press: Admin in Folder)
 #MaxThreadsPerHotkey 1
 !o:: {
     userHome := EnvGet("USERPROFILE")
@@ -1559,7 +1517,6 @@ if (Config.WATCHDOG_ENABLED) {
 }
 #MaxThreadsPerHotkey 1
 
-; Alt + P → PowerShell (Single: Home / Double: Active Folder or Admin / Long Press: Admin in Folder)
 #MaxThreadsPerHotkey 1
 !p:: {
     userHome := EnvGet("USERPROFILE")
@@ -1615,10 +1572,8 @@ if (Config.WATCHDOG_ENABLED) {
 }
 #MaxThreadsPerHotkey 1
 
-; Alt + Q → Close Active Window Safely
 !q:: WindowManager.SafeCloseActiveWindow()
 
-; Alt + S → Slack
 !s:: {
     slackPath := AppResolver.Get("Slack", "slack.exe", [
         "%LocalAppData%\slack\slack.exe",
@@ -1632,7 +1587,6 @@ if (Config.WATCHDOG_ENABLED) {
     }
 }
 
-; Alt + T → Telegram
 !t:: {
     telegramPath := AppResolver.Get("Telegram", "", [
         "%AppData%\Microsoft\Windows\Start Menu\Programs\Chrome Apps\Telegram Web.lnk",
@@ -1646,7 +1600,6 @@ if (Config.WATCHDOG_ENABLED) {
     }
 }
 
-; Alt + U → WSL (Single: Home / Double: Active Folder)
 !u:: {
     singlePress() {
         NotificationManager.ShowTransient("WSL")
@@ -1668,7 +1621,6 @@ if (Config.WATCHDOG_ENABLED) {
     GestureManager.HandleDoublePress("WSL", singlePress, doublePress)
 }
 
-; Alt + V → VS Code (Single: Launch / Double: Active Folder)
 !v:: {
     vscodePath := AppResolver.Get("VSCode", "Code.exe", [
         "%LocalAppData%\Programs\Microsoft VS Code\Code.exe",
@@ -1681,10 +1633,8 @@ if (Config.WATCHDOG_ENABLED) {
     }
 }
 
-; Alt + Shift + V → Paste Clipboard as WSL Path
 !+v:: UtilityActions.PasteClipboardAsWSL()
 
-; Alt + W → WhatsApp
 !w:: {
     whatsappPath := AppResolver.Get("WhatsApp", "", [
         "%AppData%\Microsoft\Windows\Start Menu\Programs\Chrome Apps\WhatsApp Web.lnk",
@@ -1701,7 +1651,6 @@ if (Config.WATCHDOG_ENABLED) {
     }
 }
 
-; Alt + Y → YouTube
 !y:: {
     youtubePath := AppResolver.Get("YouTube", "", [
         "%AppData%\Microsoft\Windows\Start Menu\Programs\Chrome Apps\YouTube.lnk",
@@ -1714,23 +1663,12 @@ if (Config.WATCHDOG_ENABLED) {
     }
 }
 
-; Alt + Z → Unzip Selected ZIP
 !z:: UtilityActions.ExtractSelectedZip()
 
-; Ctrl + Shift + Alt + Del → Empty Recycle Bin
 ^+!Delete:: UtilityActions.EmptyRecycleBin()
 
 ; ====================[ Audio Switcher Hotkeys ]====================
-
-; Ctrl + Shift + Q → Switch to Sony MDRX-50
 ^+q:: AudioActions.SwitchToSony()
-
-; Ctrl + Shift + X → Switch to Black Shark V2
 ^+x:: AudioActions.SwitchToBlackShark()
-
-; Ctrl + Shift + Y → Switch to Resound
 ^+y:: AudioActions.SwitchToResound()
-
-; Ctrl + Shift + Z → Switch to Heat
 ^+z:: AudioActions.SwitchToHeat()
-; --- END INLINE: bindings\Hotkeys.ahk ---
