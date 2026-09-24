@@ -1436,7 +1436,7 @@ if (Config.WATCHDOG_ENABLED) {
     ], [
         "HKEY_LOCAL_MACHINE\SOFTWARE\GitForWindows|InstallPath"
     ])
-    wtPath := A_LocalAppData "\Microsoft\WindowsApps\wt.exe"
+    wtPath := EnvGet("LOCALAPPDATA") "\Microsoft\WindowsApps\wt.exe"
 
     now := A_TickCount
     last := GestureManager.lastPresses.Has("g") ? GestureManager.lastPresses["g"] : 0
