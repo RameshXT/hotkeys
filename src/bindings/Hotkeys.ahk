@@ -1,4 +1,15 @@
 #Requires AutoHotkey v2.0.26
+#Include "../core/Config.ahk"
+#Include "../core/ToolTip.ahk"
+#Include "../core/ErrorHandler.ahk"
+#Include "../interop/Win32.ahk"
+#Include "../interop/Explorer.ahk"
+#Include "../managers/AppResolver.ahk"
+#Include "../managers/GestureManager.ahk"
+#Include "../managers/WindowManager.ahk"
+#Include "../actions/AppActions.ahk"
+#Include "../actions/AudioActions.ahk"
+#Include "../actions/UtilityActions.ahk"
 
 ; ====================[ Application & Utility Hotkeys ]====================
 !0:: AppActions.Run("calc.exe", "", "Calculator")
@@ -68,7 +79,50 @@
     ], [
         "HKEY_LOCAL_MACHINE\SOFTWARE\GitForWindows|InstallPath"
     ])
-    GestureManager.HandleContextHotkey("g", "Git Bash", gitBashPath, "--cd-to-home", "--cd=")
+    wtPath := A_LocalAppData "\Microsoft\WindowsApps\wt.exe"
+
+    now := A_TickCount
+    last := GestureManager.lastPresses.Has("g") ? GestureManager.lastPresses["g"] : 0
+
+    if (now - last < Config.DOUBLE_PRESS_DELAY) {
+        GestureManager.lastPresses["g"] := 0
+        if GestureManager.timers.Has("g") {
+            SetTimer GestureManager.timers["g"], 0
+            GestureManager.timers.Delete("g")
+        }
+        dir := ShellExplorer.GetValidExplorerPath()
+        if (dir != "") {
+            NotificationManager.ShowTransient("Git Bash")
+            wtDir := StrReplace(dir, ";", "\;")
+            if (SubStr(wtDir, -1) == "\")
+                wtDir .= "."
+            if FileExist(wtPath) {
+                try {
+                    Run('"' . wtPath . '" -w new -p "Git Bash" -d "' . wtDir . '"')
+                } catch as e {
+                    NotificationManager.ShowTransient("WT failed, using Git Bash")
+                    AppActions.Run(gitBashPath, '--cd="' . dir . '"')
+                }
+            } else {
+                NotificationManager.ShowTransient("wt.exe not found, using Git Bash")
+                AppActions.Run(gitBashPath, '--cd="' . dir . '"')
+            }
+        }
+    } else {
+        GestureManager.lastPresses["g"] := now
+        _wtPath := wtPath
+        _gitBashPath := gitBashPath
+        timerFn := () => (
+            GestureManager.timers.Delete("g"),
+            NotificationManager.ShowTransient("Git Bash"),
+            FileExist(_wtPath)
+                ? (Run('"' . _wtPath . '" -w new -p "Git Bash"'), 0)
+                : (NotificationManager.ShowTransient("wt.exe not found, using Git Bash"),
+                   AppActions.Run(_gitBashPath, "--cd-to-home"), 0)
+        )
+        GestureManager.timers["g"] := timerFn
+        SetTimer timerFn, -Config.DOUBLE_PRESS_DELAY
+    }
 }
 
 !i:: {
